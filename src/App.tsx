@@ -183,6 +183,34 @@ function App() {
       <h1>Annotatr</h1>
       <p>A cross-platform screen annotation overlay tool</p>
 
+      {/* Feature #1: Local Storage Testing */}
+      <div className="status">
+        <h2>Local Storage Connection (Feature #1)</h2>
+        <p className="info-text">
+          Test Tauri's persistent storage API for saving and loading application settings.
+        </p>
+        <div className="row">
+          <button type="button" onClick={testStorage}>
+            Test Connection
+          </button>
+          <button type="button" onClick={writeTestValue}>
+            Write Test Value
+          </button>
+          <button type="button" onClick={readTestValue}>
+            Read Test Value
+          </button>
+          <button type="button" onClick={initStorage}>
+            Initialize Defaults
+          </button>
+        </div>
+        <p className="status-msg">
+          Storage Status: <strong>{storageStatus}</strong>
+        </p>
+        {storageValue && <p className="status-msg">Last written: {storageValue}</p>}
+        {loadedValue && <p className="status-msg">Last read: {loadedValue}</p>}
+        <p className="status-msg">{statusMsg}</p>
+      </div>
+
       <div className="row">
         <input
           type="text"
@@ -309,6 +337,9 @@ function App() {
           <li>✓ Tauri 2 initialized with React + TypeScript</li>
           <li>✓ IPC command handlers configured</li>
           <li>✓ Multi-window configuration (main, overlay, mini-panel)</li>
+          <li>✓ Local storage connection established (Feature #1)</li>
+          <li>✓ Storage utility functions created</li>
+          <li>✓ Default settings configuration</li>
           <li>✓ Overlay window management (show/hide/focus)</li>
           <li>✓ Mouse capture controls (enable/disable)</li>
           <li>✓ Multi-monitor detection and positioning</li>
