@@ -767,6 +767,54 @@ fn restore_mini_panel_position(app: AppHandle) -> Result<serde_json::Value, Stri
     }
 }
 
+/// Feature #52: Toggle mini panel visibility (minimize/hide)
+/// Shows the panel if hidden, hides if visible
+#[tauri::command]
+fn toggle_mini_panel(app: AppHandle) -> Result<bool, String> {
+    let panel_window = app.get_webview_window("mini-panel")
+        .ok_or("Mini panel window not found")?;
+
+    let is_visible = panel_window.is_visible()?;
+
+    if is_visible {
+        // Hide the panel
+        panel_window.hide()?;
+        println!("Mini panel hidden (minimized)");
+        Ok(false)
+    } else {
+        // Show the panel
+        panel_window.show()?;
+        panel_window.set_focus()?;
+        println!("Mini panel shown (restored)");
+        Ok(true)
+    }
+}
+
+/// Feature #52: Hide the mini panel
+#[tauri::command]
+fn hide_mini_panel(app: AppHandle) -> Result<(), String> {
+    let panel_window = app.get_webview_window("mini-panel")
+        .ok_or("Mini panel window not found")?;
+
+    panel_window.hide()?;
+    println!("Mini panel hidden (minimized)");
+
+    Ok(())
+}
+
+/// Feature #52: Show the mini panel
+#[tauri::command]
+fn show_mini_panel(app: AppHandle) -> Result<(), String> {
+    let panel_window = app.get_webview_window("mini-panel")
+        .ok_or("Mini panel window not found")?;
+
+    panel_window.show()?;
+    panel_window.set_focus()?;
+    println!("Mini panel shown (restored)");
+
+    Ok(())
+}
+
 /// Feature #11: Get platform information
 /// Returns the detected platform and platform-specific window hints
 #[tauri::command]
@@ -832,7 +880,10 @@ pub fn run() {
             set_mini_panel_position,
             get_mini_panel_position,
             save_mini_panel_position,
-            restore_mini_panel_position
+            restore_mini_panel_position,
+            toggle_mini_panel,
+            hide_mini_panel,
+            show_mini_panel
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

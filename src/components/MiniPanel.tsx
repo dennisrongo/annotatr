@@ -70,6 +70,19 @@ export default function MiniPanel() {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
 
   /**
+   * Feature #52: Toggle panel minimize/hide
+   * Hides the Tauri window when minimized
+   */
+  const toggleMinimize = async () => {
+    try {
+      const isVisible = await invoke<boolean>("toggle_mini_panel");
+      console.log(`Panel ${isVisible ? "shown" : "hidden"}`);
+    } catch (error) {
+      console.error("Failed to toggle panel visibility:", error);
+    }
+  };
+
+  /**
    * Feature #50: Load monitor information on mount
    * Used to detect which monitor the panel is being dragged to
    */
@@ -432,6 +445,7 @@ export default function MiniPanel() {
       }}
     >
       {/* Feature #19: Draggable header */}
+      {/* Feature #52: Added minimize button */}
       <div
         className="panel-header"
         style={{
@@ -457,15 +471,50 @@ export default function MiniPanel() {
         >
           Drawing Tools
         </h3>
-        <span
+        <div
           style={{
-            fontSize: "12px",
-            color: "#666",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
           }}
-          title="Drag this header to move panel (including off-screen)"
         >
-          ⋮⋮
-        </span>
+          {/* Feature #52: Minimize button */}
+          <button
+            type="button"
+            onClick={toggleMinimize}
+            style={{
+              background: "none",
+              border: "none",
+              fontSize: "16px",
+              cursor: "pointer",
+              color: "#666",
+              padding: "0 4px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              transition: "color 0.2s",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = "#333";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = "#666";
+            }}
+            title="Minimize panel (hide from view)"
+            aria-label="Minimize panel"
+          >
+            −
+          </button>
+          <span
+            style={{
+              fontSize: "12px",
+              color: "#666",
+            }}
+            title="Drag this header to move panel (including off-screen)"
+          >
+            ⋮⋮
+          </span>
+        </div>
       </div>
 
       <div

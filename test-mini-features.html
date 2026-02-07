@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mini Panel Features Test - Features #43, #44, #45</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-container {
+            max-width: 400px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            font-size: 20px;
+            margin-bottom: 10px;
+        }
+        .test-info {
+            margin-top: 20px;
+            padding: 15px;
+            background: #e3f2fd;
+            border-radius: 4px;
+            border-left: 4px solid #2196f3;
+            font-size: 14px;
+        }
+        .test-info h3 {
+            margin: 0 0 10px 0;
+            font-size: 16px;
+            color: #1976d2;
+        }
+        .test-info ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+        .test-info li {
+            margin-bottom: 5px;
+            color: #424242;
+        }
+        .feature-check {
+            margin-top: 15px;
+            padding: 10px;
+            background: #fff3cd;
+            border-radius: 4px;
+            border-left: 4px solid #ffc107;
+        }
+        .feature-check h4 {
+            margin: 0 0 8px 0;
+            font-size: 14px;
+            color: #856404;
+        }
+        .feature-check p {
+            margin: 4px 0;
+            font-size: 13px;
+            color: #856404;
+        }
+        .status {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+        .status.pass {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+            color: #155724;
+        }
+        .status.fail {
+            background: #f8d7da;
+            border-left: 4px solid #dc3545;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>Mini Panel Features Test</h1>
+        <p style="color: #666; font-size: 14px; margin-bottom: 20px;">
+            Testing Features #43, #44, #45
+        </p>
+
+        <div class="test-info">
+            <h3>Testing Instructions:</h3>
+            <ul>
+                <li><strong>Feature #43:</strong> Click on tool buttons (Arrow, Circle, Box, etc.) - the selected tool should have a blue background with bold text</li>
+                <li><strong>Feature #44:</strong> Click on color buttons - the selected color should have a thicker blue border</li>
+                <li><strong>Feature #45:</strong> Click the rainbow gradient button to open the system color picker</li>
+            </ul>
+        </div>
+
+        <div id="status43" class="status">Feature #43: Visual indicator - Testing...</div>
+        <div id="status44" class="status">Feature #44: Preset colors - Testing...</div>
+        <div id="status45" class="status">Feature #45: Custom colors - Testing...</div>
+    </div>
+
+    <script>
+        // Mock the Tauri API since we're in a browser
+        window.__TAURI__ = {
+            invoke: async (cmd, args) => {
+                console.log(`[Mock] Tauri invoke: ${cmd}`, args);
+                return Promise.resolve();
+            },
+            core: {
+                invoke: async (cmd, args) => {
+                    console.log(`[Mock] Tauri core invoke: ${cmd}`, args);
+                    return Promise.resolve();
+                }
+            }
+        };
+
+        // Load React and the MiniPanel component
+        const script = document.createElement('script');
+        script.type = 'module';
+        script.src = '/src/panel-main.tsx';
+        document.head.appendChild(script);
+
+        // Wait for the panel to load and then test features
+        setTimeout(() => {
+            console.log('Checking for MiniPanel...');
+
+            // Feature #43: Check for visual indicator on tool buttons
+            setTimeout(() => {
+                const buttons = document.querySelectorAll('button');
+                let toolButtonsFound = false;
+                buttons.forEach(btn => {
+                    const text = btn.textContent;
+                    if (['Arrow', 'Circle', 'Box', 'Freehand', 'Highlighter', 'Text'].includes(text)) {
+                        toolButtonsFound = true;
+                        // Simulate click to test visual indicator
+                        btn.click();
+                        const bgColor = btn.style.backgroundColor;
+                        if (bgColor.includes('37, 99, 235') || bgColor.includes('rgb(37, 99, 235)')) {
+                            document.getElementById('status43').textContent = 'Feature #43: PASS - Visual indicator working (blue background on selected tool)';
+                            document.getElementById('status43').className = 'status pass';
+                        }
+                    }
+                });
+
+                if (!toolButtonsFound) {
+                    document.getElementById('status43').textContent = 'Feature #43: FAIL - No tool buttons found';
+                    document.getElementById('status43').className = 'status fail';
+                }
+            }, 2000);
+
+            // Feature #44: Check for preset color buttons
+            setTimeout(() => {
+                const colorButtons = document.querySelectorAll('[aria-label^="Color"]');
+                if (colorButtons.length >= 12) {
+                    document.getElementById('status44').textContent = 'Feature #44: PASS - Found ' + colorButtons.length + ' preset color buttons';
+                    document.getElementById('status44').className = 'status pass';
+                } else {
+                    document.getElementById('status44').textContent = 'Feature #44: FAIL - Only found ' + colorButtons.length + ' color buttons (expected 12)';
+                    document.getElementById('status44').className = 'status fail';
+                }
+            }, 2000);
+
+            // Feature #45: Check for custom color picker button
+            setTimeout(() => {
+                const customColorBtn = document.querySelector('[aria-label="Custom color picker"]');
+                if (customColorBtn) {
+                    document.getElementById('status45').textContent = 'Feature #45: PASS - Custom color picker button found';
+                    document.getElementById('status45').className = 'status pass';
+                } else {
+                    document.getElementById('status45').textContent = 'Feature #45: FAIL - Custom color picker button not found';
+                    document.getElementById('status45').className = 'status fail';
+                }
+            }, 2000);
+
+        }, 1000);
+    </script>
+</body>
+</html>
