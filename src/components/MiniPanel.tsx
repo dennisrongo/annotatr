@@ -53,6 +53,9 @@ export default function MiniPanel() {
   // Feature #47: Font size control state
   const [fontSize, setFontSize] = useState(DEFAULT_SETTINGS.fontSize);
 
+  // Feature #48: Settings modal state
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+
   /**
    * Feature #19: Restore panel position on mount
    * Loads saved position from storage (including off-screen positions)
@@ -406,6 +409,32 @@ export default function MiniPanel() {
         <ToolButton tool={ToolType.FREEHAND} label="Freehand" />
         <ToolButton tool={ToolType.HIGHLIGHTER} label="Highlighter" />
         <ToolButton tool={ToolType.TEXT} label="Text" />
+
+        {/* Feature #48: Settings button */}
+        <button
+          type="button"
+          onClick={() => setShowSettingsModal(true)}
+          style={{
+            padding: "8px 12px",
+            margin: "4px",
+            backgroundColor: "rgba(100, 100, 100, 0.9)",
+            color: "white",
+            border: "1px solid #666",
+            borderRadius: "4px",
+            cursor: "pointer",
+            fontSize: "12px",
+            transition: "all 0.2s ease",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = "rgba(120, 120, 120, 0.95)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = "rgba(100, 100, 100, 0.9)";
+          }}
+          title="Open settings panel"
+        >
+          ⚙️ Settings
+        </button>
       </div>
 
       {/* Feature #44: Color picker section */}
@@ -698,6 +727,164 @@ export default function MiniPanel() {
       >
         Pos: ({position.x}, {position.y})
       </div>
+
+      {/* Feature #48: Settings modal */}
+      {showSettingsModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 10001,
+          }}
+          onClick={() => setShowSettingsModal(false)}
+        >
+          <div
+            style={{
+              backgroundColor: "white",
+              borderRadius: "8px",
+              padding: "20px",
+              minWidth: "300px",
+              maxWidth: "500px",
+              maxHeight: "80vh",
+              overflow: "auto",
+              boxShadow: "0 4px 20px rgba(0, 0, 0, 0.3)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "20px",
+                paddingBottom: "10px",
+                borderBottom: "2px solid #eee",
+              }}
+            >
+              <h2
+                style={{
+                  margin: 0,
+                  fontSize: "18px",
+                  color: "#333",
+                }}
+              >
+                Settings
+              </h2>
+              <button
+                type="button"
+                onClick={() => setShowSettingsModal(false)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  fontSize: "20px",
+                  cursor: "pointer",
+                  color: "#666",
+                  padding: "0 8px",
+                }}
+                title="Close settings"
+              >
+                ×
+              </button>
+            </div>
+
+            <div
+              style={{
+                fontSize: "14px",
+                color: "#666",
+                lineHeight: "1.6",
+              }}
+            >
+              <p style={{ marginTop: 0 }}>
+                Configure your Annotatr preferences. Changes are saved automatically.
+              </p>
+
+              <div
+                style={{
+                  backgroundColor: "#f8f9fa",
+                  padding: "12px",
+                  borderRadius: "4px",
+                  marginTop: "15px",
+                }}
+              >
+                <h3
+                  style={{
+                    fontSize: "14px",
+                    margin: "0 0 10px 0",
+                    color: "#333",
+                  }}
+                >
+                  Current Settings
+                </h3>
+                <ul
+                  style={{
+                    margin: 0,
+                    paddingLeft: "20px",
+                    fontSize: "13px",
+                  }}
+                >
+                  <li><strong>Font Size:</strong> {fontSize}pt</li>
+                  <li><strong>Line Thickness:</strong> {lineThickness}px</li>
+                  <li><strong>Fade Duration:</strong> 10 seconds</li>
+                  <li><strong>Colors:</strong> Configured per tool</li>
+                </ul>
+              </div>
+
+              <div
+                style={{
+                  marginTop: "15px",
+                  fontSize: "12px",
+                  color: "#999",
+                }}
+              >
+                <p style={{ margin: 0 }}>
+                  💡 Tip: Use the Mini Panel sliders to adjust font size and line thickness in real-time.
+                </p>
+              </div>
+            </div>
+
+            <div
+              style={{
+                marginTop: "20px",
+                paddingTop: "15px",
+                borderTop: "1px solid #eee",
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: "10px",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setShowSettingsModal(false)}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#2563eb",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontSize: "14px",
+                  transition: "background 0.2s",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = "#1d4ed8";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = "#2563eb";
+                }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

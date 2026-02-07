@@ -51,8 +51,7 @@ export default function Overlay() {
   const [settings, setSettings] = useState<Settings | null>(null);
 
   // Feature #9: Track current monitor ID for shape confinement
-  // TODO: Implement monitor tracking logic
-  const [currentMonitor] = useState<string | null>(null);
+  const [currentMonitor, setCurrentMonitor] = useState<string | null>(null);
 
   // Default drawing settings (fallbacks until settings load)
   const defaultColor = "#FF0000";
@@ -743,6 +742,49 @@ export default function Overlay() {
 
     loadAppSettings();
   }, []);
+
+  // Feature #9: Initialize monitor on component mount
+  useEffect(() => {
+    const initializeMonitor = async () => {
+      try {
+        const monitorId = await invoke<string | null>("get_current_monitor");
+        console.log("Initialized current monitor:", monitorId);
+        setCurrentMonitor(monitorId);
+      } catch (error) {
+        console.error("Failed to get current monitor:", error);
+        setCurrentMonitor(null);
+      }
+    };
+
+    initializeMonitor();
+  }, []);
+
+  // Feature #9: Listen for monitor-changed event and filter shapes
+  useEffect(() => {
+    const unlistenMonitorChanged = listen<string>("monitor-changed", (event) => {
+      const newMonitorId = event.payload;
+      console.log("[Feature #9] Monitor changed to:", newMonitorId);
+
+      // Update current monitor state
+      setCurrentMonitor(newMonitorId);
+
+      // Filter shapes to only show those for this monitor
+      const shapesBefore = shapesRef.current.length;
+      shapesRef.current = shapesRef.current.filter(
+        shape => shape.monitorId === newMonitorId
+      );
+      const shapesAfter = shapesRef.current.length;
+
+      console.log(`[Feature #9] Filtered shapes: ${shapesBefore} -> ${shapesAfter} (removed ${shapesBefore - shapesAfter} shapes from other monitors)`);
+
+      // Redraw with filtered shapes
+      redrawAllShapes();
+    });
+
+    return () => {
+      unlistenMonitorChanged.then((fn) => fn()).catch(console.error);
+    };
+  }, [redrawAllShapes]);
 
   // Feature #35: Auto-fade system - remove old shapes
   useEffect(() => {
