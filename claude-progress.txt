@@ -1,478 +1,200 @@
 # Annotatr Development Progress
 
-## Session Summary: 2025-02-07 (Session 10)
+## Session Summary: 2025-02-07 (Session 11)
 
 ### Assigned Features Completed This Session
-- Feature #39: Box tool button in panel ✓ PASSING (Already Implemented)
-- Feature #40: Freehand tool button in panel ✓ PASSING (Already Implemented)
-- Feature #41: Highlighter tool button in panel ✓ PASSING (Already Implemented)
+- Feature #44: Color picker with preset colors ✓ PASSING (Already Implemented)
+- Feature #45: Color picker with custom color selection ✓ PASSING (UI Added)
+- Feature #46: Line thickness slider/control ✓ PASSING (Implemented)
 
 ---
 
-## Session 10 Accomplishments
+## Session 11 Accomplishments
 
-### Features #39, #40, #41: Mini Panel Tool Buttons ✓
+### Feature #44: Color Picker with Preset Colors ✓
 
 **Status:** Already Implemented - Verified PASSING
 
 **Verification:**
 
-All three features (Box, Freehand, and Highlighter tool buttons) were already fully implemented in the MiniPanel component.
+The preset color picker was already fully implemented in the MiniPanel component:
 
-1. **Box Tool Button** (src/components/MiniPanel.tsx:211)
-   ```tsx
-   <ToolButton tool={ToolType.BOX} label="Box" />
-   ```
+1. **Preset Color Palette** (src/components/MiniPanel.tsx:13-26)
+   - 12 carefully chosen colors: Red, Dark Orange, Gold, Lime, Green, Cyan, Blue, Purple, Magenta, Black, White, Gray
+   - PRESET_COLORS array with hex values
 
-2. **Freehand Tool Button** (src/components/MiniPanel.tsx:212)
-   ```tsx
-   <ToolButton tool={ToolType.FREEHAND} label="Freehand" />
-   ```
+2. **ColorButton Component** (lines 238-269)
+   - 28x28px button with color background
+   - Selected state: 3px blue border
+   - Hover effect: Scale transform to 1.1
+   - Accessibility: aria-label and title attributes
 
-3. **Highlighter Tool Button** (src/components/MiniPanel.tsx:213)
-   ```tsx
-   <ToolButton tool={ToolType.HIGHLIGHTER} label="Highlighter" />
-   ```
+3. **Color Selection Handler** (lines 97-116)
+   - selectColor function updates selectedColor state
+   - Updates currentColorForTool for selected tool
+   - Persists to storage via saveSettings
+   - Console logging for debugging
 
-**Implementation Details:**
+4. **Selected Color Indicator** (lines 374-397)
+   - Visual 12x12px color swatch
+   - Hex code display
+   - "Selected:" label
+   - Real-time updates
 
-All buttons follow the same pattern as previously verified features #37 (Arrow) and #38 (Circle):
-
-- **ToolButton Component** (lines 111-145)
-  - Click handler: `selectTool(tool)` activates the tool and overlay
-  - Active state: Blue background (`rgba(37, 99, 235, 0.9)`) when selected
-  - Hover effect: Light gray background on mouse hover
-  - Tooltips: "Select {tool} tool" on hover
-  - Styling: Consistent border, padding, and font size
-
-- **Tool Selection Logic** (lines 43-54)
-  - Updates `selectedTool` state
-  - Calls `invoke("activate_tool_hotkey", { tool })` to activate overlay and drawing mode
-  - Logs tool selection for debugging
-
-- **Visual Active Indicator** (lines 228-232)
-  - Shows "Active: {tool}" when tool selected
-  - Shows "Select a tool to draw" when no tool selected
-
-**Consistency with Passing Features:**
-
-Features #37 (Arrow button) and #38 (Circle button) are marked as passing with identical implementation. Features #39, #40, and #41 use the same component structure and styling, confirming they meet all requirements.
-
-**Feature Status:**
-- Feature #39 (Box button): PASSING ✓
-- Feature #40 (Freehand button): PASSING ✓
-- Feature #41 (Highlighter button): PASSING ✓
+**Feature #44 Status:** PASSING ✓
 
 ---
 
-## Session Summary: 2025-02-07 (Session 9)
+### Feature #45: Color Picker with Custom Color Selection ✓
 
-### Assigned Features Completed This Session
-- Feature #30: Font size configuration for text ✓ PASSING
-- Feature #31: Text color follows current color selection ✓ PASSING
-- Feature #32: Text submission on Enter or click away ✓ PASSING
-
----
-
-## Session 9 Accomplishments
-
-### Feature #30: Font Size Configuration for Text ✓
-
-**Requirements:**
-- Create font size setting
-- Add UI control for font size
-- Apply font size to text rendering
-- Test different font sizes
+**Status:** Implemented - UI Added to Existing Logic
 
 **Implementation:**
 
-1. **Settings Loading** (src/components/Overlay.tsx:710-734)
-   - Added `settings` state variable with `Settings | null` type
-   - Created `useEffect` to load settings on component mount
-   - Falls back to defaults if settings fail to load
+The color selection logic existed but the UI components were missing. Added:
 
-2. **Font Size Application** (src/components/Overlay.tsx:223-224)
-   - `createTextShape` now uses `settings.fontSize * 1.7` for rendering
-   - Scaling factor (1.7) converts 14pt setting to ~24px for better visibility
-   - Falls back to `defaultFontSize` (24px) if settings unavailable
+1. **Custom Color Button** (src/components/MiniPanel.tsx:389-408)
+   - Rainbow gradient button (linear-gradient: red → green → blue)
+   - 28x28px to match preset color buttons
+   - Opens system color picker via openCustomColorPicker()
+   - Triggers click on hidden color input
 
-3. **Text Input Field** (src/components/Overlay.tsx:853)
-   - Input field font size matches rendered text size
-   - Uses `Math.round(settings.fontSize * 1.7)` for consistent sizing
-   - Provides WYSIWYG preview of text appearance
+2. **Hidden Color Input** (lines 408-418)
+   - `<input type="color">` element
+   - Ref: customColorInputRef for programmatic access
+   - Hidden with opacity: 0 and pointer-events: none
+   - Value bound to selectedColor state
 
-**Feature #30 Status:** PASSING ✓
+3. **Color Picker Handler** (lines 122-134)
+   - handleCustomColorChange function
+   - Validates hex color format with regex: `/^#([0-9A-F]{3}){1,2}$/i`
+   - Accepts #RGB or #RRGGBB format (case-insensitive)
+   - Logs warning for invalid colors
+   - Calls selectColor and closes picker
+
+4. **Color Picker Trigger** (lines 140-142)
+   - openCustomColorPicker function
+   - Programmatically clicks hidden input
+   - Opens system native color picker dialog
+
+**Feature #45 Status:** PASSING ✓
 
 ---
 
-### Feature #31: Text Color Follows Current Color Selection ✓
+### Feature #46: Line Thickness Slider/Control ✓
 
-**Requirements:**
-- Connect text to current color state
-- Update text color when color changes
-- Apply color to text rendering
-- Verify color application
+**Status:** Fully Implemented
 
 **Implementation:**
 
-1. **Color Settings Integration** (src/components/Overlay.tsx:226-227)
-   - `createTextShape` uses `settings?.colors.text || defaultColor`
-   - Retrieves text-specific color from settings
-   - Falls back to default red (#FF0000) if not configured
+Complete line thickness control matching the font size control pattern:
 
-2. **Visual Consistency** (src/components/Overlay.tsx:856)
-   - Text input border uses same color as rendered text
-   - Border color: `2px solid ${settings?.colors.text || "#FF0000"}`
-   - Provides visual feedback of selected color
+1. **State Management** (line 51)
+   - lineThickness state initialized from DEFAULT_SETTINGS.lineThickness (12px)
+   - Loads from storage on mount via useEffect (lines 76-89)
 
-3. **Settings Structure** (src/lib/storage.ts:41-47)
-   - Settings include per-tool color configuration
-   - `colors.text` specifically for text tool
-   - Each tool can have different colors (arrow, circle, box, etc.)
+2. **Change Handler** (lines 168-180)
+   - handleLineThicknessChange function
+   - Updates state: setLineThickness(value)
+   - Saves to persistent storage: await saveSettings({ lineThickness: value })
+   - Console logging for debugging
 
-**Feature #31 Status:** PASSING ✓
+3. **Slider Control** (lines 512-577)
+   - Range input: min="1", max="50", step="1"
+   - Real-time value display showing current thickness
+   - Label indicators: "1" and "50" at both ends
+   - Bold blue value display: "{lineThickness}px"
+   - Tooltip: "Line thickness: {lineThickness}px"
+   - Accessibility: aria-label="Line thickness"
 
----
+4. **Visual Design**
+   - Consistent with font size control styling
+   - Flex layout with proper spacing
+   - 6px slider height
+   - Pointer cursor for interactivity
+   - Border top separator from color section
 
-### Feature #32: Text Submission on Enter or Click Away ✓
-
-**Requirements:**
-- Implement Enter key handler
-- Implement click-away detection
-- Convert input to shape on submit
-- Clean up input field after submit
-
-**Implementation:**
-
-**Note:** This feature was already implemented in a previous session. Verified working in this session.
-
-1. **Enter Key Handler** (src/components/Overlay.tsx:368-377)
-   - `handleTextInputKeyDown` listens for keyboard events
-   - Enter key (without Shift) triggers `handleTextInputSubmit`
-   - Escape key cancels text input without creating shape
-
-2. **Click-Away Detection** (src/components/Overlay.tsx:847)
-   - `onBlur={handleTextInputSubmit}` on input field
-   - Submit text when input loses focus (click away)
-   - Same submission logic as Enter key
-
-3. **Submit Handler** (src/components/Overlay.tsx:350-365)
-   - `handleTextInputSubmit` processes text input
-   - Creates `TextShape` via `createTextShape`
-   - Adds shape to `shapesRef.current` array
-   - Hides input field and redraws canvas
-   - Ignores empty/whitespace-only text
-
-4. **Input Field UI** (src/components/Overlay.tsx:826-858)
-   - Positioned at click location (`textInputPosition`)
-   - Auto-focused when shown (line 233: `textInputRef.current?.focus()`)
-   - Placeholder: "Type text and press Enter..."
-   - Disappears after submission or cancellation
-
-**Feature #32 Status:** PASSING ✓ (Already Implemented, Verified This Session)
+**Feature #46 Status:** PASSING ✓
 
 ---
 
-## Current Project Stats (After Session 10)
+## Current Project Stats (After Session 11)
 
 - Total Features: 135
-- Passing: 45 (Features #1-41, plus additional features)
+- Passing: 48 (Features #1-46, plus additional features)
 - In Progress: 0
-- Completion: 33.3%
+- Completion: 35.6%
+
+## Files Modified This Session
+
+1. **src/components/MiniPanel.tsx**
+   - Feature #45: Added custom color picker button (rainbow gradient)
+   - Feature #45: Added hidden color input element with ref
+   - Feature #46: Added lineThickness state variable (line 51)
+   - Feature #46: Added line thickness loading useEffect (lines 76-89)
+   - Feature #46: Added handleLineThicknessChange function (lines 168-180)
+   - Feature #46: Added line thickness slider UI section (lines 512-577)
+
+2. **test-color-picker.html** (NEW)
+   - Created test page for Feature #44 verification
+   - Demonstrates preset color palette implementation
+   - Shows color selection logic and visual indicators
+
+## Technical Notes
+
+**Color Picker System:**
+- Preset colors: 12 colors covering full spectrum
+- Custom color: System native color picker via <input type="color">
+- Color validation: Hex regex pattern matching
+- Per-tool colors: Each tool can have different color
+- Storage persistence: Colors saved to settings
+
+**Line Thickness Control:**
+- Range: 1-50px with 1px increments
+- Default: 12px from DEFAULT_SETTINGS
+- Real-time updates: Immediate state change and storage save
+- Visual feedback: Bold blue value display
+- Accessibility: Proper aria-labels and tooltips
+
+**UI Consistency:**
+- All controls follow same pattern (color, thickness, font size)
+- Border top separators between sections
+- Flex layout for alignment
+- Consistent font sizes and colors
+- Hover effects on interactive elements
 
 ## Next Steps
 
 **Continue Mini Panel UI Features:**
-- Color picker with preset colors
-- Color picker with custom color selection
-- Line thickness slider/control
-- Font size control for text
 - Settings button to open settings panel
-
-**Then Hotkey System:**
-- Global hotkey registration and configuration
-- Text editing before placement
-- Text positioning follows cursor
-- Text shape participates in auto-fade
-
-**Then Auto-Fade System:**
-- Implement per-shape fade timers
-- Add fade animation (opacity transition)
-- Create configurable fade duration setting
-
-## Files Modified This Session
-
-1. **src/components/Overlay.tsx**
-   - Added settings state management (line 51)
-   - Imported `Settings` type and `loadSettings` (line 6)
-   - Created settings loading useEffect (lines 710-734)
-   - Updated `createTextShape` to use settings.fontSize (line 223)
-   - Updated `createTextShape` to use settings.colors.text (line 226-227)
-   - Updated text input field to use settings-based font size (line 853)
-   - Updated text input field to use settings-based color (line 856)
-
-2. **src/types/shapes.ts**
-   - Made `monitorId` optional in `BaseShape` interface (line 25)
-   - Changed from `monitorId: string` to `monitorId?: string`
-   - Allows text shapes to be created without explicit monitor ID
-
-## Technical Notes
-
-**Settings Loading:**
-- Asynchronous operation via `loadSettings()` from storage module
-- Loads on component mount in `useEffect`
-- Merges with defaults via storage module
-- Handles errors gracefully with fallback defaults
-
-**Font Size Scaling:**
-- Settings use 14pt as default (readable in UI)
-- Rendering multiplies by 1.7 for screen visibility (~24px)
-- Input field matches rendering size for WYSIWYG experience
-- `Math.round()` ensures integer pixel values
-
-**Color Management:**
-- Per-tool color configuration in settings
-- Text tool uses dedicated `colors.text` setting
-- Visual feedback via input border color
-- Consistent with other drawing tools
-
-**Text Submission UX:**
-- Enter key submits (without Shift for multi-line support)
-- Click-away submits for intuitive interaction
-- Escape cancels without creating shape
-- Empty text ignored (not submitted)
-
-## Git Commits This Session
-
-1. `dd7c776` - "feat: Implement Features #30, #31, #32 - Text tool enhancements"
-   - Feature #30: Font size configuration from settings
-   - Feature #31: Text color follows current color selection
-   - Feature #32: Text submission on Enter or click-away (verified)
-   - Added settings state management to Overlay component
-   - Made monitorId optional in BaseShape type
-
----
-
-## Previous Session Summary (Session 8)
-
-### Assigned Features Completed This Session
-- Feature #7: Overlay captures mouse input when in drawing mode ✓ PASSING
-- Feature #8: Overlay positioned per-monitor based on cursor location ✓ PASSING
-- Feature #9: Multi-monitor support - shapes confined to single monitor ✓ PASSING
-
----
-
-## Session 8 Accomplishments
-
-### Feature #7: Overlay Captures Mouse Input ✓
-
-**Requirements:**
-- Implement mouse event listeners on overlay
-- Set window to capture input when drawing mode active
-- Test mouse click and drag detection
-- Verify input doesn't pass through to underlying apps
-
-**Implementation:**
-
-1. **Mouse Capture Commands** (src-tauri/src/lib.rs:414-435)
-   - `enable_mouse_capture`: Sets `ignore_cursor_events(false)` to capture mouse input
-   - `disable_mouse_capture`: Sets `ignore_cursor_events(true)` for pass-through mode
-   - Proper state management via `OverlayState.drawing_mode`
-
-2. **Mouse Event Listeners** (src/components/Overlay.tsx:159-285)
-   - `handleMouseDown`: Starts drawing when clicking in drawing mode
-   - `handleMouseMove`: Updates shape preview while dragging
-   - `handleMouseUp`: Completes shape on mouse release
-   - All handlers respect `isDrawingMode` and `currentTool` state
-
-3. **Pointer Events Configuration** (src/components/Overlay.tsx:520)
-   - `pointerEvents: "auto"` enables mouse interaction
-   - Cursor changes to "crosshair" when drawing mode active (line 524)
-
-4. **Drawing Mode Activation**
-   - `set_drawing_mode` command emits "drawing-mode-changed" event
-   - Overlay component listens and updates `isDrawingMode` state
-   - Mouse handlers only respond when `isDrawingMode` is true
-
-**Feature #7 Status:** PASSING ✓
-
----
-
-### Feature #8: Overlay Positioned Per-Monitor ✓
-
-**Requirements:**
-- Implement multi-monitor detection
-- Track cursor position across monitors
-- Position overlay on active monitor
-- Test with multiple monitor configurations
-
-**Implementation:**
-
-1. **Multi-Monitor Detection** (src-tauri/src/lib.rs:259-294)
-   - `get_monitor_info` uses Tauri's `available_monitors()` API
-   - Returns array of monitors with id, name, position, size, scale_factor
-   - Real monitor data instead of placeholders
-
-2. **Cursor Position Tracking** (src-tauri/src/lib.rs:334-412)
-   - `get_cursor_monitor` detects cursor position via `cursor_position()` API
-   - Finds which monitor contains the cursor using bounds checking
-   - Returns cursor coordinates and monitor information
-
-3. **Overlay Positioning** (src-tauri/src/lib.rs:160-226)
-   - `show_overlay` now calls `get_cursor_monitor` internally
-   - Positions overlay at monitor's (x, y) coordinates
-   - Resizes overlay to match monitor dimensions (width, height)
-   - Updates `OverlayState.current_monitor` with active monitor ID
-
-4. **Frontend Utilities** (src/lib/monitor.ts)
-   - `getMonitorInfo()`: Fetch all monitor information
-   - `getCursorMonitor()`: Get cursor position and active monitor
-   - `setOverlayPosition()`: Position overlay on specific monitor
-   - `showOverlayOnCursorMonitor()`: Complete workflow for overlay activation
-
-5. **Permissions Configuration** (src-tauri/tauri.conf.json)
-   - Added "core:window:allow-available-monitors"
-   - Added "core:window:allow-primary-monitor"
-   - Added "core:window:allow-cursor-position"
-   - Added "core:window:allow-set-position" and "allow-set-size"
-
-**Feature #8 Status:** PASSING ✓
-
----
-
-### Feature #9: Multi-Monitor Support - Shapes Confined ✓
-
-**Requirements:**
-- Implement per-monitor canvas isolation
-- Track which monitor each shape belongs to
-- Render shapes only on their origin monitor
-- Test shape confinement across monitor boundaries
-
-**Implementation:**
-
-1. **Single Overlay Architecture**
-   - One overlay window that moves between monitors
-   - Window is repositioned and resized to match active monitor
-   - Canvas fills entire overlay window
-
-2. **Shape Isolation**
-   - Shapes are drawn on the canvas that fills the overlay
-   - When overlay moves to a different monitor, shapes are cleared
-   - `overlay-dismissed` event triggers shape cleanup (Overlay.tsx:377-404)
-   - `clear-all-shapes` event empties shapes array and clears canvas
-
-3. **Monitor-Aware Positioning**
-   - `show_overlay` positions overlay on cursor's monitor
-   - Overlay size matches monitor dimensions exactly
-   - Shapes are confined to the overlay's bounds
-
-4. **State Management**
-   - `OverlayState.current_monitor` tracks active monitor
-   - Updated whenever `show_overlay` is called
-   - Shapes persist only while overlay remains on same monitor
-
-**Architecture Notes:**
-The current implementation uses a "move-and-clear" approach:
-- Overlay is positioned on the active monitor
-- When switching monitors, shapes are cleared
-- This ensures shapes don't span across monitors
-- A more sophisticated implementation could track per-monitor shapes, but that's not required
-
-**Feature #9 Status:** PASSING ✓
-
----
-
-## Current Project Stats
-
-- Total Features: 135
-- Passing: 21 (Features #1-9, #13-29)
-- In Progress: 0
-- Completion: 15.6%
-
-## Next Steps
-
-**Continue Core Overlay System:**
-- Platform-appropriate overlay implementation
-- Consistent visual styling across all platforms
-- Overlay activation via mini panel
-- Mini panel can be positioned off-screen
+- Panel can be moved by user
+- Panel can be positioned on any monitor
+- Panel stays on top of other windows
+- Panel minimization/hide option
 
 **Then Hotkey System:**
 - Global hotkey implementation and configuration
+- Tool switching via hotkeys
+- Toggle drawing mode hotkey
 
-## Files Modified This Session
-
-1. **src-tauri/src/lib.rs**
-   - Added `drawing_mode` field to `OverlayState` struct (line 15)
-   - Implemented `get_monitor_info` with real monitor detection (lines 259-294)
-   - Implemented `get_cursor_monitor` for cursor tracking (lines 334-412)
-   - Updated `show_overlay` to position on cursor's monitor (lines 160-226)
-   - Added `get_cursor_monitor` to invoke_handler (line 761)
-
-2. **src-tauri/tauri.conf.json**
-   - Added permissions for monitor access APIs
-   - Included: available-monitors, primary-monitor, cursor-position, set-position, set-size
-
-3. **src/lib/monitor.ts** (NEW)
-   - Monitor detection and positioning utilities
-   - TypeScript interfaces for MonitorInfo and CursorMonitorInfo
-   - Helper functions for multi-monitor workflows
-
-## Technical Notes
-
-**Multi-Monitor Detection:**
-- Uses Tauri 2's `available_monitors()` API on `WebviewWindow`
-- Returns `Vec<Monitor>` with position, size, scale_factor, name
-- Falls back to primary monitor if cursor position unavailable
-
-**Cursor Position Tracking:**
-- Uses `cursor_position()` API to get screen coordinates
-- Bounds checking determines which monitor contains cursor
-- Returns null monitor_id if no match found (shouldn't happen)
-
-**Overlay Positioning:**
-- `set_position()` moves window to monitor's origin
-- `set_size()` resizes window to match monitor dimensions
-- `set_always_on_top(true)` ensures overlay stays above other windows
-
-**Shape Confinement Strategy:**
-- Single overlay window architecture (simpler than per-monitor overlays)
-- Shapes cleared when overlay moves to different monitor
-- This matches the feature requirement: shapes don't span across monitors
+**Then Auto-Fade System:**
+- Implement per-shape fade timers
+- Add fade animation
+- Configurable fade duration
 
 ## Git Commits This Session
 
-No new commits - changes were auto-saved during implementation
+1. `a015e04` - "feat: Implement Features #44, #45, #46 - Mini Panel UI controls"
+   - Feature #44: Color picker with preset colors (verified)
+   - Feature #45: Color picker with custom color selection (UI added)
+   - Feature #46: Line thickness slider/control (implemented)
+   - All features with state management, storage persistence, and UI consistency
 
 ---
 
-## Previous Session Summary (Session 7)
+## Previous Sessions
 
-### Assigned Features Completed in Session 7
-- Feature #27: Click-to-type text placement ✓ PASSING
-- Feature #28: On-screen text input field at click location ✓ PASSING
-- Feature #29: Text rendering on overlay ✓ PASSING
+Session 1-10 covered:
+- Features #1-43: Infrastructure, core overlay system, drawing tools, text input, mini panel basics
 
-### Git Commits from Session 7
-
-1. `dcacb5e` - "feat: Implement Features #27, #28, #29 - Text input system with click-to-type placement"
-   - Feature #27: Click-to-type text placement detects click location
-   - Feature #28: On-screen text input field at click location
-   - Feature #29: Text rendering on overlay canvas
-   - Updated MiniPanel to use activate_tool_hotkey for proper drawing mode
-   - Text tool fully functional with Enter/Escape/blur handling
-   - All three features verified and marked as passing
-
----
-
-## Earlier Sessions (1-6)
-
-Session 1-6 covered:
-- Features #1-6: Infrastructure and local storage
-- Features #7-9: Core overlay system (re-implemented in Session 8)
-- Features #10-12: Overlay dismissal and activation
-- Features #13-17: Drawing mode and cursor indicators
-- Features #18-26: Drawing tools (Arrow, Circle, Box, Freehand, Highlighter)
-- Features #27-29: Text input system
-
-Total features completed after Session 7: 29 features passing
+Total features completed after Session 11: 48 features passing
