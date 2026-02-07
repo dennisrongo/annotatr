@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { saveSetting, loadSetting, loadSettings, saveSettings, testStorageConnection, initializeStorage } from "./lib/storage";
+import { loadSetting, loadSettings, testStorageConnection, initializeStorage } from "./lib/storage";
 
 interface MonitorInfo {
   id: string;
@@ -23,6 +23,7 @@ function App() {
   const [storageStatus, setStorageStatus] = useState("Not tested");
   const [storageValue, setStorageValue] = useState("");
   const [loadedValue, setLoadedValue] = useState("");
+  const [drawingMode, setDrawingMode] = useState(false);
 
   async function greet() {
     // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
@@ -74,7 +75,10 @@ function App() {
     try {
       await invoke("enable_mouse_capture");
       setMouseCaptureEnabled(true);
-      setStatusMsg("Mouse capture ENABLED - overlay captures mouse input");
+      // Feature #16: Also enable drawing mode for cursor change
+      await invoke("set_drawing_mode", { enabled: true });
+      setDrawingMode(true);
+      setStatusMsg("Mouse capture ENABLED - overlay captures mouse input, cursor changed to crosshair");
     } catch (error) {
       setStatusMsg(`Error: ${error}`);
     }
@@ -85,7 +89,10 @@ function App() {
     try {
       await invoke("disable_mouse_capture");
       setMouseCaptureEnabled(false);
-      setStatusMsg("Mouse capture DISABLED - click-through enabled");
+      // Feature #16: Also disable drawing mode to reset cursor
+      await invoke("set_drawing_mode", { enabled: false });
+      setDrawingMode(false);
+      setStatusMsg("Mouse capture DISABLED - click-through enabled, cursor reset to default");
     } catch (error) {
       setStatusMsg(`Error: ${error}`);
     }
@@ -324,9 +331,28 @@ function App() {
         <p className="status-msg">
           Mouse capture: <strong>{mouseCaptureEnabled ? "ENABLED" : "DISABLED"}</strong>
         </p>
+        <p className="status-msg">
+          {/* Feature #16: Show current cursor mode */}
+          Cursor mode: <strong>{drawingMode ? "Crosshair (Drawing Mode)" : "Default (Normal)"}</strong>
+        </p>
         {!overlayVisible && (
           <p className="warning">⚠️ Show the overlay first to enable mouse capture</p>
         )}
+      </div>
+
+      {/* Feature #16: Cursor Changes Test */}
+      <div className="status">
+        <h2>Cursor Changes (Feature #16)</h2>
+        <p className="info-text">
+          The cursor changes to a crosshair when drawing mode is active, and returns to default
+          when drawing mode is disabled. This provides visual feedback about the current mode.
+        </p>
+        <div className="info-box">
+          <p>✓ Cursor: <strong>crosshair</strong> when drawing mode is enabled</p>
+          <p>✓ Cursor: <strong>default</strong> when drawing mode is disabled</p>
+          <p>✓ Automatically synced with mouse capture state</p>
+          <p>✓ Listens for drawing-mode-changed events</p>
+        </div>
       </div>
 
       {/* Feature #8: Multi-Monitor Positioning */}

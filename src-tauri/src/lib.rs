@@ -151,6 +151,7 @@ fn create_overlay_window() -> Result<(), String> {
 
 /// Show the overlay window
 /// This makes the overlay visible and brings it to the foreground
+/// Feature #15: Ensures z-index management to stay above other windows
 #[tauri::command]
 fn show_overlay(app: AppHandle) -> Result<(), String> {
     // Get the overlay window by label
@@ -166,13 +167,18 @@ fn show_overlay(app: AppHandle) -> Result<(), String> {
     // Show the window if it's hidden
     overlay_window.show()?;
 
+    // Feature #15: Ensure always-on-top is set BEFORE focusing
+    // This ensures the overlay maintains proper z-index
+    overlay_window.set_always_on_top(true)?;
+
     // Bring window to foreground and focus it
     overlay_window.set_focus()?;
 
-    // Ensure it stays on top
+    // Feature #15: Set window to topmost again after focus to handle window manager changes
+    // This ensures the overlay stays above all other applications even after focus changes
     overlay_window.set_always_on_top(true)?;
 
-    println!("Overlay window shown and focused");
+    println!("Overlay window shown and focused, z-index set to topmost");
 
     Ok(())
 }
@@ -388,6 +394,29 @@ fn toggle_overlay(app: AppHandle) -> Result<bool, String> {
     }
 }
 
+/// Feature #15: Ensure overlay stays on top after window focus changes
+/// This handles cases where other applications might steal focus or z-index
+#[tauri::command]
+fn ensure_on_top(app: AppHandle) -> Result<(), String> {
+    let overlay_window = app.get_webview_window("overlay")
+        .ok_or("Overlay window not found")?;
+
+    // Only proceed if overlay is visible
+    if !overlay_window.is_visible()? {
+        return Ok(());
+    }
+
+    // Re-assert always-on-top property to maintain z-index
+    overlay_window.set_always_on_top(true)?;
+
+    // Bring to front without stealing focus from other apps unnecessarily
+    overlay_window.set_always_on_top(true)?;
+
+    println!("Overlay z-index re-asserted to stay on top");
+
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Initialize shared state
@@ -419,7 +448,8 @@ pub fn run() {
             clear_all_shapes,
             register_hotkeys,
             dismiss_overlay,
-            toggle_overlay
+            toggle_overlay,
+            ensure_on_top
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
