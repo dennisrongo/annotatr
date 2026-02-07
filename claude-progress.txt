@@ -1,77 +1,262 @@
-Session completed - Features #15, #19, #20 marked as passing
+# Annotatr Development Progress
 
-## Session 5 Summary: 2025-02-07 - Feature #4 Verification Complete
+## Session Summary: 2025-02-07 (Session 6)
 
-### Assigned Feature
-- Feature #4: Tauri API integration properly configured
+### Assigned Features Completed This Session
+- Feature #24: Freehand drawing tool - draw and release ✓ PASSING
+- Feature #25: Highlighter tool - semi-transparent freehand drawing ✓ PASSING
+- Feature #26: Text tool - click spot and type ✓ PASSING
 
-### Session Outcome
-**Feature #4 is ALREADY PASSING** - Verified through comprehensive code analysis.
+---
 
-This feature was implemented in a previous session. No code changes were needed.
+## Session 6 Accomplishments
 
-### Verification Performed
+### Feature #24: Freehand Drawing Tool ✓
 
-**Step 1: Tauri Event System ✓**
-- Event emitter properly imported: `use tauri::{AppHandle, Emitter, Manager, Window, State}` (lib.rs:6)
-- Multiple events emitted throughout codebase:
-  - `settings_updated` (lib.rs:52-56)
-  - `drawing-mode-changed` (lib.rs:321)
-  - `clear-all-shapes` (lib.rs:359)
-  - `tool-selected` (lib.rs:396)
-  - `overlay-dismissed` (lib.rs:432)
+**Requirements:**
+- Create freehand tool component
+- Implement mouse move tracking
+- Capture drawing path points
+- Render smooth freehand path
 
-**Step 2: IPC Command Handlers Configured ✓**
-- 31 Tauri commands registered in `invoke_handler` (lib.rs:620-651)
-- Commands include:
-  - Settings: `save_settings`, `load_settings`, `load_setting`, `reset_settings`
-  - Overlay: `show_overlay`, `hide_overlay`, `focus_overlay`, `get_overlay_state`
-  - Drawing: `drawing_start`, `drawing_update`, `drawing_end`, `create_shape`
-  - Platform: `get_platform_info`, `get_monitor_info`
-  - Panel: `set_mini_panel_position`, `get_mini_panel_position`, `save_mini_panel_position`, `restore_mini_panel_position`
-  - And 15+ more commands
+**Implementation:**
 
-**Step 3: Frontend-Backend Communication ✓**
-- Frontend imports Tauri API: `import { invoke } from '@tauri-apps/api/core'` (storage.ts:6)
-- Successful invoke calls in storage.ts (lines 61, 77, 92, 118, 139)
-- Successful invoke calls in App.tsx (lines 31, 36, 46, 57, 66, 77, 91)
-- All calls properly handle async/await and errors
+1. ✓ **Shape Type Added** (src/types/shapes.ts:49-52)
+   ```typescript
+   export interface FreehandShape extends BaseShape {
+     tool: ToolType.FREEHAND;
+     points: Point[];
+   }
+   ```
 
-**Step 4: API Endpoints Accessible ✓**
-- Tauri plugins configured in Cargo.toml:
-  - `tauri-plugin-store = "2"` (line 18)
-  - `tauri-plugin-shell = "2"` (line 17)
-- Store plugin schema in tauri.conf.json (lines 65-90)
-- All commands registered and accessible
+2. ✓ **Drawing Function Implemented** (src/lib/drawing.ts:86-107)
+   - `drawFreehand()` function renders smooth paths
+   - Uses `lineCap: "round"` and `lineJoin: "round"` for smooth corners
+   - Iterates through all points and connects them with `lineTo()`
 
-### Files Verified
-- src-tauri/src/lib.rs - Tauri commands and event system
-- src-tauri/Cargo.toml - Plugin dependencies
-- src-tauri/tauri.conf.json - Plugin configuration
-- src/lib/storage.ts - Frontend storage integration
-- src/App.tsx - Frontend command invocation
+3. ✓ **Mouse Move Tracking** (src/components/Overlay.tsx:271-287)
+   - Continuously adds points to `freehandPoints` array during drag
+   - Real-time preview of the drawing path
+   - Shapes complete on mouse release
 
-### Feature Status
-**Feature #4:** PASSING ✓ (Already completed in previous session)
+4. ✓ **Tool Button Added** (src/components/MiniPanel.tsx:108)
+   - "Freehand" button in mini panel
+   - Tool indicator with icon (✎) and color (#ef4444)
 
-### Current Project Stats
+**Feature #24 Status:** PASSING ✓
+
+---
+
+### Feature #25: Highlighter Tool ✓
+
+**Requirements:**
+- Create highlighter tool component
+- Implement semi-transparent rendering
+- Use broader stroke than freehand
+- Test transparency effect
+
+**Implementation:**
+
+1. ✓ **Shape Type Added** (src/types/shapes.ts:54-58)
+   ```typescript
+   export interface HighlighterShape extends BaseShape {
+     tool: ToolType.HIGHLIGHTER;
+     points: Point[];
+     opacity: number;
+   }
+   ```
+
+2. ✓ **Drawing Function Implemented** (src/lib/drawing.ts:112-135)
+   - `drawHighlighter()` function with transparency
+   - Uses `globalAlpha = 0.3` for semi-transparent effect
+   - Broader stroke: `lineThickness * 2`
+   - Resets alpha after rendering to avoid affecting other shapes
+
+3. ✓ **Same Mouse Tracking as Freehand**
+   - Reuses the point-tracking mechanism
+   - Real-time preview with transparency
+   - Shapes complete on mouse release
+
+4. ✓ **Tool Button Added** (src/components/MiniPanel.tsx:109)
+   - "Highlighter" button in mini panel
+   - Tool indicator with icon (▭) and color (#eab308)
+
+**Feature #25 Status:** PASSING ✓
+
+---
+
+### Feature #26: Text Tool ✓
+
+**Requirements:**
+- Create text tool component
+- Implement click-to-place interaction
+- Create text input field at click location
+- Render text on overlay
+
+**Implementation:**
+
+1. ✓ **Shape Type Added** (src/types/shapes.ts:60-66)
+   ```typescript
+   export interface TextShape extends BaseShape {
+     tool: ToolType.TEXT;
+     position: Point;
+     text: string;
+     fontSize: number;
+   }
+   ```
+
+2. ✓ **Drawing Function Implemented** (src/lib/drawing.ts:140-151)
+   - `drawText()` function renders text at position
+   - Uses `fillText()` with configurable fontSize
+   - Respects current color selection
+
+3. ✓ **Click-to-Place Interaction** (src/components/Overlay.tsx:227-234)
+   - Click anywhere on overlay to show inline input
+   - Input appears exactly at click position
+   - Auto-focus on text input field
+
+4. ✓ **Inline Text Input Field** (src/components/Overlay.tsx:782-803)
+   - Styled input with red border matching default color
+   - White semi-transparent background for readability
+   - Placeholder text: "Type text and press Enter..."
+   - Handles Enter key to submit, Escape to cancel
+   - Auto-submits on blur (clicking away)
+
+5. ✓ **Tool Button Added** (src/components/MiniPanel.tsx:110)
+   - "Text" button in mini panel
+   - Tool indicator with icon (T) and color (#8b5cf6)
+
+**Feature #26 Status:** PASSING ✓
+
+---
+
+## Technical Implementation Details
+
+### Modified Files
+
+1. **src/types/shapes.ts**
+   - Added `FreehandShape`, `HighlighterShape`, `TextShape` interfaces
+   - Updated `Shape` type union to include new types
+
+2. **src/lib/drawing.ts**
+   - Added `drawFreehand()` function
+   - Added `drawHighlighter()` function with transparency
+   - Added `drawText()` function
+   - Updated `drawShape()` switch to handle all new types
+
+3. **src/components/Overlay.tsx**
+   - Added `freehandPoints`, `textInput`, `textPosition` to DrawingState
+   - Added `textInputVisible`, `textInputPosition`, `textInputValue` state
+   - Added `textInputRef` for auto-focus
+   - Added shape creation functions: `createFreehandShape()`, `createHighlighterShape()`, `createTextShape()`
+   - Updated `handleMouseDown()` to show text input for TEXT tool
+   - Updated `handleMouseMove()` to track points for FREEHAND and HIGHLIGHTER
+   - Updated `handleMouseUp()` to complete all new shape types
+   - Added text input submission handlers
+   - Added inline text input field in JSX
+   - Updated all `setDrawingState()` calls to include new fields
+
+4. **src/components/MiniPanel.tsx**
+   - Added tool buttons for Freehand, Highlighter, and Text
+
+### Code Quality Verification
+
+**Mock Data Check:** ✓ Passed
+- No mock data patterns found in src/
+- All shapes created from real user interactions
+
+**TypeScript Compilation:** ✓ Passed
+- `npm run build` completed without errors
+- All type definitions correct
+
+---
+
+## Feature Verification Summary
+
+### Feature #24 (Freehand)
+- ✓ Freehand tool component exists
+- ✓ Mouse move tracking implemented
+- ✓ Drawing path points captured
+- ✓ Smooth freehand path rendered
+
+### Feature #25 (Highlighter)
+- ✓ Highlighter tool component exists
+- ✓ Semi-transparent rendering (30% opacity)
+- ✓ Broader stroke than freehand (2x lineThickness)
+- ✓ Transparency effect works correctly
+
+### Feature #26 (Text)
+- ✓ Text tool component exists
+- ✓ Click-to-place interaction
+- ✓ Text input field at click location
+- ✓ Text rendered on overlay
+- ✓ Enter to submit, Escape to cancel
+- ✓ Auto-submit on blur
+
+---
+
+## Current Project Stats
+
 - Total Features: 135
-- Passing: 20 (Features #1-20, #21-23)
-- In Progress: 12
-- Completion: 14.8%
+- Passing: 26 (Features #1-26)
+- In Progress: 7
+- Completion: 19.3%
 
-### Git Commit
-- 1893873: docs: Verify Feature #4 (Tauri API integration) - already passing
+## Git Commits This Session
 
-### Session Notes
-This session was a verification session only. The assigned feature (#4) was already implemented and passing in a previous session. The Tauri API integration is properly configured with:
-- Complete event system for bidirectional communication
-- 31+ IPC commands for all app functionality
-- Proper async/await error handling
-- Cross-platform plugin configuration
+1. `9efc268` - "feat: Implement Features #24, #25, #26 - Freehand, Highlighter, and Text tools"
+   - Added FreehandShape and HighlighterShape types
+   - Added drawFreehand function with point tracking
+   - Added HighlighterShape with semi-transparent rendering
+   - Added TextShape with inline text input UI
+   - Updated Overlay component to support all three new tools
+   - Added tool buttons to MiniPanel for new tools
+   - All features verified and passing
 
-No code changes were made during this session.
+---
 
-### Next Steps
-Continue with remaining features in the implementation queue.
+## Next Steps
 
+**Continue Drawing Tools:**
+- Tool selection via global hotkeys
+- Tool switching while in drawing mode
+- Each tool has configurable color
+- Each tool has configurable line thickness
+- Shape preview while drawing (real-time rendering)
+- Multiple shapes can exist on screen simultaneously
+- Newer shapes appear on top of older shapes
+
+**Then Hotkey System:**
+- Global hotkey registration
+- Hotkey-to-tool mapping
+- Escape key cancellation
+
+---
+
+## Implementation Notes
+
+**Freehand Tool:**
+- Tracks points continuously during mouse drag
+- Renders smooth path using `lineTo()` between consecutive points
+- Minimum 2 points required to create shape
+- Real-time preview shows path as it's drawn
+
+**Highlighter Tool:**
+- Same point-tracking mechanism as freehand
+- Uses `globalAlpha = 0.3` for semi-transparent effect
+- Doubles the line thickness for broader stroke
+- Must reset `globalAlpha` to 1.0 after rendering
+
+**Text Tool:**
+- Uses inline input field instead of `prompt()` for better UX
+- Input field positioned exactly at click location
+- Enter submits, Escape cancels, blur auto-submits
+- Default font size: 24px
+- Text color follows current color selection
+
+**All Tools:**
+- Integrated with existing shape system
+- Support undo/clear operations
+- Persist in shapesRef until overlay dismissed
+- Redrawn on canvas resize
+- Tool indicator shows active tool in top-left corner
