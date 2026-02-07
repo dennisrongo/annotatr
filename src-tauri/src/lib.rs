@@ -30,17 +30,116 @@ fn greet(name: &str) -> String {
 }
 
 // Settings commands
+/// Save a setting to persistent storage
+/// This uses Tauri's store plugin for cross-platform persistent storage
 #[tauri::command]
-fn save_settings(key: String, value: serde_json::Value) -> Result<(), String> {
-    // TODO: Implement actual storage
-    println!("Saving setting: {} = {:?}", key, value);
+async fn save_settings(app: AppHandle, key: String, value: serde_json::Value) -> Result<(), String> {
+    // Get or create the settings store
+    let store_path = PathBuf::from("settings.json");
+    let store = StoreBuilder::new(app.clone(), store_path).build();
+
+    // Save the key-value pair
+    store.set(key.clone(), value.clone());
+    store.save().map_err(|e| format!("Failed to save settings: {}", e))?;
+
+    println!("Setting saved: {} = {:?}", key, value);
+
+    // Emit event that settings were updated
+    app.emit("settings_updated", serde_json::json!({
+        "key": key,
+        "value": value
+    }))
+    .map_err(|e| format!("Failed to emit event: {}", e))?;
+
     Ok(())
 }
 
+/// Load all settings from persistent storage
+/// Returns the complete settings object
 #[tauri::command]
-fn load_settings() -> Result<serde_json::Value, String> {
-    // TODO: Implement actual storage
-    Ok(serde_json::json!({}))
+async fn load_settings(app: AppHandle) -> Result<serde_json::Value, String> {
+    // Get or create the settings store
+    let store_path = PathBuf::from("settings.json");
+    let store = StoreBuilder::new(app.clone(), store_path).build();
+
+    // Load all settings as a JSON object
+    let settings = store
+        .as_json()
+        .map_err(|e| format!("Failed to load settings: {}", e))?;
+
+    println!("Settings loaded: {:?}", settings);
+
+    Ok(settings)
+}
+
+/// Load a specific setting by key
+#[tauri::command]
+async fn load_setting(app: AppHandle, key: String) -> Result<serde_json::Value, String> {
+    // Get or create the settings store
+    let store_path = PathBuf::from("settings.json");
+    let store = StoreBuilder::new(app.clone(), store_path).build();
+
+    // Get the specific key
+    if let Some(value) = store.get(&key) {
+        println!("Setting loaded: {} = {:?}", key, value);
+        Ok(value.clone())
+    } else {
+        // Return null if key doesn't exist
+        Ok(serde_json::json!(null))
+    }
+}
+
+/// Reset all settings to default values
+#[tauri::command]
+async fn reset_settings(app: AppHandle) -> Result<(), String> {
+    // Get or create the settings store
+    let store_path = PathBuf::from("settings.json");
+    let store = StoreBuilder::new(app.clone(), store_path).build();
+
+    // Clear all settings
+    store.clear();
+    store.save().map_err(|e| format!("Failed to reset settings: {}", e))?;
+
+    // Set default values
+    let defaults = get_default_settings();
+    for (key, value) in defaults.as_object().unwrap().iter() {
+        store.set(key.clone(), value.clone());
+    }
+    store.save().map_err(|e| format!("Failed to save default settings: {}", e))?;
+
+    println!("Settings reset to defaults");
+
+    // Emit event that settings were reset
+    app.emit("settings_updated", defaults)
+        .map_err(|e| format!("Failed to emit event: {}", e))?;
+
+    Ok(())
+}
+
+/// Get default settings values
+fn get_default_settings() -> serde_json::Value {
+    serde_json::json!({
+        "hotkeys": {
+            "toggleDrawingMode": "Ctrl+Shift+D",
+            "arrowTool": "Ctrl+Shift+A",
+            "circleTool": "Ctrl+Shift+C",
+            "boxTool": "Ctrl+Shift+B",
+            "freehandTool": "Ctrl+Shift+F",
+            "highlighterTool": "Ctrl+Shift+H",
+            "textTool": "Ctrl+Shift+T"
+        },
+        "colors": {
+            "arrow": "#FF0000",
+            "circle": "#FF0000",
+            "box": "#FF0000",
+            "freehand": "#FF0000",
+            "highlighter": "#FFFF00",
+            "text": "#FF0000"
+        },
+        "lineThickness": 12,
+        "fontSize": 14,
+        "fadeDuration": 10
+    })
 }
 
 // Overlay commands
@@ -241,6 +340,54 @@ fn register_hotkeys(hotkey_config: serde_json::Value) -> Result<(), String> {
     Ok(())
 }
 
+/// Dismiss the overlay (hide and clean up state)
+/// This is called when Escape key is pressed or toggle hotkey is triggered
+#[tauri::command]
+fn dismiss_overlay(app: AppHandle) -> Result<(), String> {
+    // Get the overlay window by label
+    let overlay_window = app.get_webview_window("overlay")
+        .ok_or("Overlay window not found")?;
+
+    // Update state to mark overlay as not visible
+    if let Some(state) = app.state::<SharedState>().try_get() {
+        let mut state_guard = state.lock().map_err(|e| format!("State lock error: {}", e))?;
+        state_guard.is_visible = false;
+    }
+
+    // Hide the overlay window
+    overlay_window.hide()?;
+
+    // Disable mouse capture (return to pass-through mode)
+    overlay_window.set_ignore_cursor_events(true)?;
+
+    // Clear any active drawing state
+    // TODO: Emit an event to frontend to clear drawing state
+
+    println!("Overlay dismissed via Escape key or toggle");
+
+    Ok(())
+}
+
+/// Toggle overlay visibility
+/// Shows overlay if hidden, hides if visible
+#[tauri::command]
+fn toggle_overlay(app: AppHandle) -> Result<bool, String> {
+    let overlay_window = app.get_webview_window("overlay")
+        .ok_or("Overlay window not found")?;
+
+    let is_visible = overlay_window.is_visible()?;
+
+    if is_visible {
+        // Hide the overlay
+        dismiss_overlay(app)?;
+        Ok(false)
+    } else {
+        // Show the overlay
+        show_overlay(app)?;
+        Ok(true)
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Initialize shared state
@@ -248,11 +395,14 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_store::Builder::new().build())
         .manage(overlay_state)
         .invoke_handler(tauri::generate_handler![
             greet,
             save_settings,
             load_settings,
+            load_setting,
+            reset_settings,
             create_overlay_window,
             show_overlay,
             hide_overlay,
@@ -267,7 +417,9 @@ pub fn run() {
             drawing_end,
             create_shape,
             clear_all_shapes,
-            register_hotkeys
+            register_hotkeys,
+            dismiss_overlay,
+            toggle_overlay
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
