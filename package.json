@@ -4,6 +4,7 @@
   "description": "A cross-platform screen annotation overlay tool",
   "type": "module",
   "scripts": {
+    "predev": "rm -rf node_modules/.vite",
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
