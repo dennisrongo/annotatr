@@ -12,22 +12,8 @@ pub struct MonitorInfo {
     pub scale_factor: f64,
 }
 
-/// Get information about all monitors
-#[tauri::command]
-pub fn get_monitor_info() -> Result<Vec<MonitorInfo>, String> {
-    // For now, return a placeholder
-    // In a real implementation, this would use platform-specific APIs
-    // to query monitor information
-    Ok(vec![MonitorInfo {
-        id: "default".to_string(),
-        name: "Primary Monitor".to_string(),
-        x: 0,
-        y: 0,
-        width: 1920,
-        height: 1080,
-        scale_factor: 1.0,
-    }])
-}
+// NOTE: get_monitor_info has been moved to lib.rs with a proper implementation
+// using Tauri's real monitor API. This file now contains only supporting utilities.
 
 /// Create or show the overlay window
 #[tauri::command]
