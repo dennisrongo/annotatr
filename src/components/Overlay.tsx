@@ -14,6 +14,7 @@ interface DrawingState {
  * This component renders on the overlay window and handles:
  * - Escape key to dismiss overlay
  * - Drawing mode activation/deactivation
+ * - Cursor changes based on drawing mode (Feature #16)
  * - Shape rendering
  */
 export default function Overlay() {
@@ -25,6 +26,7 @@ export default function Overlay() {
     startY: 0,
   });
   const [isVisible, setIsVisible] = useState(true);
+  const [isDrawingMode, setIsDrawingMode] = useState(false);
 
   useEffect(() => {
     // Feature #10: Handle Escape key to dismiss overlay
