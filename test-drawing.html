@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Drawing Test - Annotatr</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: system-ui, -apple-system, sans-serif;
+        }
+        #controls {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 10000;
+        }
+        #controls button {
+            margin: 5px;
+            padding: 8px 12px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            cursor: pointer;
+            background: #f0f0f0;
+        }
+        #controls button.active {
+            background: #3b82f6;
+            color: white;
+            border-color: #3b82f6;
+        }
+        #controls button.circle {
+            background: #10b981;
+            color: white;
+        }
+        #controls button.box {
+            background: #f59e0b;
+            color: white;
+        }
+        #controls button.freehand {
+            background: #ef4444;
+            color: white;
+        }
+        #canvas-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            cursor: crosshair;
+        }
+        #info {
+            position: fixed;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div id="controls">
+        <h3>Drawing Tools</h3>
+        <button onclick="setTool('circle')" class="circle">○ Circle</button>
+        <button onclick="setTool('box')" class="box">□ Box</button>
+        <button onclick="setTool('freehand')" class="freehand">✎ Freehand</button>
+        <hr>
+        <button onclick="clearCanvas()">Clear All</button>
+    </div>
+
+    <div id="canvas-container">
+        <canvas id="drawing-canvas"></canvas>
+    </div>
+
+    <div id="info">
+        Tool: <span id="current-tool">None</span> | Shapes: <span id="shape-count">0</span>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('drawing-canvas');
+        const ctx = canvas.getContext('2d');
+        const container = document.getElementById('canvas-container');
+
+        let currentTool = null;
+        let isDrawing = false;
+        let startX = 0;
+        let startY = 0;
+        let shapes = [];
+        let freehandPoints = [];
+
+        // Resize canvas to full window
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            redrawAllShapes();
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        function setTool(tool) {
+            currentTool = tool;
+            document.getElementById('current-tool').textContent = tool || 'None';
+
+            // Update button styles
+            document.querySelectorAll('#controls button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+        }
+
+        function clearCanvas() {
+            shapes = [];
+            redrawAllShapes();
+            document.getElementById('shape-count').textContent = '0';
+        }
+
+        function redrawAllShapes() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            shapes.forEach(shape => drawShape(shape));
+        }
+
+        function drawShape(shape) {
+            ctx.strokeStyle = shape.color;
+            ctx.lineWidth = shape.lineThickness;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+
+            switch (shape.tool) {
+                case 'circle':
+                    ctx.beginPath();
+                    ctx.ellipse(shape.centerX, shape.centerY, shape.radiusX, shape.radiusY, 0, 0, 2 * Math.PI);
+                    ctx.stroke();
+                    break;
+
+                case 'box':
+                    ctx.strokeRect(shape.startX, shape.startY, shape.width, shape.height);
+                    break;
+
+                case 'freehand':
+                    if (shape.points.length < 2) return;
+                    ctx.beginPath();
+                    ctx.moveTo(shape.points[0].x, shape.points[0].y);
+                    for (let i = 1; i < shape.points.length; i++) {
+                        ctx.lineTo(shape.points[i].x, shape.points[i].y);
+                    }
+                    ctx.stroke();
+                    break;
+            }
+        }
+
+        container.addEventListener('mousedown', (e) => {
+            if (!currentTool) return;
+
+            isDrawing = true;
+            startX = e.clientX;
+            startY = e.clientY;
+
+            if (currentTool === 'freehand') {
+                freehandPoints = [{ x: startX, y: startY }];
+            }
+        });
+
+        container.addEventListener('mousemove', (e) => {
+            if (!isDrawing || !currentTool) return;
+
+            const currentX = e.clientX;
+            const currentY = e.clientY;
+
+            if (currentTool === 'freehand') {
+                freehandPoints.push({ x: currentX, y: currentY });
+
+                // Redraw existing shapes and preview
+                redrawAllShapes();
+
+                // Draw preview of current freehand path
+                ctx.strokeStyle = '#ef4444';
+                ctx.lineWidth = 12;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.beginPath();
+                ctx.moveTo(freehandPoints[0].x, freehandPoints[0].y);
+                for (let i = 1; i < freehandPoints.length; i++) {
+                    ctx.lineTo(freehandPoints[i].x, freehandPoints[i].y);
+                }
+                ctx.stroke();
+            } else {
+                // For circle and box - preview shape
+                redrawAllShapes();
+
+                ctx.strokeStyle = currentTool === 'circle' ? '#10b981' : '#f59e0b';
+                ctx.lineWidth = 12;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+
+                if (currentTool === 'circle') {
+                    const centerX = startX;
+                    const centerY = startY;
+                    const radiusX = Math.abs(currentX - startX);
+                    const radiusY = Math.abs(currentY - startY);
+                    ctx.beginPath();
+                    ctx.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, 2 * Math.PI);
+                    ctx.stroke();
+                } else if (currentTool === 'box') {
+                    const width = currentX - startX;
+                    const height = currentY - startY;
+                    ctx.strokeRect(startX, startY, width, height);
+                }
+            }
+        });
+
+        container.addEventListener('mouseup', (e) => {
+            if (!isDrawing || !currentTool) return;
+
+            const endX = e.clientX;
+            const endY = e.clientY;
+
+            let newShape = null;
+
+            if (currentTool === 'freehand') {
+                if (freehandPoints.length >= 2) {
+                    newShape = {
+                        tool: 'freehand',
+                        points: [...freehandPoints],
+                        color: '#ef4444',
+                        lineThickness: 12
+                    };
+                }
+            } else if (currentTool === 'circle') {
+                newShape = {
+                    tool: 'circle',
+                    centerX: startX,
+                    centerY: startY,
+                    radiusX: Math.abs(endX - startX),
+                    radiusY: Math.abs(endY - startY),
+                    color: '#10b981',
+                    lineThickness: 12
+                };
+            } else if (currentTool === 'box') {
+                newShape = {
+                    tool: 'box',
+                    startX: startX,
+                    startY: startY,
+                    width: endX - startX,
+                    height: endY - startY,
+                    color: '#f59e0b',
+                    lineThickness: 12
+                };
+            }
+
+            if (newShape) {
+                shapes.push(newShape);
+                document.getElementById('shape-count').textContent = shapes.length;
+            }
+
+            isDrawing = false;
+            freehandPoints = [];
+            redrawAllShapes();
+        });
+
+        container.addEventListener('mouseleave', () => {
+            if (isDrawing) {
+                isDrawing = false;
+                freehandPoints = [];
+                redrawAllShapes();
+            }
+        });
+    </script>
+</body>
+</html>
