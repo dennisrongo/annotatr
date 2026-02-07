@@ -308,6 +308,20 @@ fn disable_mouse_capture(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// Set drawing mode and emit event to notify UI components
+/// When enabled, activates drawing mode and changes cursor
+/// When disabled, deactivates drawing mode and resets cursor
+#[tauri::command]
+fn set_drawing_mode(app: AppHandle, enabled: bool) -> Result<(), String> {
+    // Emit drawing-mode-changed event for UI components to listen to
+    app.emit("drawing-mode-changed", enabled)
+        .map_err(|e| format!("Failed to emit drawing-mode-changed event: {}", e))?;
+
+    println!("Drawing mode changed to: {}", enabled);
+
+    Ok(())
+}
+
 // Drawing commands
 #[tauri::command]
 fn drawing_start(tool: String, x: i32, y: i32) -> Result<(), String> {
@@ -465,6 +479,7 @@ pub fn run() {
             set_overlay_position,
             enable_mouse_capture,
             disable_mouse_capture,
+            set_drawing_mode,
             drawing_start,
             drawing_update,
             drawing_end,
