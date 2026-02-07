@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { ToolType, Shape, ArrowShape, CircleShape, BoxShape, FreehandShape, HighlighterShape, TextShape, Point } from "../types/shapes";
 import { drawShape, redrawShapes } from "../lib/drawing";
 import { loadSettings, Settings } from "../lib/storage";
+import { drawingState as centralizedState, DrawingState as CentralizedDrawingState } from "../lib/drawingState";
 
 interface DrawingState {
   isDrawing: boolean;
@@ -51,12 +52,18 @@ export default function Overlay() {
   const [settings, setSettings] = useState<Settings | null>(null);
 
   // Feature #9: Track current monitor ID for shape confinement
-  const [currentMonitor, setCurrentMonitor] = useState<string | null>(null);
+  const [currentMonitor] = useState<string | null>(null);
 
   // Default drawing settings (fallbacks until settings load)
   const defaultColor = "#FF0000";
   const defaultLineThickness = 12;
   const defaultFontSize = 24;
+
+  // Feature #35: Auto-fade system - track fade timers for shapes
+  // TODO: Implement auto-fade logic
+  // const fadeTimersRef = useRef<Map<string, number>>(new Map());
+  // const fadingShapesRef = useRef<Set<string>>(new Set());
+  // const [shapeOpacities, setShapeOpacities] = useState<Record<string, number>>({});
 
   // Feature #17: Tool-specific visual indicators (icons, colors, labels)
   const toolIndicators: Record<ToolType, { icon: string; color: string; label: string }> = {
@@ -96,12 +103,12 @@ export default function Overlay() {
     if (!context) return;
 
     const { ctx } = context;
-    // Feature #35: Pass opacities to redrawShapes for fade effect
-    redrawShapes(ctx, shapesRef.current, shapeOpacities);
-  }, [getCanvasContext, shapeOpacities]);
+    redrawShapes(ctx, shapesRef.current);
+  }, [getCanvasContext]);
 
   /**
    * Create arrow shape from drawing state
+   * Feature #9: Includes monitorId for per-monitor shape confinement
    */
   const createArrowShape = useCallback((
     startX: number,
@@ -117,12 +124,13 @@ export default function Overlay() {
       color: defaultColor,
       lineThickness: defaultLineThickness,
       createdAt: Date.now(),
-      monitorId: "default", // Feature #9: Track monitor ID
+      monitorId: currentMonitor || "default", // Feature #9: Track monitor ID
     };
-  }, [generateShapeId]);
+  }, [generateShapeId, currentMonitor]);
 
   /**
    * Create circle shape from drawing state
+   * Feature #9: Includes monitorId for per-monitor shape confinement
    */
   const createCircleShape = useCallback((
     startX: number,
@@ -145,12 +153,13 @@ export default function Overlay() {
       color: defaultColor,
       lineThickness: defaultLineThickness,
       createdAt: Date.now(),
-      monitorId: "default", // Feature #9: Track monitor ID
+      monitorId: currentMonitor || "default", // Feature #9: Track monitor ID
     };
-  }, [generateShapeId]);
+  }, [generateShapeId, currentMonitor]);
 
   /**
    * Create box shape from drawing state
+   * Feature #9: Includes monitorId for per-monitor shape confinement
    */
   const createBoxShape = useCallback((
     startX: number,
@@ -171,12 +180,13 @@ export default function Overlay() {
       color: defaultColor,
       lineThickness: defaultLineThickness,
       createdAt: Date.now(),
-      monitorId: "default", // Feature #9: Track monitor ID
+      monitorId: currentMonitor || "default", // Feature #9: Track monitor ID
     };
-  }, [generateShapeId]);
+  }, [generateShapeId, currentMonitor]);
 
   /**
    * Create freehand shape from drawing state
+   * Feature #9: Includes monitorId for per-monitor shape confinement
    */
   const createFreehandShape = useCallback((points: Point[]): FreehandShape => {
     return {
@@ -186,12 +196,13 @@ export default function Overlay() {
       color: defaultColor,
       lineThickness: defaultLineThickness,
       createdAt: Date.now(),
-      monitorId: "default", // Feature #9: Track monitor ID
+      monitorId: currentMonitor || "default", // Feature #9: Track monitor ID
     };
-  }, [generateShapeId]);
+  }, [generateShapeId, currentMonitor]);
 
   /**
    * Create highlighter shape from drawing state
+   * Feature #9: Includes monitorId for per-monitor shape confinement
    */
   const createHighlighterShape = useCallback((points: Point[]): HighlighterShape => {
     return {
@@ -202,9 +213,9 @@ export default function Overlay() {
       lineThickness: defaultLineThickness,
       opacity: 0.3, // Semi-transparent
       createdAt: Date.now(),
-      monitorId: "default", // Feature #9: Track monitor ID
+      monitorId: currentMonitor || "default", // Feature #9: Track monitor ID
     };
-  }, [generateShapeId]);
+  }, [generateShapeId, currentMonitor]);
 
   /**
    * Create text shape from drawing state
@@ -230,6 +241,7 @@ export default function Overlay() {
       lineThickness: 0, // Not used for text
       fontSize: Math.round(fontSize),
       createdAt: Date.now(),
+      monitorId: "default", // Feature #9: Track monitor ID
     };
   }, [generateShapeId, settings, defaultFontSize, defaultColor]);
 
@@ -667,7 +679,7 @@ export default function Overlay() {
       unlistenOverlayDismissed.then((fn) => fn()).catch(console.error);
       unlistenClearShapes.then((fn) => fn()).catch(console.error);
     };
-  }, [isVisible, cancelAllFadeTimers]);
+  }, [isVisible]);
 
   // Initialize canvas
   useEffect(() => {
