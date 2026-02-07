@@ -362,6 +362,40 @@ fn register_hotkeys(hotkey_config: serde_json::Value) -> Result<(), String> {
     Ok(())
 }
 
+/// Feature #18: Activate overlay and select a tool via hotkey
+/// This command is called when a hotkey for a specific tool is pressed
+#[tauri::command]
+fn activate_tool_hotkey(app: AppHandle, tool: String) -> Result<(), String> {
+    // Show the overlay if not already visible
+    let overlay_window = app.get_webview_window("overlay")
+        .ok_or("Overlay window not found")?;
+
+    if !overlay_window.is_visible()? {
+        overlay_window.show()?;
+        overlay_window.set_focus()?;
+        overlay_window.set_always_on_top(true)?;
+
+        // Update state
+        if let Some(state) = app.state::<SharedState>().try_get() {
+            let mut state_guard = state.lock().map_err(|e| format!("State lock error: {}", e))?;
+            state_guard.is_visible = true;
+            state_guard.drawing_mode = true;
+        }
+    }
+
+    // Emit tool-selected event to notify overlay
+    app.emit("tool-selected", tool)
+        .map_err(|e| format!("Failed to emit event: {}", e))?;
+
+    // Emit drawing-mode-changed event
+    app.emit("drawing-mode-changed", true)
+        .map_err(|e| format!("Failed to emit event: {}", e))?;
+
+    println!("Activated tool '{}' via hotkey, overlay shown", tool);
+
+    Ok(())
+}
+
 /// Dismiss the overlay (hide and clean up state)
 /// This is called when Escape key is pressed or toggle hotkey is triggered
 #[tauri::command]
@@ -433,6 +467,102 @@ fn ensure_on_top(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// Feature #19: Set mini panel position (supports off-screen positioning)
+/// Allows the panel to be positioned off-screen to hide it from recordings
+#[tauri::command]
+fn set_mini_panel_position(app: AppHandle, x: i32, y: i32) -> Result<(), String> {
+    let panel_window = app.get_webview_window("mini-panel")
+        .ok_or("Mini panel window not found")?;
+
+    // Feature #19: Allow off-screen positioning by not validating bounds
+    // The window can be positioned anywhere, including off-screen
+    panel_window.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y }))?;
+
+    println!("Mini panel positioned at off-screen coordinates ({}, {})", x, y);
+
+    Ok(())
+}
+
+/// Feature #19: Get mini panel position
+/// Returns the current position of the mini panel
+#[tauri::command]
+fn get_mini_panel_position(app: AppHandle) -> Result<serde_json::Value, String> {
+    let panel_window = app.get_webview_window("mini-panel")
+        .ok_or("Mini panel window not found")?;
+
+    let position = panel_window.position()?;
+
+    Ok(serde_json::json!({
+        "x": position.x,
+        "y": position.y
+    }))
+}
+
+/// Feature #19: Save mini panel position to persistent storage
+/// Stores the off-screen position so it persists across app restarts
+#[tauri::command]
+fn save_mini_panel_position(app: AppHandle, x: i32, y: i32) -> Result<(), String> {
+    use tauri_plugin_store::{StoreBuilder, StoreExt};
+    use std::path::PathBuf;
+
+    let store_path = PathBuf::from("settings.json");
+    let store = StoreBuilder::new(app.clone(), store_path).build();
+
+    // Save panel position to storage
+    store.set("mini_panel_position", serde_json::json!({
+        "x": x,
+        "y": y
+    }));
+    store.save().map_err(|e| format!("Failed to save panel position: {}", e))?;
+
+    println!("Mini panel position saved: ({}, {})", x, y);
+
+    Ok(())
+}
+
+/// Feature #19: Load and restore mini panel position from storage
+/// Restores the panel to its last saved position (including off-screen)
+#[tauri::command]
+fn restore_mini_panel_position(app: AppHandle) -> Result<serde_json::Value, String> {
+    use tauri_plugin_store::{StoreBuilder, StoreExt};
+    use std::path::PathBuf;
+
+    let store_path = PathBuf::from("settings.json");
+    let store = StoreBuilder::new(app.clone(), store_path).build();
+
+    // Get panel position from storage
+    if let Some(position) = store.get("mini_panel_position") {
+        let x = position["x"].as_i64().unwrap_or(0) as i32;
+        let y = position["y"].as_i64().unwrap_or(0) as i32;
+
+        // Restore position
+        let panel_window = app.get_webview_window("mini-panel")
+            .ok_or("Mini panel window not found")?;
+
+        panel_window.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y }))?;
+
+        println!("Mini panel position restored to: ({}, {})", x, y);
+
+        Ok(serde_json::json!({
+            "x": x,
+            "y": y,
+            "restored": true
+        }))
+    } else {
+        // No saved position, return current position
+        let panel_window = app.get_webview_window("mini-panel")
+            .ok_or("Mini panel window not found")?;
+
+        let position = panel_window.position()?;
+
+        Ok(serde_json::json!({
+            "x": position.x,
+            "y": position.y,
+            "restored": false
+        }))
+    }
+}
+
 /// Feature #11: Get platform information
 /// Returns the detected platform and platform-specific window hints
 #[tauri::command]
@@ -491,7 +621,11 @@ pub fn run() {
             dismiss_overlay,
             toggle_overlay,
             ensure_on_top,
-            get_platform_info
+            get_platform_info,
+            set_mini_panel_position,
+            get_mini_panel_position,
+            save_mini_panel_position,
+            restore_mini_panel_position
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
