@@ -123,6 +123,30 @@ function App() {
     }
   }
 
+  // Feature #10: Dismiss overlay (Escape key handler)
+  async function dismissOverlay() {
+    try {
+      await invoke("dismiss_overlay");
+      setOverlayVisible(false);
+      setMouseCaptureEnabled(false);
+      setStatusMsg("Overlay dismissed - drawing state cleared");
+    } catch (error) {
+      setStatusMsg(`Error: ${error}`);
+    }
+  }
+
+  // Feature #10: Toggle overlay visibility
+  async function toggleOverlay() {
+    try {
+      const newState = await invoke<boolean>("toggle_overlay");
+      setOverlayVisible(newState);
+      setMouseCaptureEnabled(newState); // Reset mouse capture when toggling
+      setStatusMsg(`Overlay toggled - now ${newState ? "visible" : "hidden"}`);
+    } catch (error) {
+      setStatusMsg(`Error: ${error}`);
+    }
+  }
+
   // Load monitors on mount
   useEffect(() => {
     loadMonitorInfo();
