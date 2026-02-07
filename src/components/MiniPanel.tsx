@@ -382,14 +382,15 @@ export default function MiniPanel() {
         style={{
           padding: "8px 12px",
           margin: "4px",
-          backgroundColor: isSelected ? "rgba(37, 99, 235, 0.9)" : "rgba(255, 255, 255, 0.9)",
-          color: isSelected ? "white" : "black",
-          border: isSelected ? "2px solid #2563eb" : "1px solid #ccc",
-          borderRadius: "4px",
+          backgroundColor: isSelected ? "#2563eb" : "rgba(255, 255, 255, 0.9)",
+          color: isSelected ? "white" : "#213547",
+          border: isSelected ? "1px solid #2563eb" : "1px solid transparent",
+          borderRadius: "8px",
           cursor: "pointer",
           fontSize: "12px",
-          fontWeight: isSelected ? "bold" : "normal",
-          transition: "all 0.2s ease",
+          fontWeight: isSelected ? "bold" : "500",
+          fontFamily: "inherit",
+          transition: "all 0.2s",
         }}
         onMouseEnter={(e) => {
           if (!isSelected) {
@@ -556,19 +557,21 @@ export default function MiniPanel() {
           style={{
             padding: "8px 12px",
             margin: "4px",
-            backgroundColor: "rgba(100, 100, 100, 0.9)",
+            backgroundColor: "#1a1a1a",
             color: "white",
-            border: "1px solid #666",
-            borderRadius: "4px",
+            border: "1px solid transparent",
+            borderRadius: "8px",
             cursor: "pointer",
             fontSize: "12px",
-            transition: "all 0.2s ease",
+            fontWeight: "500",
+            fontFamily: "inherit",
+            transition: "border-color 0.25s",
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = "rgba(120, 120, 120, 0.95)";
+            e.currentTarget.style.borderColor = "#646cff";
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = "rgba(100, 100, 100, 0.9)";
+            e.currentTarget.style.borderColor = "transparent";
           }}
           title="Open settings panel"
         >
