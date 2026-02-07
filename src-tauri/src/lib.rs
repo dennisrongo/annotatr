@@ -5,6 +5,7 @@ mod utils;
 
 use tauri::{AppHandle, Emitter, Manager, Window, State};
 use tauri_plugin_store::{StoreBuilder, StoreExt};
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 use std::sync::{Arc, Mutex};
 use std::path::PathBuf;
 
@@ -510,10 +511,111 @@ fn clear_all_shapes(app: AppHandle) -> Result<(), String> {
 }
 
 // Hotkey commands
+/// Feature #56, #57, #58: Register global hotkeys for tools
+/// Registers shortcuts like Ctrl+Shift+A for Arrow tool, etc.
 #[tauri::command]
-fn register_hotkeys(hotkey_config: serde_json::Value) -> Result<(), String> {
-    // TODO: Implement hotkey registration
+fn register_hotkeys(app: AppHandle, hotkey_config: serde_json::Value) -> Result<(), String> {
+    // Get the hotkeys object from config
+    let hotkeys_obj = hotkey_config["hotkeys"].as_object()
+        .ok_or("Invalid hotkeys config: missing 'hotkeys' object")?;
+
+    // Register each tool hotkey
+    for (tool_name, hotkey_str) in hotkeys_obj.iter() {
+        if let Some(hotkey_value) = hotkey_str.as_str() {
+            // Parse the hotkey string (e.g., "Ctrl+Shift+A")
+            let shortcut = parse_hotkey_string(hotkey_value)
+                .map_err(|e| format!("Failed to parse hotkey '{}': {}", hotkey_value, e))?;
+
+            // Register the global shortcut
+            let app_handle = app.clone();
+            let tool = tool_name.clone();
+
+            app.global_shortcut().register(shortcut, move || {
+                // When hotkey is pressed, call activate_tool_hotkey
+                if let Err(e) = activate_tool_hotkey(app_handle.clone(), tool.clone()) {
+                    eprintln!("Failed to activate tool '{}': {}", tool, e);
+                }
+            }).map_err(|e| format!("Failed to register hotkey '{}' for tool '{}': {}", hotkey_value, tool_name, e))?;
+
+            println!("Registered hotkey '{}' for tool '{}'", hotkey_value, tool_name);
+        }
+    }
+
     Ok(())
+}
+
+/// Parse a hotkey string like "Ctrl+Shift+A" into a Shortcut
+fn parse_hotkey_string(s: &str) -> Result<Shortcut, String> {
+    let mut modifiers = Vec::new();
+    let mut key = None;
+
+    for part in s.split('+') {
+        let part = part.trim();
+        match part.to_uppercase().as_str() {
+            "CTRL" | "CONTROL" => modifiers.push(tauri_plugin_global_shortcut::Modifier::Control),
+            "SHIFT" => modifiers.push(tauri_plugin_global_shortcut::Modifier::Shift),
+            "ALT" => modifiers.push(tauri_plugin_global_shortcut::Modifier::Alt),
+            "META" | "CMD" | "SUPER" | "WIN" => modifiers.push(tauri_plugin_global_shortcut::Modifier::Super),
+            _ => {
+                // This is the key
+                if key.is_some() {
+                    return Err(format!("Multiple keys found in hotkey: '{}'", s));
+                }
+                key = Some(parse_key_string(part)?);
+            }
+        }
+    }
+
+    let key = key.ok_or(format!("No key found in hotkey: '{}'", s))?;
+
+    Ok(Shortcut::new(modifiers, key))
+}
+
+/// Parse a key string (e.g., "A", "F1", "Space") into a Key
+fn parse_key_string(s: &str) -> Result<tauri_plugin_global_shortcut::Key, String> {
+    use tauri_plugin_global_shortcut::Key;
+
+    let s_upper = s.to_uppercase();
+
+    // Single character keys
+    if s_upper.len() == 1 {
+        let c = s_upper.chars().next().unwrap();
+        if c.is_alphabetic() || c.is_ascii_digit() {
+            return Ok(Key::Character(c.to_string()));
+        }
+    }
+
+    // Special keys
+    match s_upper.as_str() {
+        "SPACE" => Ok(Key::Space),
+        "ENTER" | "RETURN" => Ok(Key::Enter),
+        "TAB" => Ok(Key::Tab),
+        "ESCAPE" | "ESC" => Ok(Key::Escape),
+        "BACKSPACE" => Ok(Key::Backspace),
+        "DELETE" | "DEL" => Ok(Key::Delete),
+        "INSERT" => Ok(Key::Insert),
+        "HOME" => Ok(Key::Home),
+        "END" => Ok(Key::End),
+        "PAGEUP" => Ok(Key::PageUp),
+        "PAGEDOWN" => Ok(Key::PageDown),
+        "LEFT" | "ARROWLEFT" => Ok(Key::ArrowLeft),
+        "RIGHT" | "ARROWRIGHT" => Ok(Key::ArrowRight),
+        "UP" | "ARROWUP" => Ok(Key::ArrowUp),
+        "DOWN" | "ARROWDOWN" => Ok(Key::ArrowDown),
+        "F1" => Ok(Key::F1),
+        "F2" => Ok(Key::F2),
+        "F3" => Ok(Key::F3),
+        "F4" => Ok(Key::F4),
+        "F5" => Ok(Key::F5),
+        "F6" => Ok(Key::F6),
+        "F7" => Ok(Key::F7),
+        "F8" => Ok(Key::F8),
+        "F9" => Ok(Key::F9),
+        "F10" => Ok(Key::F10),
+        "F11" => Ok(Key::F11),
+        "F12" => Ok(Key::F12),
+        _ => Err(format!("Unknown key: '{}'", s))
+    }
 }
 
 /// Feature #18: Activate overlay and select a tool via hotkey
@@ -847,6 +949,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_store::Builder::new().build())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .manage(overlay_state)
         .invoke_handler(tauri::generate_handler![
             greet,

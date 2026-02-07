@@ -175,6 +175,24 @@ export default function MiniPanel() {
   }, []);
 
   /**
+   * Feature #56, #57, #58: Register global hotkeys on mount
+   * Registers shortcuts for Arrow (Ctrl+Shift+A), Circle (Ctrl+Shift+C), Box (Ctrl+Shift+B)
+   */
+  useEffect(() => {
+    const registerHotkeys = async () => {
+      try {
+        const settings = await loadSettings();
+        // Register all hotkeys with the backend
+        await invoke("register_hotkeys", { hotkeyConfig: settings });
+        console.log("Global hotkeys registered successfully:", settings.hotkeys);
+      } catch (error) {
+        console.error("Failed to register global hotkeys:", error);
+      }
+    };
+    registerHotkeys();
+  }, []);
+
+  /**
    * Handle tool selection
    * Feature #18: Also activate overlay when a tool is selected via mini panel
    */
