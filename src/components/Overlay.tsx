@@ -55,6 +55,11 @@ export default function Overlay() {
   const defaultLineThickness = 12;
   const defaultFontSize = 24;
 
+  // Feature #35: Auto-fade system - track fade timers for shapes
+  const fadeTimersRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  const fadingShapesRef = useRef<Set<string>>(new Set()); // Shapes currently fading
+  const [shapeOpacities, setShapeOpacities] = useState<Record<string, number>>({});
+
   // Feature #17: Tool-specific visual indicators (icons, colors, labels)
   const toolIndicators: Record<ToolType, { icon: string; color: string; label: string }> = {
     [ToolType.ARROW]: { icon: "↗", color: "#3b82f6", label: "Arrow" },
@@ -70,6 +75,100 @@ export default function Overlay() {
    */
   const generateShapeId = useCallback(() => {
     return `shape_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }, []);
+
+  /**
+   * Feature #35: Start auto-fade timer for a shape
+   * After fadeDuration seconds, start fading the shape over 1 second, then remove it
+   */
+  const startFadeTimer = useCallback((shapeId: string) => {
+    // Get fade duration from settings (default 10 seconds)
+    const fadeDuration = settings?.fadeDuration || 10;
+
+    // Clear any existing timer for this shape
+    const existingTimer = fadeTimersRef.current.get(shapeId);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
+
+    // Set timer to start fading
+    const timer = setTimeout(() => {
+      console.log(`[Auto-Fade] Starting fade for shape ${shapeId}`);
+
+      // Mark shape as fading
+      fadingShapesRef.current.add(shapeId);
+
+      // Animate opacity over 1 second (20 frames at 50ms each)
+      let opacity = 1.0;
+      const fadeSteps = 20;
+      const fadeStepDuration = 50; // 50ms per step = 1 second total
+
+      const fadeInterval = setInterval(() => {
+        opacity -= 1 / fadeSteps;
+
+        if (opacity <= 0) {
+          // Fade complete - remove shape
+          clearInterval(fadeInterval);
+          fadeTimersRef.current.delete(shapeId);
+          fadingShapesRef.current.delete(shapeId);
+
+          // Remove shape from collection
+          const index = shapesRef.current.findIndex(s => s.id === shapeId);
+          if (index !== -1) {
+            shapesRef.current.splice(index, 1);
+            console.log(`[Auto-Fade] Removed shape ${shapeId}`);
+
+            // Update opacities state
+            setShapeOpacities(prev => {
+              const newOpacities = { ...prev };
+              delete newOpacities[shapeId];
+              return newOpacities;
+            });
+
+            // Redraw remaining shapes
+            redrawAllShapes();
+          }
+        } else {
+          // Update opacity for this shape
+          setShapeOpacities(prev => ({
+            ...prev,
+            [shapeId]: opacity
+          }));
+        }
+      }, fadeStepDuration);
+
+    }, fadeDuration * 1000); // Convert to milliseconds
+
+    // Store timer reference
+    fadeTimersRef.current.set(shapeId, timer);
+
+    console.log(`[Auto-Fade] Started ${fadeDuration}s timer for shape ${shapeId}`);
+  }, [settings?.fadeDuration, redrawAllShapes]);
+
+  /**
+   * Feature #35: Cancel auto-fade timer for a shape
+   */
+  const cancelFadeTimer = useCallback((shapeId: string) => {
+    const timer = fadeTimersRef.current.get(shapeId);
+    if (timer) {
+      clearTimeout(timer);
+      fadeTimersRef.current.delete(shapeId);
+      fadingShapesRef.current.delete(shapeId);
+      console.log(`[Auto-Fade] Cancelled timer for shape ${shapeId}`);
+    }
+  }, []);
+
+  /**
+   * Feature #35: Cancel all fade timers (e.g., when overlay is dismissed)
+   */
+  const cancelAllFadeTimers = useCallback(() => {
+    fadeTimersRef.current.forEach((timer, shapeId) => {
+      clearTimeout(timer);
+    });
+    fadeTimersRef.current.clear();
+    fadingShapesRef.current.clear();
+    setShapeOpacities({});
+    console.log(`[Auto-Fade] Cancelled all timers`);
   }, []);
 
   /**

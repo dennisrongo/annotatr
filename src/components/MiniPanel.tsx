@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { ToolType } from "../types/shapes";
 
@@ -9,6 +9,32 @@ import { ToolType } from "../types/shapes";
  */
 export default function MiniPanel() {
   const [selectedTool, setSelectedTool] = useState<ToolType | null>(null);
+  const [position, setPosition] = useState({ x: 20, y: 20 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * Feature #19: Restore panel position on mount
+   * Loads saved position from storage (including off-screen positions)
+   */
+  useEffect(() => {
+    const restorePosition = async () => {
+      try {
+        const result = await invoke<serde_json.Value>("restore_mini_panel_position");
+        if (result && typeof result === "object") {
+          const x = (result as any).x as number;
+          const y = (result as any).y as number;
+          setPosition({ x, y });
+          console.log("Panel position restored:", { x, y });
+        }
+      } catch (error) {
+        console.error("Failed to restore panel position:", error);
+        setPosition({ x: 20, y: 20 });
+      }
+    };
+    restorePosition();
+  }, []);
 
   /**
    * Handle tool selection
@@ -26,6 +52,58 @@ export default function MiniPanel() {
 
     console.log(`Selected tool: ${tool}, overlay and drawing mode activated`);
   };
+
+  /**
+   * Feature #19: Handle drag start
+   * Initiates panel dragging
+   */
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('.panel-header')) {
+      setIsDragging(true);
+      setDragOffset({
+        x: e.clientX - position.x,
+        y: e.clientY - position.y,
+      });
+      e.preventDefault();
+    }
+  };
+
+  /**
+   * Feature #19: Handle drag move and save
+   */
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (isDragging) {
+        const newX = e.clientX - dragOffset.x;
+        const newY = e.clientY - dragOffset.y;
+        setPosition({ x: newX, y: newY });
+      }
+    };
+
+    const handleMouseUp = async () => {
+      if (isDragging) {
+        setIsDragging(false);
+        try {
+          await invoke("save_mini_panel_position", {
+            x: position.x,
+            y: position.y,
+          });
+          console.log("Panel position saved:", position);
+        } catch (error) {
+          console.error("Failed to save panel position:", error);
+        }
+      }
+    };
+
+    if (isDragging) {
+      window.addEventListener("mousemove", handleMouseMove);
+      window.addEventListener("mouseup", handleMouseUp);
+      return () => {
+        window.removeEventListener("mousemove", handleMouseMove);
+        window.removeEventListener("mouseup", handleMouseUp);
+      };
+    }
+  }, [isDragging, dragOffset, position]);
 
   /**
    * Tool button component
