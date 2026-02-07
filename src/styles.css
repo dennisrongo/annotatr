@@ -115,3 +115,89 @@ input {
     background: #1a1a1a;
   }
 }
+
+/* Feature #7: Mouse Capture Styles */
+button.active {
+  background-color: #2563eb;
+  border-color: #2563eb;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.info-text {
+  color: #6b7280;
+  font-size: 0.9em;
+  margin-bottom: 1rem;
+}
+
+.warning {
+  color: #dc2626;
+  font-size: 0.9em;
+  margin-top: 0.5rem;
+}
+
+/* Feature #8: Multi-Monitor Styles */
+.monitor-list {
+  margin-top: 1rem;
+  text-align: left;
+}
+
+.monitor-list h3 {
+  font-size: 1.1em;
+  margin-bottom: 1rem;
+}
+
+.monitor-item {
+  background: #f3f4f6;
+  padding: 1rem;
+  margin-bottom: 0.75rem;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  transition: all 0.2s;
+}
+
+.monitor-item.selected {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.monitor-item small {
+  color: #6b7280;
+}
+
+/* Feature #9: Info Box */
+.info-box {
+  background: #ecfdf5;
+  border: 1px solid #10b981;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-top: 1rem;
+}
+
+.info-box p {
+  margin: 0.5rem 0;
+  color: #065f46;
+}
+
+@media (prefers-color-scheme: dark) {
+  .monitor-item {
+    background: #1f2937;
+  }
+
+  .monitor-item.selected {
+    background: #1e3a8a;
+    border-color: #3b82f6;
+  }
+
+  .info-box {
+    background: #064e3b;
+    border-color: #059669;
+  }
+
+  .info-box p {
+    color: #d1fae5;
+  }
+}

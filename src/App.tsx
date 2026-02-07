@@ -20,6 +20,9 @@ function App() {
   const [statusMsg, setStatusMsg] = useState("");
   const [monitors, setMonitors] = useState<MonitorInfo[]>([]);
   const [selectedMonitor, setSelectedMonitor] = useState("");
+  const [storageStatus, setStorageStatus] = useState("Not tested");
+  const [storageValue, setStorageValue] = useState("");
+  const [loadedValue, setLoadedValue] = useState("");
 
   async function greet() {
     // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
@@ -123,7 +126,57 @@ function App() {
   // Load monitors on mount
   useEffect(() => {
     loadMonitorInfo();
+    // Test storage on mount
+    testStorage();
   }, []);
+
+  // Feature #1: Test local storage connection
+  async function testStorage() {
+    setStorageStatus("Testing...");
+    try {
+      const isConnected = await testStorageConnection();
+      setStorageStatus(isConnected ? "✓ Connected" : "✗ Failed");
+    } catch (error) {
+      setStorageStatus(`✗ Error: ${error}`);
+    }
+  }
+
+  // Test writing a value
+  async function writeTestValue() {
+    const testValue = `test_${Date.now()}`;
+    try {
+      await saveSetting("test_key", testValue);
+      setStorageValue(testValue);
+      setStatusMsg(`Wrote: ${testValue}`);
+    } catch (error) {
+      setStatusMsg(`Error writing: ${error}`);
+    }
+  }
+
+  // Test reading a value
+  async function readTestValue() {
+    try {
+      const value = await loadSetting<string>("test_key");
+      setLoadedValue(value ?? "null");
+      setStatusMsg(`Read: ${value}`);
+    } catch (error) {
+      setStatusMsg(`Error reading: ${error}`);
+    }
+  }
+
+  // Initialize storage with defaults
+  async function initStorage() {
+    try {
+      await initializeStorage();
+      setStatusMsg("Storage initialized with defaults");
+      // Load and display settings
+      const settings = await loadSettings();
+      console.log("Loaded settings:", settings);
+      setStatusMsg(`Storage initialized. Line thickness: ${settings.lineThickness}, Font size: ${settings.fontSize}`);
+    } catch (error) {
+      setStatusMsg(`Error initializing: ${error}`);
+    }
+  }
 
   return (
     <div className="container">
