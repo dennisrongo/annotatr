@@ -87,7 +87,62 @@ if (canvas) {
     }
   });
 
-  console.log('Overlay window initialized with mouse capture support');
+  // Feature #10: Handle Escape key to dismiss overlay
+  window.addEventListener('keydown', async (event) => {
+    if (event.key === 'Escape') {
+      console.log('Escape key pressed - dismissing overlay');
+      event.preventDefault();
+
+      try {
+        // @ts-expect-error - Tauri API is available at runtime
+        const { invoke } = await import('@tauri-apps/api/core');
+
+        // Call dismiss_overlay command
+        await invoke('dismiss_overlay');
+
+        // Clear any active drawing state
+        isDrawing = false;
+        startX = 0;
+        startY = 0;
+
+        // Clear the canvas
+        if (ctx) {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+
+        console.log('Overlay dismissed successfully');
+      } catch (error) {
+        console.error('Failed to dismiss overlay:', error);
+      }
+    }
+  });
+
+  // Feature #10: Listen for toggle events from hotkeys
+  window.addEventListener('tauri://toggle-overlay', async () => {
+    console.log('Toggle overlay event received');
+
+    try {
+      // @ts-expect-error - Tauri API is available at runtime
+      const { invoke } = await import('@tauri-apps/api/core');
+
+      // Call toggle_overlay command
+      await invoke('toggle_overlay');
+
+      // Clear any active drawing state
+      isDrawing = false;
+      startX = 0;
+      startY = 0;
+
+      // Clear the canvas
+      if (ctx) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+    } catch (error) {
+      console.error('Failed to toggle overlay:', error);
+    }
+  });
+
+  console.log('Overlay window initialized with mouse capture and Escape key support');
 } else {
   console.error('Canvas element not found');
 }
