@@ -12,6 +12,7 @@ use std::path::PathBuf;
 struct OverlayState {
     is_visible: bool,
     current_monitor: Option<String>,
+    drawing_mode: bool,
 }
 
 impl Default for OverlayState {
@@ -19,6 +20,7 @@ impl Default for OverlayState {
         Self {
             is_visible: false,
             current_monitor: None,
+            drawing_mode: false,
         }
     }
 }
