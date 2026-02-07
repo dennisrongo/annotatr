@@ -52,7 +52,7 @@ export default function Overlay() {
 
   // Feature #9: Track current monitor ID for shape confinement
   // TODO: Implement monitor tracking logic
-  const [currentMonitor, setCurrentMonitor] = useState<string | null>(null);
+  const [currentMonitor] = useState<string | null>(null);
 
   // Default drawing settings (fallbacks until settings load)
   const defaultColor = "#FF0000";
