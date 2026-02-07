@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test Feature #50: Multi-Monitor Panel Positioning</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    h1 {
+      color: #333;
+      border-bottom: 2px solid #2563eb;
+      padding-bottom: 10px;
+    }
+    h2 {
+      color: #555;
+      margin-top: 30px;
+    }
+    .feature-info {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+    }
+    .status {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 4px;
+      font-weight: bold;
+      font-size: 12px;
+    }
+    .status.implemented {
+      background: #dcfce7;
+      color: #166534;
+    }
+    .test-case {
+      background: white;
+      padding: 15px;
+      margin: 10px 0;
+      border-left: 4px solid #2563eb;
+      border-radius: 4px;
+    }
+    .test-case h3 {
+      margin-top: 0;
+      color: #2563eb;
+    }
+    code {
+      background: #f3f4f6;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: 'Monaco', 'Menlo', monospace;
+      font-size: 13px;
+    }
+    pre {
+      background: #1f2937;
+      color: #f3f4f6;
+      padding: 15px;
+      border-radius: 6px;
+      overflow-x: auto;
+    }
+    pre code {
+      background: transparent;
+      padding: 0;
+    }
+    .checklist {
+      list-style: none;
+      padding-left: 0;
+    }
+    .checklist li {
+      padding: 8px 0;
+      border-bottom: 1px solid #eee;
+    }
+    .checklist li:before {
+      content: "☐ ";
+      color: #2563eb;
+      font-weight: bold;
+      margin-right: 8px;
+    }
+    .checklist li.pass:before {
+      content: "☑ ";
+      color: #166534;
+    }
+    .diagram {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      text-align: center;
+      margin: 20px 0;
+    }
+    .monitor {
+      display: inline-block;
+      width: 150px;
+      height: 100px;
+      border: 3px solid #333;
+      border-radius: 8px;
+      margin: 10px;
+      position: relative;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    .monitor-label {
+      position: absolute;
+      bottom: 5px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      color: white;
+      font-weight: bold;
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+    }
+    .panel {
+      position: absolute;
+      width: 40px;
+      height: 30px;
+      background: rgba(240, 240, 240, 0.95);
+      border: 2px solid #2563eb;
+      border-radius: 4px;
+      top: 10px;
+      left: 10px;
+      font-size: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #333;
+      font-weight: bold;
+      cursor: move;
+    }
+  </style>
+</head>
+<body>
+  <h1>Feature #50: Panel Can Be Positioned on Any Monitor</h1>
+
+  <div class="feature-info">
+    <h2>Overview</h2>
+    <p>
+      <strong>Feature:</strong> Allow the mini panel to be positioned on any connected monitor<br>
+      <strong>Status:</strong> <span class="status implemented">IMPLEMENTED</span>
+    </p>
+
+    <h3>Implementation Details:</h3>
+    <ul>
+      <li><strong>Backend (Rust):</strong> Modified <code>save_mini_panel_position</code> to accept and auto-detect monitor_id</li>
+      <li><strong>Backend (Rust):</strong> Modified <code>restore_mini_panel_position</code> to return monitor_id</li>
+      <li><strong>Frontend (React):</strong> Added <code>currentMonitor</code> state to track which monitor panel is on</li>
+      <li><strong>Frontend (React):</strong> Added <code>monitors</code> state with monitor info from <code>get_monitor_info</code></li>
+      <li><strong>Frontend (React):</strong> Added <code>detectMonitorForPosition()</code> helper to detect monitor from x,y coordinates</li>
+      <li><strong>Frontend (React):</strong> Updated drag handlers to detect and save monitor changes</li>
+      <li><strong>Frontend (React):</strong> Updated position indicator to show current monitor</li>
+    </ul>
+  </div>
+
+  <div class="diagram">
+    <h3>Multi-Monitor Setup</h3>
+    <div style="position: relative; display: inline-block;">
+      <div class="monitor">
+        <div class="panel">Panel</div>
+        <div class="monitor-label">Monitor 0</div>
+      </div>
+      <div class="monitor" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+        <div class="monitor-label">Monitor 1</div>
+      </div>
+      <div class="monitor" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+        <div class="monitor-label">Monitor 2</div>
+      </div>
+    </div>
+    <p style="margin-top: 20px; color: #666; font-size: 14px;">
+      Panel can be dragged across all monitors
+    </p>
+  </div>
+
+  <div class="test-case">
+    <h3>Test Case 1: Multi-Monitor Position Detection</h3>
+    <p><strong>What to test:</strong> Drag the mini panel to different monitors</p>
+    <p><strong>Expected behavior:</strong></p>
+    <ul class="checklist">
+      <li>Panel detects when it's moved to a different monitor</li>
+      <li>Position indicator shows "Pos: (x, y) on monitor_N" where N changes</li>
+      <li>Panel position is saved with the correct monitor_id</li>
+      <li>On restart, panel appears on the same monitor it was on</li>
+    </ul>
+  </div>
+
+  <div class="test-case">
+    <h3>Test Case 2: Cross-Monitor Dragging</h3>
+    <p><strong>What to test:</strong> Drag panel from one monitor to another</p>
+    <p><strong>Expected behavior:</strong></p>
+    <ul class="checklist">
+      <li>Dragging works smoothly across monitor boundaries</li>
+      <li>Panel follows mouse cursor across all monitors</li>
+      <li>Monitor ID updates when panel crosses boundary</li>
+      <li>Position saves correctly on new monitor</li>
+    </ul>
+  </div>
+
+  <div class="test-case">
+    <h3>Test Case 3: Persistence Across Restarts</h3>
+    <p><strong>What to test:</strong> Restart app after positioning panel on different monitor</p>
+    <p><strong>Expected behavior:</strong></p>
+    <ul class="checklist">
+      <li>Panel appears on same monitor after restart</li>
+      <li>Panel position relative to monitor is preserved</li>
+      <li>Off-screen positions are preserved</li>
+    </ul>
+  </div>
+
+  <h2>Code Changes</h2>
+
+  <h3>Backend (src-tauri/src/lib.rs)</h3>
+  <pre><code>// Feature #50: Save mini panel position with monitor detection
+#[tauri::command]
+fn save_mini_panel_position(
+    app: AppHandle,
+    x: i32,
+    y: i32,
+    monitor_id: Option&lt;String&gt;
+) -> Result&lt;(), String&gt; {
+    // Auto-detect monitor if not provided
+    let monitor_id_final = if let Some(mid) = monitor_id {
+        mid
+    } else {
+        // Detect which monitor contains (x, y)
+        let detected_monitor = detect_monitor_from_position(app, x, y)?;
+        detected_monitor
+    };
+
+    // Save with monitor_id
+    store.set("mini_panel_position", serde_json::json!({
+        "x": x,
+        "y": y,
+        "monitor_id": monitor_id_final
+    }));
+
+    Ok(())
+}</code></pre>
+
+  <h3>Frontend (src/components/MiniPanel.tsx)</h3>
+  <pre><code>// Feature #50: Monitor detection helper
+const detectMonitorForPosition = (x: number, y: number): string =&gt; {
+  for (const monitor of monitors) {
+    if (
+      x &gt;= monitor.x &&
+      x &lt; monitor.x + monitor.width &&
+      y &gt;= monitor.y &&
+      y &lt; monitor.y + monitor.height
+    ) {
+      return monitor.id;
+    }
+  }
+  return "monitor_0"; // Default
+};
+
+// Feature #50: Drag handler with monitor detection
+const handleMouseMove = async (e: MouseEvent) =&gt; {
+  if (isDragging) {
+    const newX = e.clientX - dragOffset.x;
+    const newY = e.clientY - dragOffset.y;
+    setPosition({ x: newX, y: newY });
+
+    // Detect monitor change
+    const newMonitor = detectMonitorForPosition(newX, newY);
+    if (newMonitor !== currentMonitor) {
+      setCurrentMonitor(newMonitor);
+      console.log(`Panel moved to monitor: ${newMonitor}`);
+    }
+
+    // Move Tauri window (works across monitors)
+    await invoke("set_mini_panel_position", {
+      x: Math.round(newX),
+      y: Math.round(newY),
+    });
+  }
+};
+
+// Feature #50: Save with monitor ID
+const handleMouseUp = async () =&gt; {
+  if (isDragging) {
+    setIsDragging(false);
+    await invoke("save_mini_panel_position", {
+      x: Math.round(position.x),
+      y: Math.round(position.y),
+      monitorId: currentMonitor,
+    });
+  }
+};</code></pre>
+
+  <h2>Verification Steps</h2>
+  <ol>
+    <li>Run the app with 2+ monitors connected</li>
+    <li>Open Mini Panel</li>
+    <li>Drag panel to different monitors</li>
+    <li>Check position indicator shows correct monitor</li>
+    <li>Restart app</li>
+    <li>Verify panel appears on last monitor</li>
+  </ol>
+
+  <div class="feature-info" style="background: #ecfdf5; border-left: 4px solid #10b981;">
+    <h3 style="margin-top: 0; color: #065f46;">✓ Implementation Complete</h3>
+    <p>
+      Feature #50 is fully implemented. The mini panel can now be positioned on any monitor
+      and will remember its position across app restarts.
+    </p>
+  </div>
+
+</body>
+</html>

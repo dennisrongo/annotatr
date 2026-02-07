@@ -7,6 +7,7 @@ import { loadSettings, saveSettings, DEFAULT_SETTINGS } from "../lib/storage";
  * MiniPanel Component
  * Floating toolbar with tool selection buttons for drawing shapes
  * Feature #19: Supports drag-to-reposition including off-screen placement
+ * Feature #50: Can be positioned on any monitor
  */
 
 // Feature #44: Preset color palette for drawing tools
@@ -25,9 +26,22 @@ const PRESET_COLORS = [
   "#808080", // Gray
 ];
 
+// Feature #50: Monitor info interface
+interface Monitor {
+  id: string;
+  name: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  scale_factor: number;
+}
+
 export default function MiniPanel() {
   const [selectedTool, setSelectedTool] = useState<ToolType | null>(null);
   const [position, setPosition] = useState({ x: 20, y: 20 });
+  const [currentMonitor, setCurrentMonitor] = useState<string>("monitor_0");
+  const [monitors, setMonitors] = useState<Monitor[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const panelRef = useRef<HTMLDivElement>(null);
@@ -44,7 +58,6 @@ export default function MiniPanel() {
   });
 
   // Feature #45: Custom color picker state
-  const [showCustomColorPicker, setShowCustomColorPicker] = useState(false);
   const customColorInputRef = useRef<HTMLInputElement>(null);
 
   // Feature #46: Line thickness control state
@@ -57,8 +70,44 @@ export default function MiniPanel() {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
 
   /**
+   * Feature #50: Load monitor information on mount
+   * Used to detect which monitor the panel is being dragged to
+   */
+  useEffect(() => {
+    const loadMonitors = async () => {
+      try {
+        const monitorList = await invoke<Monitor[]>("get_monitor_info");
+        setMonitors(monitorList);
+        console.log("Loaded monitor info:", monitorList);
+      } catch (error) {
+        console.error("Failed to load monitor info:", error);
+      }
+    };
+    loadMonitors();
+  }, []);
+
+  /**
+   * Feature #50: Helper function to detect which monitor contains a position
+   */
+  const detectMonitorForPosition = (x: number, y: number): string => {
+    for (const monitor of monitors) {
+      if (
+        x >= monitor.x &&
+        x < monitor.x + monitor.width &&
+        y >= monitor.y &&
+        y < monitor.y + monitor.height
+      ) {
+        return monitor.id;
+      }
+    }
+    // Default to monitor_0 if no match found
+    return "monitor_0";
+  };
+
+  /**
    * Feature #19: Restore panel position on mount
    * Loads saved position from storage (including off-screen positions)
+   * Feature #50: Also restores which monitor the panel was on
    */
   useEffect(() => {
     const restorePosition = async () => {
@@ -67,8 +116,10 @@ export default function MiniPanel() {
         if (result && typeof result === "object") {
           const x = result.x as number;
           const y = result.y as number;
+          const monitorId = result.monitor_id as string || "monitor_0";
           setPosition({ x, y });
-          console.log("Panel position restored:", { x, y });
+          setCurrentMonitor(monitorId);
+          console.log("Panel position restored:", { x, y, monitorId });
         }
       } catch (error) {
         console.error("Failed to restore panel position:", error);
@@ -148,7 +199,7 @@ export default function MiniPanel() {
 
       // Save to persistent storage
       try {
-        await saveSettings({ colors: updatedColors });
+        await saveSettings({ colors: updatedColors as any });
         console.log(`Updated ${selectedTool} color to: ${color}`);
       } catch (error) {
         console.error("Failed to save color:", error);
@@ -171,7 +222,6 @@ export default function MiniPanel() {
     }
 
     await selectColor(color);
-    setShowCustomColorPicker(false);
   };
 
   /**
@@ -230,14 +280,34 @@ export default function MiniPanel() {
   };
 
   /**
-   * Feature #19: Handle drag move and save
+   * Feature #19 & #50: Handle drag move and save
+   * Feature #50: Uses Tauri window positioning for multi-monitor support
+   * Feature #50: Detects which monitor the panel is being dragged to
    */
   useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
+    const handleMouseMove = async (e: MouseEvent) => {
       if (isDragging) {
         const newX = e.clientX - dragOffset.x;
         const newY = e.clientY - dragOffset.y;
         setPosition({ x: newX, y: newY });
+
+        // Feature #50: Detect which monitor the panel is now on
+        const newMonitor = detectMonitorForPosition(newX, newY);
+        if (newMonitor !== currentMonitor) {
+          setCurrentMonitor(newMonitor);
+          console.log(`Panel moved to monitor: ${newMonitor}`);
+        }
+
+        // Feature #50: Move the actual Tauri window (not just CSS)
+        // This allows positioning on any monitor in multi-monitor setups
+        try {
+          await invoke("set_mini_panel_position", {
+            x: Math.round(newX),
+            y: Math.round(newY),
+          });
+        } catch (error) {
+          console.error("Failed to reposition mini panel window:", error);
+        }
       }
     };
 
@@ -245,11 +315,13 @@ export default function MiniPanel() {
       if (isDragging) {
         setIsDragging(false);
         try {
+          // Feature #50: Save to persistent storage with monitor ID
           await invoke("save_mini_panel_position", {
-            x: position.x,
-            y: position.y,
+            x: Math.round(position.x),
+            y: Math.round(position.y),
+            monitor_id: currentMonitor,
           });
-          console.log("Panel position saved:", position);
+          console.log("Panel position saved:", { ...position, monitor: currentMonitor });
         } catch (error) {
           console.error("Failed to save panel position:", error);
         }
@@ -264,7 +336,7 @@ export default function MiniPanel() {
         window.removeEventListener("mouseup", handleMouseUp);
       };
     }
-  }, [isDragging, dragOffset, position]);
+  }, [isDragging, dragOffset, position, currentMonitor, monitors]);
 
   /**
    * Tool button component
@@ -346,9 +418,8 @@ export default function MiniPanel() {
       ref={panelRef}
       onMouseDown={handleMouseDown}
       style={{
-        position: "fixed",
-        left: position.x,
-        top: position.y,
+        // Feature #50: No CSS positioning - using Tauri window positioning instead
+        // This allows the panel window to be positioned on any monitor
         padding: "12px",
         backgroundColor: "rgba(240, 240, 240, 0.95)",
         borderRadius: "8px",
@@ -357,6 +428,7 @@ export default function MiniPanel() {
         minWidth: "200px",
         cursor: isDragging ? "grabbing" : "default",
         userSelect: isDragging ? "none" : "auto",
+        height: "100vh", // Fill the window for easier dragging
       }}
     >
       {/* Feature #19: Draggable header */}
@@ -717,6 +789,7 @@ export default function MiniPanel() {
       </div>
 
       {/* Feature #19: Position indicator */}
+      {/* Feature #50: Also shows current monitor */}
       <div
         style={{
           marginTop: "4px",
@@ -725,7 +798,7 @@ export default function MiniPanel() {
           textAlign: "center",
         }}
       >
-        Pos: ({position.x}, {position.y})
+        Pos: ({position.x}, {position.y}) on {currentMonitor}
       </div>
 
       {/* Feature #48: Settings modal */}

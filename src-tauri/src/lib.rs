@@ -665,28 +665,64 @@ fn get_mini_panel_position(app: AppHandle) -> Result<serde_json::Value, String> 
 }
 
 /// Feature #19: Save mini panel position to persistent storage
+/// Feature #50: Also saves which monitor the panel is on
 /// Stores the off-screen position so it persists across app restarts
 #[tauri::command]
-fn save_mini_panel_position(app: AppHandle, x: i32, y: i32) -> Result<(), String> {
+fn save_mini_panel_position(app: AppHandle, x: i32, y: i32, monitor_id: Option<String>) -> Result<(), String> {
     use tauri_plugin_store::{StoreBuilder, StoreExt};
     use std::path::PathBuf;
 
     let store_path = PathBuf::from("settings.json");
     let store = StoreBuilder::new(app.clone(), store_path).build();
 
-    // Save panel position to storage
+    // If no monitor_id provided, detect which monitor contains this position
+    let monitor_id_final = if let Some(mid) = monitor_id {
+        mid
+    } else {
+        // Auto-detect monitor from position
+        let primary_window = app.get_webview_window("main")
+            .or_else(|| app.get_webview_window("overlay"))
+            .ok_or("No window available for monitor detection")?;
+
+        let monitors = primary_window.available_monitors()
+            .map_err(|e| format!("Failed to get monitors: {}", e))?;
+
+        let mut detected_monitor = "monitor_0".to_string();
+
+        for (i, monitor) in monitors.iter().enumerate() {
+            let size = monitor.size();
+            let position = monitor.position();
+
+            // Check if panel position is within this monitor's bounds
+            let is_in_monitor = x >= position.x
+                && x < position.x + size.width as i32
+                && y >= position.y
+                && y < position.y + size.height as i32;
+
+            if is_in_monitor {
+                detected_monitor = format!("monitor_{}", i);
+                break;
+            }
+        }
+
+        detected_monitor
+    };
+
+    // Save panel position and monitor to storage
     store.set("mini_panel_position", serde_json::json!({
         "x": x,
-        "y": y
+        "y": y,
+        "monitor_id": monitor_id_final
     }));
     store.save().map_err(|e| format!("Failed to save panel position: {}", e))?;
 
-    println!("Mini panel position saved: ({}, {})", x, y);
+    println!("Mini panel position saved: ({}, {}) on monitor {}", x, y, monitor_id_final);
 
     Ok(())
 }
 
 /// Feature #19: Load and restore mini panel position from storage
+/// Feature #50: Also restores the monitor the panel was on
 /// Restores the panel to its last saved position (including off-screen)
 #[tauri::command]
 fn restore_mini_panel_position(app: AppHandle) -> Result<serde_json::Value, String> {
@@ -700,6 +736,7 @@ fn restore_mini_panel_position(app: AppHandle) -> Result<serde_json::Value, Stri
     if let Some(position) = store.get("mini_panel_position") {
         let x = position["x"].as_i64().unwrap_or(0) as i32;
         let y = position["y"].as_i64().unwrap_or(0) as i32;
+        let monitor_id = position["monitor_id"].as_str().unwrap_or("monitor_0");
 
         // Restore position
         let panel_window = app.get_webview_window("mini-panel")
@@ -707,11 +744,12 @@ fn restore_mini_panel_position(app: AppHandle) -> Result<serde_json::Value, Stri
 
         panel_window.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y }))?;
 
-        println!("Mini panel position restored to: ({}, {})", x, y);
+        println!("Mini panel position restored to: ({}, {}) on monitor {}", x, y, monitor_id);
 
         Ok(serde_json::json!({
             "x": x,
             "y": y,
+            "monitor_id": monitor_id,
             "restored": true
         }))
     } else {
