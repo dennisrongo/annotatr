@@ -223,6 +223,18 @@ function App() {
     }
   }
 
+  // Feature #18: Simulate hotkey activation (for testing)
+  async function activateToolViaHotkey(tool: string) {
+    try {
+      await invoke("activate_tool_hotkey", { tool });
+      setOverlayVisible(true);
+      setDrawingMode(true);
+      setStatusMsg(`Activated ${tool} tool via hotkey - overlay shown`);
+    } catch (error) {
+      setStatusMsg(`Error activating tool: ${error}`);
+    }
+  }
+
   return (
     <div className="container">
       <h1>Annotatr</h1>
@@ -429,6 +441,37 @@ function App() {
             ))}
           </div>
         )}
+      </div>
+
+      {/* Feature #18: Overlay Activation via Hotkey or Mini Panel */}
+      <div className="status">
+        <h2>Overlay Activation (Feature #18)</h2>
+        <p className="info-text">
+          The overlay can be activated via global hotkeys or by clicking tools in the mini panel.
+          When a tool is selected, the overlay automatically shows and drawing mode is enabled.
+        </p>
+        <div className="info-box">
+          <p><strong>Activation Methods:</strong></p>
+          <p>✓ <strong>Mini Panel:</strong> Click any tool button to show overlay and select tool</p>
+          <p>✓ <strong>Global Hotkeys:</strong> Press tool-specific hotkey (e.g., Ctrl+Shift+A for Arrow)</p>
+          <p>✓ <strong>Toggle Hotkey:</strong> Ctrl+Shift+D to toggle drawing mode on/off</p>
+          <p>✓ <strong>Escape Key:</strong> Press Escape in overlay to dismiss and clean up</p>
+        </div>
+        <div className="row">
+          <button type="button" onClick={() => activateToolViaHotkey("arrow")}>
+            Simulate Arrow Hotkey (Ctrl+Shift+A)
+          </button>
+          <button type="button" onClick={() => activateToolViaHotkey("circle")}>
+            Simulate Circle Hotkey (Ctrl+Shift+C)
+          </button>
+          <button type="button" onClick={() => activateToolViaHotkey("box")}>
+            Simulate Box Hotkey (Ctrl+Shift+B)
+          </button>
+        </div>
+        <p className="info-text" style={{ marginTop: "12px" }}>
+          Click these buttons to simulate hotkey presses and verify the overlay activates
+          with the correct tool selected. The mini panel also triggers overlay activation.
+        </p>
       </div>
 
       {/* Feature #9: Multi-Monitor Shape Confinement Info */}

@@ -404,7 +404,8 @@ fn activate_tool_hotkey(app: AppHandle, tool: String) -> Result<(), String> {
 }
 
 /// Dismiss the overlay (hide and clean up state)
-/// This is called when Escape key is pressed or toggle hotkey is triggered
+/// Feature #20: This is called when Escape key is pressed or toggle hotkey is triggered
+/// Properly deactivates overlay and cleans up existing shapes
 #[tauri::command]
 fn dismiss_overlay(app: AppHandle) -> Result<(), String> {
     // Get the overlay window by label
@@ -415,6 +416,8 @@ fn dismiss_overlay(app: AppHandle) -> Result<(), String> {
     if let Some(state) = app.state::<SharedState>().try_get() {
         let mut state_guard = state.lock().map_err(|e| format!("State lock error: {}", e))?;
         state_guard.is_visible = false;
+        // Feature #20: Also disable drawing mode when dismissing
+        state_guard.drawing_mode = false;
     }
 
     // Hide the overlay window
@@ -423,10 +426,19 @@ fn dismiss_overlay(app: AppHandle) -> Result<(), String> {
     // Disable mouse capture (return to pass-through mode)
     overlay_window.set_ignore_cursor_events(true)?;
 
-    // Clear any active drawing state
-    // TODO: Emit an event to frontend to clear drawing state
+    // Feature #20: Emit event to clear drawing state and shapes
+    app.emit("overlay-dismissed", ())
+        .map_err(|e| format!("Failed to emit overlay-dismissed event: {}", e))?;
 
-    println!("Overlay dismissed via Escape key or toggle");
+    // Feature #20: Clear all shapes
+    app.emit("clear-all-shapes", ())
+        .map_err(|e| format!("Failed to emit clear-all-shapes event: {}", e))?;
+
+    // Feature #20: Emit drawing mode changed event to reset cursor
+    app.emit("drawing-mode-changed", false)
+        .map_err(|e| format!("Failed to emit drawing-mode-changed event: {}", e))?;
+
+    println!("Overlay dismissed - shapes cleared, drawing state reset");
 
     Ok(())
 }
