@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { emit } from "@tauri-apps/api/event";
+import { invoke } from "@tauri-apps/api/core";
 import { ToolType } from "../types/shapes";
 
 /**
@@ -11,14 +12,22 @@ export default function MiniPanel() {
 
   /**
    * Handle tool selection
+   * Feature #18: Also activate overlay when a tool is selected via mini panel
    */
   const selectTool = async (tool: ToolType) => {
     setSelectedTool(tool);
 
+    // Feature #18: Show overlay if not already visible
+    try {
+      await invoke("show_overlay");
+    } catch (error) {
+      console.error("Failed to show overlay:", error);
+    }
+
     // Emit event to notify overlay of tool selection
     await emit("tool-selected", tool);
 
-    console.log(`Selected tool: ${tool}`);
+    console.log(`Selected tool: ${tool}, overlay activated`);
   };
 
   /**

@@ -158,7 +158,7 @@ function App() {
   // Feature #11: Load platform information
   async function loadPlatformInfo() {
     try {
-      const info = await invoke("get_platform_info");
+      const info = await invoke<any>("get_platform_info");
       setPlatformInfo(info);
       setStatusMsg(`Platform: ${info.platform}`);
     } catch (error) {

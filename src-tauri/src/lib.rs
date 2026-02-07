@@ -349,9 +349,16 @@ fn create_shape(shape_data: serde_json::Value) -> Result<String, String> {
     Ok("shape-id".to_string())
 }
 
+/// Feature #20: Clear all shapes from the overlay
+/// This is called when dismissing the overlay to ensure clean state
 #[tauri::command]
-fn clear_all_shapes() -> Result<(), String> {
-    // TODO: Implement clear shapes
+fn clear_all_shapes(app: AppHandle) -> Result<(), String> {
+    // Feature #20: Emit event to frontend to clear all shapes
+    app.emit("clear-all-shapes", ())
+        .map_err(|e| format!("Failed to emit clear-all-shapes event: {}", e))?;
+
+    println!("Clear all shapes event emitted");
+
     Ok(())
 }
 
@@ -618,6 +625,7 @@ pub fn run() {
             create_shape,
             clear_all_shapes,
             register_hotkeys,
+            activate_tool_hotkey,
             dismiss_overlay,
             toggle_overlay,
             ensure_on_top,
