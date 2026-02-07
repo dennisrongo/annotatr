@@ -1,5 +1,4 @@
-import { useState, useEffect, useRef } from "react";
-import { emit } from "@tauri-apps/api/event";
+import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { ToolType } from "../types/shapes";
 
@@ -10,10 +9,6 @@ import { ToolType } from "../types/shapes";
  */
 export default function MiniPanel() {
   const [selectedTool, setSelectedTool] = useState<ToolType | null>(null);
-  const [position, setPosition] = useState({ x: 0, y: 0 });
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-  const panelRef = useRef<HTMLDivElement>(null);
 
   /**
    * Handle tool selection
@@ -22,17 +17,14 @@ export default function MiniPanel() {
   const selectTool = async (tool: ToolType) => {
     setSelectedTool(tool);
 
-    // Feature #18: Show overlay if not already visible
+    // Feature #18: Activate tool via hotkey command which handles overlay, drawing mode, and events
     try {
-      await invoke("show_overlay");
+      await invoke("activate_tool_hotkey", { tool });
     } catch (error) {
-      console.error("Failed to show overlay:", error);
+      console.error("Failed to activate tool:", error);
     }
 
-    // Emit event to notify overlay of tool selection
-    await emit("tool-selected", tool);
-
-    console.log(`Selected tool: ${tool}, overlay activated`);
+    console.log(`Selected tool: ${tool}, overlay and drawing mode activated`);
   };
 
   /**

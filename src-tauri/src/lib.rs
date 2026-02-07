@@ -410,22 +410,6 @@ fn get_cursor_monitor(app: AppHandle) -> Result<serde_json::Value, String> {
         "monitor": monitor_info
     }))
 }
-    let overlay_window = app.get_webview_window("overlay")
-        .ok_or("Overlay window not found")?;
-
-    // Update state with current monitor
-    if let Some(state) = app.state::<SharedState>().try_get() {
-        let mut state_guard = state.lock().map_err(|e| format!("State lock error: {}", e))?;
-        state_guard.current_monitor = Some(monitor_id);
-    }
-
-    // Set window position
-    overlay_window.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y }))?;
-
-    println!("Overlay positioned at ({}, {}) on monitor {}", x, y, monitor_id);
-
-    Ok(())
-}
 
 /// Enable mouse input capture (drawing mode active)
 /// When enabled, the overlay captures mouse events instead of letting them pass through

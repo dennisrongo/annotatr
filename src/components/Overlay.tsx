@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { ToolType, Shape, ArrowShape, CircleShape, BoxShape, FreehandShape, HighlighterShape, TextShape, Point } from "../types/shapes";
 import { drawShape, redrawShapes } from "../lib/drawing";
+import { loadSettings, Settings } from "../lib/storage";
 
 interface DrawingState {
   isDrawing: boolean;
@@ -46,9 +47,13 @@ export default function Overlay() {
   const [textInputValue, setTextInputValue] = useState("");
   const textInputRef = useRef<HTMLInputElement>(null);
 
-  // Default drawing settings
+  // Feature #30 & #31: Settings state for font size and colors
+  const [settings, setSettings] = useState<Settings | null>(null);
+
+  // Default drawing settings (fallbacks until settings load)
   const defaultColor = "#FF0000";
   const defaultLineThickness = 12;
+  const defaultFontSize = 24;
 
   // Feature #17: Tool-specific visual indicators (icons, colors, labels)
   const toolIndicators: Record<ToolType, { icon: string; color: string; label: string }> = {
@@ -194,22 +199,30 @@ export default function Overlay() {
 
   /**
    * Create text shape from drawing state
+   * Feature #30: Uses fontSize from settings
+   * Feature #31: Uses current text color from settings
    */
   const createTextShape = useCallback((
     position: Point,
     text: string
   ): TextShape => {
+    // Feature #30: Get font size from settings (scaled up for visibility - 14pt in settings -> ~24px for rendering)
+    const fontSize = settings ? (settings.fontSize * 1.7) : defaultFontSize;
+
+    // Feature #31: Get text color from settings
+    const textColor = settings?.colors.text || defaultColor;
+
     return {
       id: generateShapeId(),
       tool: ToolType.TEXT,
       position,
       text,
-      color: defaultColor,
+      color: textColor,
       lineThickness: 0, // Not used for text
-      fontSize: 24, // Default font size
+      fontSize: Math.round(fontSize),
       createdAt: Date.now(),
     };
-  }, [generateShapeId]);
+  }, [generateShapeId, settings, defaultFontSize, defaultColor]);
 
   /**
    * Handle mouse down - start drawing
@@ -671,6 +684,44 @@ export default function Overlay() {
     };
   }, [redrawAllShapes]);
 
+  // Feature #30 & #31: Load settings on mount to get font size and colors
+  useEffect(() => {
+    const loadAppSettings = async () => {
+      try {
+        const loadedSettings = await loadSettings();
+        console.log("Loaded settings in overlay:", loadedSettings);
+        setSettings(loadedSettings);
+      } catch (error) {
+        console.error("Failed to load settings:", error);
+        // Use defaults if loading fails
+        setSettings({
+          hotkeys: {
+            toggleDrawingMode: 'Ctrl+Shift+D',
+            arrowTool: 'Ctrl+Shift+A',
+            circleTool: 'Ctrl+Shift+C',
+            boxTool: 'Ctrl+Shift+B',
+            freehandTool: 'Ctrl+Shift+F',
+            highlighterTool: 'Ctrl+Shift+H',
+            textTool: 'Ctrl+Shift+T',
+          },
+          colors: {
+            arrow: '#FF0000',
+            circle: '#FF0000',
+            box: '#FF0000',
+            freehand: '#FF0000',
+            highlighter: '#FFFF00',
+            text: '#FF0000',
+          },
+          lineThickness: 12,
+          fontSize: 14,
+          fadeDuration: 10,
+        });
+      }
+    };
+
+    loadAppSettings();
+  }, []);
+
   if (!isVisible) {
     return null;
   }
@@ -772,6 +823,7 @@ export default function Overlay() {
       </div>
 
       {/* Text input field (shown when text tool is used) */}
+      {/* Feature #30 & #31: Uses font size and color from settings */}
       {textInputVisible && (
         <input
           ref={textInputRef}
@@ -784,9 +836,11 @@ export default function Overlay() {
             position: "absolute",
             left: textInputPosition.x,
             top: textInputPosition.y,
-            fontSize: "24px",
+            // Feature #30: Use font size from settings
+            fontSize: settings ? `${Math.round(settings.fontSize * 1.7)}px` : "24px",
             padding: "4px 8px",
-            border: "2px solid #FF0000",
+            // Feature #31: Use text color from settings for border
+            border: `2px solid ${settings?.colors.text || "#FF0000"}`,
             borderRadius: "4px",
             outline: "none",
             backgroundColor: "rgba(255, 255, 255, 0.9)",
