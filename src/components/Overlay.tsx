@@ -40,6 +40,16 @@ export default function Overlay() {
   const defaultColor = "#FF0000";
   const defaultLineThickness = 12;
 
+  // Feature #17: Tool-specific visual indicators (icons, colors, labels)
+  const toolIndicators: Record<ToolType, { icon: string; color: string; label: string }> = {
+    [ToolType.ARROW]: { icon: "↗", color: "#3b82f6", label: "Arrow" },
+    [ToolType.CIRCLE]: { icon: "○", color: "#10b981", label: "Circle" },
+    [ToolType.BOX]: { icon: "□", color: "#f59e0b", label: "Box" },
+    [ToolType.FREEHAND]: { icon: "✎", color: "#ef4444", label: "Freehand" },
+    [ToolType.HIGHLIGHTER]: { icon: "▭", color: "#eab308", label: "Highlighter" },
+    [ToolType.TEXT]: { icon: "T", color: "#8b5cf6", label: "Text" },
+  };
+
   /**
    * Generate a unique ID for shapes
    */
@@ -273,11 +283,6 @@ export default function Overlay() {
     // Redraw all shapes
     redrawAllShapes();
   }, [drawingState, currentTool, createArrowShape, createCircleShape, createBoxShape, redrawAllShapes]);
-  const [currentTool, setCurrentTool] = useState<ToolType | null>(null);
-
-  // Default drawing settings
-  const defaultColor = "#FF0000";
-  const defaultLineThickness = 12;
 
   useEffect(() => {
     // Feature #10: Handle Escape key to dismiss overlay
@@ -413,7 +418,7 @@ export default function Overlay() {
       clearInterval(zIndexCheckInterval);
       unlistenToggle.then((fn) => fn());
       unlistenDrawingMode.then((fn) => fn());
-      unlistenToolSelected.then((fn) => fn());
+      unlistenToolSelected.then((fn) => fn()).catch(console.error);
     };
   }, [isVisible]);
 
@@ -493,24 +498,34 @@ export default function Overlay() {
         Overlay Active • Press <strong>Escape</strong> to dismiss
       </div>
 
-      {/* Drawing tool indicator */}
+      {/* Feature #17: Enhanced drawing tool indicator with icon and color coding */}
       {currentTool && (
         <div
           style={{
             position: "absolute",
             top: 20,
             left: 20,
-            padding: "8px 12px",
-            backgroundColor: "rgba(37, 99, 235, 0.9)",
+            padding: "12px 16px",
+            backgroundColor: toolIndicators[currentTool].color,
             color: "white",
-            borderRadius: "4px",
-            fontSize: "12px",
+            borderRadius: "8px",
+            fontSize: "16px",
+            fontWeight: "bold",
             pointerEvents: "none",
+            boxShadow: "0 4px 6px rgba(0, 0, 0, 0.3)",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            border: "2px solid rgba(255, 255, 255, 0.3)",
           }}
         >
-          Tool: <strong>{currentTool}</strong>
-          <br />
-          {isDrawingMode && "Drawing Mode Active"}
+          <span style={{ fontSize: "24px" }}>{toolIndicators[currentTool].icon}</span>
+          <span>{toolIndicators[currentTool].label}</span>
+          {isDrawingMode && (
+            <span style={{ fontSize: "12px", marginLeft: "8px", opacity: 0.9 }}>
+              • Active
+            </span>
+          )}
         </div>
       )}
 

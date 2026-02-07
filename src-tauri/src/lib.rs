@@ -1,6 +1,8 @@
 // Prevents additional console window on Windows in release
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod utils;
+
 use tauri::{AppHandle, Emitter, Manager, Window, State};
 use tauri_plugin_store::{StoreBuilder, StoreExt};
 use std::sync::{Arc, Mutex};

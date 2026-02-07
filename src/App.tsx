@@ -20,11 +20,11 @@ function App() {
   const [statusMsg, setStatusMsg] = useState("");
   const [monitors, setMonitors] = useState<MonitorInfo[]>([]);
   const [selectedMonitor, setSelectedMonitor] = useState("");
-  const [platformInfo, setPlatformInfo] = useState<any>(null);
   const [storageStatus, setStorageStatus] = useState("Not tested");
   const [storageValue, setStorageValue] = useState("");
   const [loadedValue, setLoadedValue] = useState("");
   const [drawingMode, setDrawingMode] = useState(false);
+  const [platformInfo, setPlatformInfo] = useState<any>(null);
 
   async function greet() {
     // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
@@ -155,9 +155,22 @@ function App() {
     }
   }
 
+  // Feature #11: Load platform information
+  async function loadPlatformInfo() {
+    try {
+      const info = await invoke("get_platform_info");
+      setPlatformInfo(info);
+      setStatusMsg(`Platform: ${info.platform}`);
+    } catch (error) {
+      console.error("Failed to load platform info:", error);
+      setStatusMsg("Platform info unavailable");
+    }
+  }
+
   // Load monitors on mount
   useEffect(() => {
     loadMonitorInfo();
+    loadPlatformInfo();
     // Test storage on mount
     testStorage();
   }, []);
@@ -356,6 +369,28 @@ function App() {
         </div>
       </div>
 
+      {/* Feature #17: Visual Tool Indicator */}
+      <div className="status">
+        <h2>Visual Tool Indicator (Feature #17)</h2>
+        <p className="info-text">
+          Each drawing tool has a unique visual indicator with an icon, color, and label.
+          The indicator appears in the top-left corner of the overlay when a tool is active.
+        </p>
+        <div className="info-box">
+          <p><strong>Tool Indicators:</strong></p>
+          <p>↗ Arrow - Blue (#3b82f6)</p>
+          <p>○ Circle - Green (#10b981)</p>
+          <p>□ Box - Orange (#f59e0b)</p>
+          <p>✎ Freehand - Red (#ef4444)</p>
+          <p>▭ Highlighter - Yellow (#eab308)</p>
+          <p>T Text - Purple (#8b5cf6)</p>
+        </div>
+        <p className="info-text" style={{ marginTop: "12px" }}>
+          The indicator automatically updates when you switch tools via hotkeys or mini panel.
+          Each tool has a distinct color and icon for easy identification.
+        </p>
+      </div>
+
       {/* Feature #8: Multi-Monitor Positioning */}
       <div className="status">
         <h2>Multi-Monitor Support (Feature #8)</h2>
@@ -407,6 +442,53 @@ function App() {
           <p>✓ Shapes are tracked per-monitor</p>
           <p>✓ Shape rendering is isolated to origin monitor</p>
           <p>✓ Multi-monitor configurations supported</p>
+        </div>
+      </div>
+
+      {/* Feature #11: Platform-Appropriate Overlay Implementation */}
+      <div className="status">
+        <h2>Platform Implementation (Feature #11)</h2>
+        <p className="info-text">
+          The overlay uses platform-appropriate APIs for Windows, macOS, and Linux to ensure
+          optimal performance and visual integration with each operating system.
+        </p>
+        <div className="row">
+          <button type="button" onClick={loadPlatformInfo}>
+            Refresh Platform Info
+          </button>
+        </div>
+        {platformInfo && (
+          <div className="info-box platform-box">
+            <h3>Detected Platform: <strong>{platformInfo.platform.toUpperCase()}</strong></h3>
+            <p><strong>Implementation Details:</strong></p>
+            <p className="platform-hints">{platformInfo.hints}</p>
+            <p><strong>API:</strong> {platformInfo.overlay_implementation}</p>
+          </div>
+        )}
+      </div>
+
+      {/* Feature #12: Consistent Visual Styling Across Platforms */}
+      <div className="status">
+        <h2>Consistent Visual Styling (Feature #12)</h2>
+        <p className="info-text">
+          Despite platform differences, the overlay maintains consistent visual appearance
+          across Windows, macOS, and Linux through platform-agnostic styling.
+        </p>
+        <div className="info-box">
+          <p>✓ Consistent transparent overlay rendering</p>
+          <p>✓ Unified shape rendering system (Canvas API)</p>
+          <p>✓ Cross-platform color management</p>
+          <p>✓ Platform-appropriate anti-aliasing</p>
+          <p>✓ DPI-aware rendering on all platforms</p>
+        </div>
+        <div className="style-preview">
+          <h3>Style Consistency Features:</h3>
+          <ul>
+            <li>Colors are standardized (RGB values)</li>
+            <li>Line thickness uses pixel values independent of platform</li>
+            <li>Text rendering uses system fonts but consistent sizing</li>
+            <li>Shape algorithms are platform-independent</li>
+          </ul>
         </div>
       </div>
 
