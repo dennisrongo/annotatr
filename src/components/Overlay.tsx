@@ -4,7 +4,6 @@ import { listen } from "@tauri-apps/api/event";
 import { ToolType, Shape, ArrowShape, CircleShape, BoxShape, FreehandShape, HighlighterShape, TextShape, Point } from "../types/shapes";
 import { drawShape, redrawShapes } from "../lib/drawing";
 import { loadSettings, Settings } from "../lib/storage";
-import { drawingState as centralizedState, DrawingState as CentralizedDrawingState } from "../lib/drawingState";
 
 interface DrawingState {
   isDrawing: boolean;
@@ -221,6 +220,7 @@ export default function Overlay() {
    * Create text shape from drawing state
    * Feature #30: Uses fontSize from settings
    * Feature #31: Uses current text color from settings
+   * Feature #9: Includes monitorId for per-monitor shape confinement
    */
   const createTextShape = useCallback((
     position: Point,
@@ -241,9 +241,9 @@ export default function Overlay() {
       lineThickness: 0, // Not used for text
       fontSize: Math.round(fontSize),
       createdAt: Date.now(),
-      monitorId: "default", // Feature #9: Track monitor ID
+      monitorId: currentMonitor || "default", // Feature #9: Track monitor ID
     };
-  }, [generateShapeId, settings, defaultFontSize, defaultColor]);
+  }, [generateShapeId, settings, defaultFontSize, defaultColor, currentMonitor]);
 
   /**
    * Handle mouse down - start drawing

@@ -1,6 +1,186 @@
 # Annotatr Development Progress
 
-## Session Summary: 2025-02-07 (Session 8)
+## Session Summary: 2025-02-07 (Session 9)
+
+### Assigned Features Completed This Session
+- Feature #30: Font size configuration for text ✓ PASSING
+- Feature #31: Text color follows current color selection ✓ PASSING
+- Feature #32: Text submission on Enter or click away ✓ PASSING
+
+---
+
+## Session 9 Accomplishments
+
+### Feature #30: Font Size Configuration for Text ✓
+
+**Requirements:**
+- Create font size setting
+- Add UI control for font size
+- Apply font size to text rendering
+- Test different font sizes
+
+**Implementation:**
+
+1. **Settings Loading** (src/components/Overlay.tsx:710-734)
+   - Added `settings` state variable with `Settings | null` type
+   - Created `useEffect` to load settings on component mount
+   - Falls back to defaults if settings fail to load
+
+2. **Font Size Application** (src/components/Overlay.tsx:223-224)
+   - `createTextShape` now uses `settings.fontSize * 1.7` for rendering
+   - Scaling factor (1.7) converts 14pt setting to ~24px for better visibility
+   - Falls back to `defaultFontSize` (24px) if settings unavailable
+
+3. **Text Input Field** (src/components/Overlay.tsx:853)
+   - Input field font size matches rendered text size
+   - Uses `Math.round(settings.fontSize * 1.7)` for consistent sizing
+   - Provides WYSIWYG preview of text appearance
+
+**Feature #30 Status:** PASSING ✓
+
+---
+
+### Feature #31: Text Color Follows Current Color Selection ✓
+
+**Requirements:**
+- Connect text to current color state
+- Update text color when color changes
+- Apply color to text rendering
+- Verify color application
+
+**Implementation:**
+
+1. **Color Settings Integration** (src/components/Overlay.tsx:226-227)
+   - `createTextShape` uses `settings?.colors.text || defaultColor`
+   - Retrieves text-specific color from settings
+   - Falls back to default red (#FF0000) if not configured
+
+2. **Visual Consistency** (src/components/Overlay.tsx:856)
+   - Text input border uses same color as rendered text
+   - Border color: `2px solid ${settings?.colors.text || "#FF0000"}`
+   - Provides visual feedback of selected color
+
+3. **Settings Structure** (src/lib/storage.ts:41-47)
+   - Settings include per-tool color configuration
+   - `colors.text` specifically for text tool
+   - Each tool can have different colors (arrow, circle, box, etc.)
+
+**Feature #31 Status:** PASSING ✓
+
+---
+
+### Feature #32: Text Submission on Enter or Click Away ✓
+
+**Requirements:**
+- Implement Enter key handler
+- Implement click-away detection
+- Convert input to shape on submit
+- Clean up input field after submit
+
+**Implementation:**
+
+**Note:** This feature was already implemented in a previous session. Verified working in this session.
+
+1. **Enter Key Handler** (src/components/Overlay.tsx:368-377)
+   - `handleTextInputKeyDown` listens for keyboard events
+   - Enter key (without Shift) triggers `handleTextInputSubmit`
+   - Escape key cancels text input without creating shape
+
+2. **Click-Away Detection** (src/components/Overlay.tsx:847)
+   - `onBlur={handleTextInputSubmit}` on input field
+   - Submit text when input loses focus (click away)
+   - Same submission logic as Enter key
+
+3. **Submit Handler** (src/components/Overlay.tsx:350-365)
+   - `handleTextInputSubmit` processes text input
+   - Creates `TextShape` via `createTextShape`
+   - Adds shape to `shapesRef.current` array
+   - Hides input field and redraws canvas
+   - Ignores empty/whitespace-only text
+
+4. **Input Field UI** (src/components/Overlay.tsx:826-858)
+   - Positioned at click location (`textInputPosition`)
+   - Auto-focused when shown (line 233: `textInputRef.current?.focus()`)
+   - Placeholder: "Type text and press Enter..."
+   - Disappears after submission or cancellation
+
+**Feature #32 Status:** PASSING ✓ (Already Implemented, Verified This Session)
+
+---
+
+## Current Project Stats
+
+- Total Features: 135
+- Passing: 24 (Features #1-9, #13-32)
+- In Progress: 0
+- Completion: 17.8%
+
+## Next Steps
+
+**Continue Text Input Features:**
+- Text editing before placement
+- Text positioning follows cursor
+- Text shape participates in auto-fade
+
+**Then Auto-Fade System:**
+- Implement per-shape fade timers
+- Add fade animation (opacity transition)
+- Create configurable fade duration setting
+
+## Files Modified This Session
+
+1. **src/components/Overlay.tsx**
+   - Added settings state management (line 51)
+   - Imported `Settings` type and `loadSettings` (line 6)
+   - Created settings loading useEffect (lines 710-734)
+   - Updated `createTextShape` to use settings.fontSize (line 223)
+   - Updated `createTextShape` to use settings.colors.text (line 226-227)
+   - Updated text input field to use settings-based font size (line 853)
+   - Updated text input field to use settings-based color (line 856)
+
+2. **src/types/shapes.ts**
+   - Made `monitorId` optional in `BaseShape` interface (line 25)
+   - Changed from `monitorId: string` to `monitorId?: string`
+   - Allows text shapes to be created without explicit monitor ID
+
+## Technical Notes
+
+**Settings Loading:**
+- Asynchronous operation via `loadSettings()` from storage module
+- Loads on component mount in `useEffect`
+- Merges with defaults via storage module
+- Handles errors gracefully with fallback defaults
+
+**Font Size Scaling:**
+- Settings use 14pt as default (readable in UI)
+- Rendering multiplies by 1.7 for screen visibility (~24px)
+- Input field matches rendering size for WYSIWYG experience
+- `Math.round()` ensures integer pixel values
+
+**Color Management:**
+- Per-tool color configuration in settings
+- Text tool uses dedicated `colors.text` setting
+- Visual feedback via input border color
+- Consistent with other drawing tools
+
+**Text Submission UX:**
+- Enter key submits (without Shift for multi-line support)
+- Click-away submits for intuitive interaction
+- Escape cancels without creating shape
+- Empty text ignored (not submitted)
+
+## Git Commits This Session
+
+1. `dd7c776` - "feat: Implement Features #30, #31, #32 - Text tool enhancements"
+   - Feature #30: Font size configuration from settings
+   - Feature #31: Text color follows current color selection
+   - Feature #32: Text submission on Enter or click-away (verified)
+   - Added settings state management to Overlay component
+   - Made monitorId optional in BaseShape type
+
+---
+
+## Previous Session Summary (Session 8)
 
 ### Assigned Features Completed This Session
 - Feature #7: Overlay captures mouse input when in drawing mode ✓ PASSING
