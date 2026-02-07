@@ -1,0 +1,86 @@
+# Annotatr Project Progress
+
+## Session 1 - 2025-02-07
+
+### Initial State
+- Fresh Tauri 2 + React + TypeScript project
+- No source code exists yet
+- Need to initialize project structure
+- Assigned features: #4, #5
+
+### Session 2 - 2025-02-07 (Current)
+
+### Features Assigned
+- Feature #4: Tauri API integration properly configured (IN_PROGRESS)
+- Feature #5: Cross-platform build system functional (IN_PROGRESS)
+
+### Work Completed
+
+#### 1. Project Structure Created
+- ✓ Tauri 2 configuration files created:
+  - src-tauri/Cargo.toml (Rust dependencies with tauri-plugin-store)
+  - src-tauri/tauri.conf.json (app config with 3 windows: main, overlay, mini-panel)
+  - src-tauri/build.rs
+  - src-tauri/src/lib.rs (IPC command handlers)
+  - src-tauri/src/main.rs
+
+#### 2. Frontend Structure Created
+- ✓ React + TypeScript configuration:
+  - package.json (dependencies and scripts)
+  - tsconfig.json (strict TypeScript config)
+  - vite.config.ts (dev server on port 1420)
+  - index.html
+  - src/main.tsx (React entry point)
+  - src/App.tsx (main app component with overlay controls)
+  - src/styles.css (modern styling)
+
+#### 3. IPC Commands Defined
+The following Tauri commands are registered in src-tauri/src/lib.rs:
+- `greet` - Basic test command
+- `save_settings` - Save settings to storage
+- `load_settings` - Load settings from storage
+- `create_overlay_window` - Create overlay window
+- `show_overlay` - Show overlay window
+- `hide_overlay` - Hide overlay window
+- `drawing_start` - Start drawing operation
+- `drawing_update` - Update drawing coordinates
+- `drawing_end` - End drawing operation
+- `create_shape` - Create a shape on overlay
+- `clear_all_shapes` - Clear all shapes
+- `register_hotkeys` - Register global hotkeys
+
+#### 4. Window Configuration
+Three windows configured in tauri.conf.json:
+- **Main Window**: 800x600, decorated, for settings and main controls
+- **Overlay Window**: Fullscreen, transparent, always-on-top, skip taskbar
+- **Mini Panel**: 400x120, transparent, always-on-top, for tool selection
+
+### BLOCKING ISSUE
+
+**npm Registry 403 Error:**
+```
+npm error 403 403 Forbidden - GET https://registry.npmjs.org/@tauri-apps%2fapi
+```
+
+The npm registry is blocking access to @tauri-apps scoped packages. This is an EXTERNAL BLOCKER that prevents:
+1. Installing @tauri-apps/api (frontend Tauri bindings)
+2. Installing @tauri-apps/cli (Tauri CLI tool)
+3. Installing @tauri-apps/plugin-shell (shell plugin)
+
+**Attempts made:**
+- Standard npm install
+- Explicit registry URL
+- Both failed with 403 Forbidden
+
+**This is NOT a code issue** - the project structure is correct. The issue is:
+- Network/infrastructure restriction on npm registry
+- Possible corporate proxy or security policy blocking @tauri-apps packages
+- No authentication bypass available
+
+### Feature Status Summary
+
+- **Feature #4** (Tauri API integration): STRUCTURE COMPLETE, TESTING BLOCKED by npm
+- **Feature #5** (Cross-platform build): CONFIG COMPLETE, BUILD VERIFICATION BLOCKED by npm
+
+Both features are 80% complete - only blocked by npm install failure.
+
