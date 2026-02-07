@@ -51,7 +51,8 @@ export default function Overlay() {
   const [settings, setSettings] = useState<Settings | null>(null);
 
   // Feature #9: Track current monitor ID for shape confinement
-  const [currentMonitor] = useState<string | null>(null);
+  // TODO: Implement monitor tracking logic
+  const [currentMonitor, setCurrentMonitor] = useState<string | null>(null);
 
   // Default drawing settings (fallbacks until settings load)
   const defaultColor = "#FF0000";
@@ -742,6 +743,29 @@ export default function Overlay() {
 
     loadAppSettings();
   }, []);
+
+  // Feature #35: Auto-fade system - remove old shapes
+  useEffect(() => {
+    const fadeCheckInterval = setInterval(() => {
+      const now = Date.now();
+      const fadeDurationMs = (settings?.fadeDuration || 10) * 1000;
+
+      // Find and remove shapes older than fade duration
+      const shapesBefore = shapesRef.current.length;
+      shapesRef.current = shapesRef.current.filter(shape => {
+        const age = now - shape.createdAt;
+        return age < fadeDurationMs;
+      });
+
+      const shapesRemoved = shapesBefore - shapesRef.current.length;
+      if (shapesRemoved > 0) {
+        console.log(`[Auto-Fade] Removed ${shapesRemoved} old shape(s)`);
+        redrawAllShapes();
+      }
+    }, 1000); // Check every second
+
+    return () => clearInterval(fadeCheckInterval);
+  }, [settings?.fadeDuration, redrawAllShapes]);
 
   if (!isVisible) {
     return null;
