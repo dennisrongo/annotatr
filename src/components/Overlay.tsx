@@ -83,6 +83,9 @@ export default function Overlay() {
     const unlistenDrawingMode = listen<boolean>("drawing-mode-changed", (event) => {
       console.log("Drawing mode changed:", event.payload);
 
+      // Feature #16: Update drawing mode state for cursor management
+      setIsDrawingMode(event.payload);
+
       if (!event.payload) {
         // Clear drawing state when drawing mode is deactivated
         setDrawingState({
@@ -139,6 +142,8 @@ export default function Overlay() {
         pointerEvents: "auto",
         backgroundColor: "transparent",
         zIndex: 9999,
+        // Feature #16: Change cursor based on drawing mode
+        cursor: isDrawingMode ? "crosshair" : "default",
       }}
     >
       {/* Canvas for drawing shapes */}
