@@ -373,6 +373,55 @@ export default function Overlay() {
       }
     });
 
+    // Feature #20: Listen for overlay dismissed event to clean up shapes
+    const unlistenOverlayDismissed = listen("overlay-dismissed", () => {
+      console.log("Overlay dismissed event received - cleaning up");
+
+      // Clear all shapes
+      shapesRef.current = [];
+
+      // Clear drawing state
+      setDrawingState({
+        isDrawing: false,
+        currentTool: null,
+        startX: 0,
+        startY: 0,
+        currentX: 0,
+        currentY: 0,
+      });
+      setCurrentTool(null);
+
+      // Clear canvas
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+      }
+
+      console.log("Overlay cleanup complete");
+    });
+
+    // Feature #20: Listen for clear all shapes event
+    const unlistenClearShapes = listen("clear-all-shapes", () => {
+      console.log("Clear all shapes event received");
+
+      // Clear all shapes
+      shapesRef.current = [];
+
+      // Clear canvas
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+      }
+
+      console.log("All shapes cleared");
+    });
+
     // Feature #15: Handle window focus changes to ensure z-index stays on top
     const handleFocus = async () => {
       console.log("Overlay window focused - ensuring z-index");
@@ -419,6 +468,8 @@ export default function Overlay() {
       unlistenToggle.then((fn) => fn());
       unlistenDrawingMode.then((fn) => fn());
       unlistenToolSelected.then((fn) => fn()).catch(console.error);
+      unlistenOverlayDismissed.then((fn) => fn()).catch(console.error);
+      unlistenClearShapes.then((fn) => fn()).catch(console.error);
     };
   }, [isVisible]);
 
