@@ -5,7 +5,7 @@ interface OverlayProps {
   windowLabel: string;
 }
 
-export default function Overlay({ windowLabel }: OverlayProps) {
+export default function Overlay({ }: OverlayProps) {
   const [isDrawing, setIsDrawing] = useState(false);
   const [mouseCapture, setMouseCapture] = useState(false);
 
@@ -47,8 +47,8 @@ export default function Overlay({ windowLabel }: OverlayProps) {
 
   useEffect(() => {
     // Check initial mouse capture state
-    invoke("get_overlay_state")
-      .then((visible: boolean) => {
+    invoke<boolean>("get_overlay_state")
+      .then((visible) => {
         if (visible) {
           invoke("enable_mouse_capture").then(() => {
             setMouseCapture(true);

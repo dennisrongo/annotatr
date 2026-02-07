@@ -94,8 +94,8 @@ if (canvas) {
       event.preventDefault();
 
       try {
-        // @ts-expect-error - Tauri API is available at runtime
-        const { invoke } = await import('@tauri-apps/api/core');
+        // Tauri API is available at runtime
+        const { invoke } = await import('@tauri-apps/api/core') as { invoke: (cmd: string, args?: Record<string, unknown>) => Promise<unknown> };
 
         // Call dismiss_overlay command
         await invoke('dismiss_overlay');
@@ -122,8 +122,8 @@ if (canvas) {
     console.log('Toggle overlay event received');
 
     try {
-      // @ts-expect-error - Tauri API is available at runtime
-      const { invoke } = await import('@tauri-apps/api/core');
+      // Tauri API is available at runtime
+      const { invoke } = await import('@tauri-apps/api/core') as { invoke: (cmd: string, args?: Record<string, unknown>) => Promise<unknown> };
 
       // Call toggle_overlay command
       await invoke('toggle_overlay');

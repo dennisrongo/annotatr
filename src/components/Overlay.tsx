@@ -494,7 +494,7 @@ export default function Overlay() {
       </div>
 
       {/* Drawing tool indicator */}
-      {drawingState.currentTool && (
+      {currentTool && (
         <div
           style={{
             position: "absolute",
@@ -508,9 +508,28 @@ export default function Overlay() {
             pointerEvents: "none",
           }}
         >
-          Tool: <strong>{drawingState.currentTool}</strong>
+          Tool: <strong>{currentTool}</strong>
+          <br />
+          {isDrawingMode && "Drawing Mode Active"}
         </div>
       )}
+
+      {/* Shape count indicator */}
+      <div
+        style={{
+          position: "absolute",
+          top: 20,
+          right: 20,
+          padding: "8px 12px",
+          backgroundColor: "rgba(0, 128, 0, 0.7)",
+          color: "white",
+          borderRadius: "4px",
+          fontSize: "12px",
+          pointerEvents: "none",
+        }}
+      >
+        Shapes: <strong>{shapesRef.current.length}</strong>
+      </div>
     </div>
   );
 }

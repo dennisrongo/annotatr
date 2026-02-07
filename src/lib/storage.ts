@@ -95,7 +95,7 @@ export async function loadSettings(): Promise<Settings> {
     // Merge with defaults to ensure all keys exist
     return {
       ...DEFAULT_SETTINGS,
-      ...(stored as Settings),
+      ...(stored as unknown as Settings),
     };
   } catch (error) {
     console.error('[Storage] Failed to load settings:', error);

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { loadSetting, loadSettings, testStorageConnection, initializeStorage } from "./lib/storage";
+import { saveSetting, loadSetting, loadSettings, testStorageConnection, initializeStorage } from "./lib/storage";
 
 interface MonitorInfo {
   id: string;
@@ -20,6 +20,7 @@ function App() {
   const [statusMsg, setStatusMsg] = useState("");
   const [monitors, setMonitors] = useState<MonitorInfo[]>([]);
   const [selectedMonitor, setSelectedMonitor] = useState("");
+  const [platformInfo, setPlatformInfo] = useState<any>(null);
   const [storageStatus, setStorageStatus] = useState("Not tested");
   const [storageValue, setStorageValue] = useState("");
   const [loadedValue, setLoadedValue] = useState("");

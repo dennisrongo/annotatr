@@ -417,6 +417,30 @@ fn ensure_on_top(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// Feature #11: Get platform information
+/// Returns the detected platform and platform-specific window hints
+#[tauri::command]
+fn get_platform_info() -> Result<serde_json::Value, String> {
+    use utils::{get_platform, Platform};
+
+    let platform = match get_platform() {
+        Platform::Windows => "windows",
+        Platform::Macos => "macos",
+        Platform::Linux => "linux",
+        Platform::Unknown => "unknown",
+    };
+
+    let hints = get_platform_window_hints();
+
+    println!("Platform detected: {} - {}", platform, hints);
+
+    Ok(serde_json::json!({
+        "platform": platform,
+        "hints": hints,
+        "overlay_implementation": "Tauri cross-platform window API with platform-specific optimizations"
+    }))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Initialize shared state
@@ -449,7 +473,8 @@ pub fn run() {
             register_hotkeys,
             dismiss_overlay,
             toggle_overlay,
-            ensure_on_top
+            ensure_on_top,
+            get_platform_info
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
