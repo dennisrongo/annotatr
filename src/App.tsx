@@ -268,6 +268,34 @@ function App() {
         <p>Current state: {overlayVisible ? "Visible" : "Hidden"}</p>
       </div>
 
+      {/* Feature #10: Dismiss Overlay (Escape Key + Toggle) */}
+      <div className="status">
+        <h2>Dismiss Overlay (Feature #10)</h2>
+        <p className="info-text">
+          Dismiss the overlay using the Escape key or toggle hotkey. This clears any active
+          drawing state and hides the overlay window.
+        </p>
+        <div className="row">
+          <button
+            type="button"
+            onClick={dismissOverlay}
+            disabled={!overlayVisible}
+            className="danger"
+          >
+            Dismiss Overlay (Esc)
+          </button>
+          <button
+            type="button"
+            onClick={toggleOverlay}
+          >
+            Toggle Overlay
+          </button>
+        </div>
+        <p className="status-msg">
+          Press <strong>Escape</strong> in the overlay window to dismiss it, or use the toggle button.
+        </p>
+      </div>
+
       {/* Feature #7: Mouse Capture Controls */}
       <div className="status">
         <h2>Mouse Capture (Feature #7)</h2>

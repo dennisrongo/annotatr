@@ -122,6 +122,15 @@ button.active {
   border-color: #2563eb;
 }
 
+button.danger {
+  background-color: #dc2626;
+  border-color: #dc2626;
+}
+
+button.danger:hover {
+  border-color: #ef4444;
+}
+
 button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
