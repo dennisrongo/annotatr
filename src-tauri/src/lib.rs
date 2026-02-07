@@ -155,6 +155,7 @@ fn create_overlay_window() -> Result<(), String> {
 
 /// Show the overlay window
 /// This makes the overlay visible and brings it to the foreground
+/// Feature #8: Positions overlay on the monitor where the cursor is currently located
 /// Feature #15: Ensures z-index management to stay above other windows
 #[tauri::command]
 fn show_overlay(app: AppHandle) -> Result<(), String> {
@@ -162,10 +163,38 @@ fn show_overlay(app: AppHandle) -> Result<(), String> {
     let overlay_window = app.get_webview_window("overlay")
         .ok_or("Overlay window not found")?;
 
-    // Update state
-    if let Some(state) = app.state::<SharedState>().try_get() {
-        let mut state_guard = state.lock().map_err(|e| format!("State lock error: {}", e))?;
-        state_guard.is_visible = true;
+    // Feature #8: Get cursor position and determine which monitor to use
+    let cursor_monitor_info = get_cursor_monitor(app.clone())?;
+
+    if let Some(monitor_id) = cursor_monitor_info["monitor_id"].as_str() {
+        if let Some(monitor) = cursor_monitor_info["monitor"].as_object() {
+            let x = monitor["x"].as_i64().unwrap_or(0) as i32;
+            let y = monitor["y"].as_i64().unwrap_or(0) as i32;
+            let width = monitor["width"].as_u64().unwrap_or(1920) as u32;
+            let height = monitor["height"].as_u64().unwrap_or(1080) as u32;
+
+            // Update state with current monitor
+            if let Some(state) = app.state::<SharedState>().try_get() {
+                let mut state_guard = state.lock().map_err(|e| format!("State lock error: {}", e))?;
+                state_guard.is_visible = true;
+                state_guard.current_monitor = Some(monitor_id.to_string());
+            }
+
+            // Feature #8: Position overlay on the correct monitor
+            overlay_window.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y }))?;
+
+            // Feature #8: Set overlay size to match monitor size
+            overlay_window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width, height }))?;
+
+            println!("Overlay positioned on monitor {} at ({}, {}), size: {}x{}",
+                monitor_id, x, y, width, height);
+        }
+    } else {
+        // Fallback: just update visibility state
+        if let Some(state) = app.state::<SharedState>().try_get() {
+            let mut state_guard = state.lock().map_err(|e| format!("State lock error: {}", e))?;
+            state_guard.is_visible = true;
+        }
     }
 
     // Show the window if it's hidden
@@ -245,26 +274,142 @@ fn get_overlay_state(app: AppHandle) -> Result<bool, String> {
 }
 
 /// Get information about all monitors
+/// Feature #8: Returns real monitor information using Tauri's monitor API
 #[tauri::command]
-fn get_monitor_info() -> Result<Vec<serde_json::Value>, String> {
-    // For now, return a placeholder for the primary monitor
-    // In a real implementation, this would use platform-specific APIs
-    Ok(vec![
+fn get_monitor_info(app: AppHandle) -> Result<Vec<serde_json::Value>, String> {
+    // Get all available monitors from the primary window
+    let primary_window = app.get_webview_window("main")
+        .or_else(|| app.get_webview_window("overlay"))
+        .ok_or("No window available for monitor detection")?;
+
+    let monitors = primary_window.available_monitors()
+        .map_err(|e| format!("Failed to get monitor info: {}", e))?;
+
+    // Convert monitor information to JSON
+    let monitor_info: Vec<serde_json::Value> = monitors.iter().enumerate().map(|(i, monitor)| {
+        let size = monitor.size();
+        let position = monitor.position();
+        let scale_factor = monitor.scale_factor();
+        let name = monitor.name().unwrap_or(format!("Monitor {}", i + 1));
+
         serde_json::json!({
-            "id": "default",
-            "name": "Primary Monitor",
-            "x": 0,
-            "y": 0,
-            "width": 1920,
-            "height": 1080,
-            "scale_factor": 1.0
+            "id": format!("monitor_{}", i),
+            "name": name,
+            "x": position.x,
+            "y": position.y,
+            "width": size.width,
+            "height": size.height,
+            "scale_factor": scale_factor
         })
-    ])
+    }).collect();
+
+    println!("Detected {} monitors: {:?}", monitor_info.len(), monitor_info);
+
+    Ok(monitor_info)
 }
 
 /// Set the overlay window position on a specific monitor
 #[tauri::command]
 fn set_overlay_position(app: AppHandle, monitor_id: String, x: i32, y: i32) -> Result<(), String> {
+    let overlay_window = app.get_webview_window("overlay")
+        .ok_or("Overlay window not found")?;
+
+    // Update state with current monitor
+    if let Some(state) = app.state::<SharedState>().try_get() {
+        let mut state_guard = state.lock().map_err(|e| format!("State lock error: {}", e))?;
+        state_guard.current_monitor = Some(monitor_id);
+    }
+
+    // Set window position
+    overlay_window.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y }))?;
+
+    println!("Overlay positioned at ({}, {}) on monitor {}", x, y, monitor_id);
+
+    Ok(())
+}
+
+/// Feature #8: Get current cursor position and determine which monitor it's on
+/// This is used to position the overlay on the correct monitor when drawing mode is activated
+#[tauri::command]
+fn get_cursor_monitor(app: AppHandle) -> Result<serde_json::Value, String> {
+    use tauri::{Manager, PhysicalPosition};
+
+    // Get the primary window to access monitor APIs
+    let primary_window = app.get_webview_window("main")
+        .or_else(|| app.get_webview_window("overlay"))
+        .ok_or("No window available")?;
+
+    // Get cursor position using Tauri's cursor position API
+    let cursor_pos = primary_window.cursor_position()
+        .map_err(|e| format!("Failed to get cursor position: {}", e))?
+        .ok_or("Cursor position not available")?;
+
+    // Get all monitors
+    let monitors = primary_window.available_monitors()
+        .map_err(|e| format!("Failed to get monitors: {}", e))?;
+
+    // Find which monitor contains the cursor
+    let mut current_monitor = None;
+    let mut monitor_info = None;
+
+    for (i, monitor) in monitors.iter().enumerate() {
+        let size = monitor.size();
+        let position = monitor.position();
+        let scale_factor = monitor.scale_factor();
+        let name = monitor.name().unwrap_or(format!("Monitor {}", i + 1));
+
+        // Check if cursor is within this monitor's bounds
+        let is_cursor_in_monitor = cursor_pos.x >= position.x
+            && cursor_pos.x < position.x + size.width as i32
+            && cursor_pos.y >= position.y
+            && cursor_pos.y < position.y + size.height as i32;
+
+        if is_cursor_in_monitor {
+            current_monitor = Some(format!("monitor_{}", i));
+            monitor_info = Some(serde_json::json!({
+                "id": format!("monitor_{}", i),
+                "name": name,
+                "x": position.x,
+                "y": position.y,
+                "width": size.width,
+                "height": size.height,
+                "scale_factor": scale_factor
+            }));
+            break;
+        }
+    }
+
+    // If no monitor found (shouldn't happen), use primary monitor
+    if current_monitor.is_none() {
+        if let Some(primary) = primary_window.primary_monitor()
+            .map_err(|e| format!("Failed to get primary monitor: {}", e))? {
+            let size = primary.size();
+            let position = primary.position();
+            let scale_factor = primary.scale_factor();
+            let name = primary.name().unwrap_or("Primary Monitor".to_string());
+
+            current_monitor = Some("monitor_0".to_string());
+            monitor_info = Some(serde_json::json!({
+                "id": "monitor_0",
+                "name": name,
+                "x": position.x,
+                "y": position.y,
+                "width": size.width,
+                "height": size.height,
+                "scale_factor": scale_factor
+            }));
+        }
+    }
+
+    println!("Cursor at ({}, {}) on monitor: {:?}", cursor_pos.x, cursor_pos.y, current_monitor);
+
+    Ok(serde_json::json!({
+        "cursor_x": cursor_pos.x,
+        "cursor_y": cursor_pos.y,
+        "monitor_id": current_monitor,
+        "monitor": monitor_info
+    }))
+}
     let overlay_window = app.get_webview_window("overlay")
         .ok_or("Overlay window not found")?;
 
@@ -629,6 +774,7 @@ pub fn run() {
             focus_overlay,
             get_overlay_state,
             get_monitor_info,
+            get_cursor_monitor,
             set_overlay_position,
             enable_mouse_capture,
             disable_mouse_capture,

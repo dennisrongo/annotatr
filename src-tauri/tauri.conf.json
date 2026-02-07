@@ -5,7 +5,7 @@
   "identifier": "com.annotatr.app",
   "build": {
     "beforeDevCommand": "npm run dev",
-    "devUrl": "http://localhost:3000",
+    "devUrl": "http://localhost:1420",
     "beforeBuildCommand": "npm run build",
     "frontendDist": "../dist"
   },
@@ -51,6 +51,22 @@
       "csp": null
     }
   },
+  "permissions": [
+    "core:window:allow-available-monitors",
+    "core:window:allow-primary-monitor",
+    "core:window:allow-cursor-position",
+    "core:window:allow-set-position",
+    "core:window:allow-set-size",
+    "core:window:allow-set-focus",
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "core:window:allow-set-always-on-top",
+    "core:window:allow-set-ignore-cursor-events",
+    "core:window:allow-is-visible",
+    "core:window:allow-position",
+    "core:event:allow-emit",
+    "core:event:allow-listen"
+  ],
   "bundle": {
     "active": true,
     "targets": "all",

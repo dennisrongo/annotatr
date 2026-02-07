@@ -46,7 +46,25 @@ export interface BoxShape extends BaseShape {
   height: number;
 }
 
-export type Shape = ArrowShape | CircleShape | BoxShape;
+export interface FreehandShape extends BaseShape {
+  tool: ToolType.FREEHAND;
+  points: Point[];
+}
+
+export interface HighlighterShape extends BaseShape {
+  tool: ToolType.HIGHLIGHTER;
+  points: Point[];
+  opacity: number;
+}
+
+export interface TextShape extends BaseShape {
+  tool: ToolType.TEXT;
+  position: Point;
+  text: string;
+  fontSize: number;
+}
+
+export type Shape = ArrowShape | CircleShape | BoxShape | FreehandShape | HighlighterShape | TextShape;
 
 export interface DrawingState {
   isDrawing: boolean;

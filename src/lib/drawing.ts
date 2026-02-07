@@ -2,7 +2,7 @@
  * Drawing utilities for rendering shapes on canvas
  */
 
-import { Shape, ArrowShape, CircleShape, BoxShape } from "../types/shapes";
+import { Shape, ArrowShape, CircleShape, BoxShape, FreehandShape, HighlighterShape, TextShape } from "../types/shapes";
 
 /**
  * Draw an arrow shape on the canvas
@@ -81,6 +81,76 @@ export function drawBox(
 }
 
 /**
+ * Draw a freehand shape on the canvas
+ */
+export function drawFreehand(
+  ctx: CanvasRenderingContext2D,
+  shape: FreehandShape
+): void {
+  const { points, color, lineThickness } = shape;
+
+  if (points.length < 2) return;
+
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lineThickness;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+
+  for (let i = 1; i < points.length; i++) {
+    ctx.lineTo(points[i].x, points[i].y);
+  }
+
+  ctx.stroke();
+}
+
+/**
+ * Draw a highlighter shape on the canvas (semi-transparent)
+ */
+export function drawHighlighter(
+  ctx: CanvasRenderingContext2D,
+  shape: HighlighterShape
+): void {
+  const { points, color, lineThickness, opacity = 0.3 } = shape;
+
+  if (points.length < 2) return;
+
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lineThickness * 2; // Broader stroke for highlighter
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.globalAlpha = opacity; // Semi-transparent
+
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+
+  for (let i = 1; i < points.length; i++) {
+    ctx.lineTo(points[i].x, points[i].y);
+  }
+
+  ctx.stroke();
+  ctx.globalAlpha = 1.0; // Reset alpha
+}
+
+/**
+ * Draw a text shape on the canvas
+ */
+export function drawText(
+  ctx: CanvasRenderingContext2D,
+  shape: TextShape
+): void {
+  const { position, text, color, fontSize } = shape;
+
+  ctx.fillStyle = color;
+  ctx.font = `${fontSize}px sans-serif`;
+  ctx.textBaseline = "top";
+
+  ctx.fillText(text, position.x, position.y);
+}
+
+/**
  * Draw any shape on the canvas
  */
 export function drawShape(
@@ -96,6 +166,15 @@ export function drawShape(
       break;
     case "box":
       drawBox(ctx, shape as BoxShape);
+      break;
+    case "freehand":
+      drawFreehand(ctx, shape as FreehandShape);
+      break;
+    case "highlighter":
+      drawHighlighter(ctx, shape as HighlighterShape);
+      break;
+    case "text":
+      drawText(ctx, shape as TextShape);
       break;
     default:
       console.warn("Unknown shape type:", shape);

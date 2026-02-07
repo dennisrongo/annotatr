@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { ToolType, Shape, ArrowShape, CircleShape, BoxShape } from "../types/shapes";
+import { ToolType, Shape, ArrowShape, CircleShape, BoxShape, FreehandShape, HighlighterShape, TextShape, Point } from "../types/shapes";
 import { drawShape, redrawShapes } from "../lib/drawing";
 
 interface DrawingState {
@@ -11,6 +11,9 @@ interface DrawingState {
   startY: number;
   currentX: number;
   currentY: number;
+  freehandPoints: Point[]; // For freehand and highlighter
+  textInput: string; // For text tool
+  textPosition: Point | null; // For text tool
 }
 
 /**
@@ -31,10 +34,17 @@ export default function Overlay() {
     startY: 0,
     currentX: 0,
     currentY: 0,
+    freehandPoints: [],
+    textInput: "",
+    textPosition: null,
   });
   const [isVisible, setIsVisible] = useState(true);
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [currentTool, setCurrentTool] = useState<ToolType | null>(null);
+  const [textInputVisible, setTextInputVisible] = useState(false);
+  const [textInputPosition, setTextInputPosition] = useState<Point>({ x: 0, y: 0 });
+  const [textInputValue, setTextInputValue] = useState("");
+  const textInputRef = useRef<HTMLInputElement>(null);
 
   // Default drawing settings
   const defaultColor = "#FF0000";
@@ -154,6 +164,54 @@ export default function Overlay() {
   }, [generateShapeId]);
 
   /**
+   * Create freehand shape from drawing state
+   */
+  const createFreehandShape = useCallback((points: Point[]): FreehandShape => {
+    return {
+      id: generateShapeId(),
+      tool: ToolType.FREEHAND,
+      points: [...points],
+      color: defaultColor,
+      lineThickness: defaultLineThickness,
+      createdAt: Date.now(),
+    };
+  }, [generateShapeId]);
+
+  /**
+   * Create highlighter shape from drawing state
+   */
+  const createHighlighterShape = useCallback((points: Point[]): HighlighterShape => {
+    return {
+      id: generateShapeId(),
+      tool: ToolType.HIGHLIGHTER,
+      points: [...points],
+      color: defaultColor,
+      lineThickness: defaultLineThickness,
+      opacity: 0.3, // Semi-transparent
+      createdAt: Date.now(),
+    };
+  }, [generateShapeId]);
+
+  /**
+   * Create text shape from drawing state
+   */
+  const createTextShape = useCallback((
+    position: Point,
+    text: string
+  ): TextShape => {
+    return {
+      id: generateShapeId(),
+      tool: ToolType.TEXT,
+      position,
+      text,
+      color: defaultColor,
+      lineThickness: 0, // Not used for text
+      fontSize: 24, // Default font size
+      createdAt: Date.now(),
+    };
+  }, [generateShapeId]);
+
+  /**
    * Handle mouse down - start drawing
    */
   const handleMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
@@ -165,6 +223,23 @@ export default function Overlay() {
     const startX = event.clientX - rect.left;
     const startY = event.clientY - rect.top;
 
+    // For text tool, show inline input at click location
+    if (currentTool === ToolType.TEXT) {
+      setTextInputPosition({ x: startX, y: startY });
+      setTextInputValue("");
+      setTextInputVisible(true);
+      // Focus the input after it's rendered
+      setTimeout(() => {
+        textInputRef.current?.focus();
+      }, 0);
+      return;
+    }
+
+    // For freehand and highlighter, start tracking points
+    const initialPoints = currentTool === ToolType.FREEHAND || currentTool === ToolType.HIGHLIGHTER
+      ? [{ x: startX, y: startY }]
+      : [];
+
     setDrawingState({
       isDrawing: true,
       currentTool,
@@ -172,6 +247,9 @@ export default function Overlay() {
       startY,
       currentX: startX,
       currentY: startY,
+      freehandPoints: initialPoints,
+      textInput: "",
+      textPosition: null,
     });
 
     console.log(`Started drawing ${currentTool} at (${startX}, ${startY})`);
@@ -189,7 +267,35 @@ export default function Overlay() {
     const currentX = event.clientX - rect.left;
     const currentY = event.clientY - rect.top;
 
-    // Update drawing state
+    // For freehand and highlighter, add points to the path
+    if (currentTool === ToolType.FREEHAND || currentTool === ToolType.HIGHLIGHTER) {
+      const newPoint = { x: currentX, y: currentY };
+      setDrawingState(prev => ({
+        ...prev,
+        currentX,
+        currentY,
+        freehandPoints: [...prev.freehandPoints, newPoint],
+      }));
+
+      // Redraw existing shapes and preview
+      const context = getCanvasContext();
+      if (!context) return;
+
+      const { ctx } = context;
+
+      // Clear and redraw all existing shapes
+      redrawShapes(ctx, shapesRef.current);
+
+      // Draw preview of current freehand path
+      const previewShape = currentTool === ToolType.FREEHAND
+        ? createFreehandShape([...drawingState.freehandPoints, newPoint])
+        : createHighlighterShape([...drawingState.freehandPoints, newPoint]);
+
+      drawShape(ctx, previewShape);
+      return;
+    }
+
+    // For arrow, circle, box - update drawing state
     setDrawingState(prev => ({
       ...prev,
       currentX,
@@ -223,7 +329,39 @@ export default function Overlay() {
     }
 
     drawShape(ctx, previewShape);
-  }, [drawingState.isDrawing, drawingState.startX, drawingState.startY, currentTool, getCanvasContext, createArrowShape, createCircleShape, createBoxShape]);
+  }, [drawingState.isDrawing, drawingState.startX, drawingState.startY, drawingState.freehandPoints, currentTool, getCanvasContext, createArrowShape, createCircleShape, createBoxShape, createFreehandShape, createHighlighterShape]);
+
+  /**
+   * Handle text input submission
+   */
+  const handleTextInputSubmit = useCallback(() => {
+    if (!textInputValue.trim()) {
+      setTextInputVisible(false);
+      return;
+    }
+
+    const newTextShape = createTextShape(textInputPosition, textInputValue);
+    shapesRef.current.push(newTextShape);
+    console.log("Created text shape:", newTextShape);
+
+    setTextInputVisible(false);
+    setTextInputValue("");
+    redrawAllShapes();
+  }, [textInputValue, textInputPosition, createTextShape, redrawAllShapes]);
+
+  /**
+   * Handle text input keydown (Enter to submit, Escape to cancel)
+   */
+  const handleTextInputKeyDown = useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      handleTextInputSubmit();
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      setTextInputVisible(false);
+      setTextInputValue("");
+    }
+  }, [handleTextInputSubmit]);
 
   /**
    * Handle mouse up - complete shape
@@ -231,27 +369,48 @@ export default function Overlay() {
   const handleMouseUp = useCallback(() => {
     if (!drawingState.isDrawing || !currentTool) return;
 
-    const { startX, startY, currentX, currentY } = drawingState;
-
-    // Don't create tiny shapes from accidental clicks
-    const distance = Math.sqrt(Math.pow(currentX - startX, 2) + Math.pow(currentY - startY, 2));
-    if (distance < 5) {
-      console.log("Shape too small, not creating");
-      setDrawingState({
-        isDrawing: false,
-        currentTool: null,
-        startX: 0,
-        startY: 0,
-        currentX: 0,
-        currentY: 0,
-      });
-      return;
-    }
+    const { startX, startY, currentX, currentY, freehandPoints } = drawingState;
 
     // Create the final shape
     let newShape: Shape;
 
     switch (currentTool) {
+      case ToolType.FREEHAND:
+        if (freehandPoints.length < 2) {
+          console.log("Freehand path too short, not creating");
+          setDrawingState({
+            isDrawing: false,
+            currentTool: null,
+            startX: 0,
+            startY: 0,
+            currentX: 0,
+            currentY: 0,
+            freehandPoints: [],
+            textInput: "",
+            textPosition: null,
+          });
+          return;
+        }
+        newShape = createFreehandShape(freehandPoints);
+        break;
+      case ToolType.HIGHLIGHTER:
+        if (freehandPoints.length < 2) {
+          console.log("Highlighter path too short, not creating");
+          setDrawingState({
+            isDrawing: false,
+            currentTool: null,
+            startX: 0,
+            startY: 0,
+            currentX: 0,
+            currentY: 0,
+            freehandPoints: [],
+            textInput: "",
+            textPosition: null,
+          });
+          return;
+        }
+        newShape = createHighlighterShape(freehandPoints);
+        break;
       case ToolType.ARROW:
         newShape = createArrowShape(startX, startY, currentX, currentY);
         break;
@@ -278,11 +437,14 @@ export default function Overlay() {
       startY: 0,
       currentX: 0,
       currentY: 0,
+      freehandPoints: [],
+      textInput: "",
+      textPosition: null,
     });
 
     // Redraw all shapes
     redrawAllShapes();
-  }, [drawingState, currentTool, createArrowShape, createCircleShape, createBoxShape, redrawAllShapes]);
+  }, [drawingState, currentTool, createArrowShape, createCircleShape, createBoxShape, createFreehandShape, createHighlighterShape, redrawAllShapes]);
 
   useEffect(() => {
     // Feature #10: Handle Escape key to dismiss overlay
@@ -303,6 +465,9 @@ export default function Overlay() {
             startY: 0,
             currentX: 0,
             currentY: 0,
+            freehandPoints: [],
+            textInput: "",
+            textPosition: null,
           });
           setCurrentTool(null);
 
@@ -333,6 +498,9 @@ export default function Overlay() {
             startY: 0,
             currentX: 0,
             currentY: 0,
+            freehandPoints: [],
+            textInput: "",
+            textPosition: null,
           });
           setCurrentTool(null);
         }
@@ -357,6 +525,9 @@ export default function Overlay() {
           startY: 0,
           currentX: 0,
           currentY: 0,
+          freehandPoints: [],
+          textInput: "",
+          textPosition: null,
         });
         setCurrentTool(null);
       }
@@ -388,6 +559,9 @@ export default function Overlay() {
         startY: 0,
         currentX: 0,
         currentY: 0,
+        freehandPoints: [],
+        textInput: "",
+        textPosition: null,
       });
       setCurrentTool(null);
 
@@ -596,6 +770,33 @@ export default function Overlay() {
       >
         Shapes: <strong>{shapesRef.current.length}</strong>
       </div>
+
+      {/* Text input field (shown when text tool is used) */}
+      {textInputVisible && (
+        <input
+          ref={textInputRef}
+          type="text"
+          value={textInputValue}
+          onChange={(e) => setTextInputValue(e.target.value)}
+          onKeyDown={handleTextInputKeyDown}
+          onBlur={handleTextInputSubmit}
+          style={{
+            position: "absolute",
+            left: textInputPosition.x,
+            top: textInputPosition.y,
+            fontSize: "24px",
+            padding: "4px 8px",
+            border: "2px solid #FF0000",
+            borderRadius: "4px",
+            outline: "none",
+            backgroundColor: "rgba(255, 255, 255, 0.9)",
+            color: "#000000",
+            minWidth: "200px",
+            zIndex: 10000,
+          }}
+          placeholder="Type text and press Enter..."
+        />
+      )}
     </div>
   );
 }

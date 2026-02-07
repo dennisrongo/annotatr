@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { emit } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { ToolType } from "../types/shapes";
@@ -6,9 +6,14 @@ import { ToolType } from "../types/shapes";
 /**
  * MiniPanel Component
  * Floating toolbar with tool selection buttons for drawing shapes
+ * Feature #19: Supports drag-to-reposition including off-screen placement
  */
 export default function MiniPanel() {
   const [selectedTool, setSelectedTool] = useState<ToolType | null>(null);
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const panelRef = useRef<HTMLDivElement>(null);
 
   /**
    * Handle tool selection
@@ -105,6 +110,9 @@ export default function MiniPanel() {
         <ToolButton tool={ToolType.ARROW} label="Arrow" />
         <ToolButton tool={ToolType.CIRCLE} label="Circle" />
         <ToolButton tool={ToolType.BOX} label="Box" />
+        <ToolButton tool={ToolType.FREEHAND} label="Freehand" />
+        <ToolButton tool={ToolType.HIGHLIGHTER} label="Highlighter" />
+        <ToolButton tool={ToolType.TEXT} label="Text" />
       </div>
 
       <div
