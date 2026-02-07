@@ -21,10 +21,10 @@ export default function MiniPanel() {
   useEffect(() => {
     const restorePosition = async () => {
       try {
-        const result = await invoke<serde_json.Value>("restore_mini_panel_position");
+        const result = await invoke<Record<string, any>>("restore_mini_panel_position");
         if (result && typeof result === "object") {
-          const x = (result as any).x as number;
-          const y = (result as any).y as number;
+          const x = result.x as number;
+          const y = result.y as number;
           setPosition({ x, y });
           console.log("Panel position restored:", { x, y });
         }
@@ -146,29 +146,58 @@ export default function MiniPanel() {
 
   return (
     <div
+      ref={panelRef}
+      onMouseDown={handleMouseDown}
       style={{
         position: "fixed",
-        top: 20,
-        right: 20,
+        left: position.x,
+        top: position.y,
         padding: "12px",
         backgroundColor: "rgba(240, 240, 240, 0.95)",
         borderRadius: "8px",
         boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
         zIndex: 10000,
         minWidth: "200px",
+        cursor: isDragging ? "grabbing" : "default",
+        userSelect: isDragging ? "none" : "auto",
       }}
     >
-      <h3
+      {/* Feature #19: Draggable header */}
+      <div
+        className="panel-header"
         style={{
-          margin: "0 0 12px 0",
-          fontSize: "14px",
-          fontWeight: "bold",
-          color: "#333",
-          textAlign: "center",
+          margin: "-12px -12px 12px -12px",
+          padding: "8px 12px",
+          backgroundColor: "rgba(220, 220, 220, 0.95)",
+          borderRadius: "8px 8px 0 0",
+          cursor: "grab",
+          borderBottom: "1px solid rgba(0, 0, 0, 0.1)",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
         }}
+        title="Drag to reposition panel (can be moved off-screen)"
       >
-        Drawing Tools
-      </h3>
+        <h3
+          style={{
+            margin: 0,
+            fontSize: "14px",
+            fontWeight: "bold",
+            color: "#333",
+          }}
+        >
+          Drawing Tools
+        </h3>
+        <span
+          style={{
+            fontSize: "12px",
+            color: "#666",
+          }}
+          title="Drag this header to move panel (including off-screen)"
+        >
+          ⋮⋮
+        </span>
+      </div>
 
       <div
         style={{
@@ -212,6 +241,18 @@ export default function MiniPanel() {
         }}
       >
         Click & drag on overlay to draw
+      </div>
+
+      {/* Feature #19: Position indicator */}
+      <div
+        style={{
+          marginTop: "4px",
+          fontSize: "9px",
+          color: "#aaa",
+          textAlign: "center",
+        }}
+      >
+        Pos: ({position.x}, {position.y})
       </div>
     </div>
   );
