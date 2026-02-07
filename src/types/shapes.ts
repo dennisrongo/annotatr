@@ -22,6 +22,7 @@ export interface BaseShape {
   color: string;
   lineThickness: number;
   createdAt: number;
+  monitorId: string; // Feature #9: Track which monitor this shape belongs to
 }
 
 export interface ArrowShape extends BaseShape {

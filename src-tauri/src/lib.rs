@@ -180,6 +180,10 @@ fn show_overlay(app: AppHandle) -> Result<(), String> {
                 state_guard.current_monitor = Some(monitor_id.to_string());
             }
 
+            // Feature #9: Emit event when monitor changes - frontend needs this to filter shapes
+            app.emit("monitor-changed", monitor_id)
+                .map_err(|e| format!("Failed to emit monitor-changed event: {}", e))?;
+
             // Feature #8: Position overlay on the correct monitor
             overlay_window.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y }))?;
 
@@ -270,6 +274,18 @@ fn get_overlay_state(app: AppHandle) -> Result<bool, String> {
         let overlay_window = app.get_webview_window("overlay")
             .ok_or("Overlay window not found")?;
         Ok(overlay_window.is_visible()?)
+    }
+}
+
+/// Get the current monitor ID
+/// Feature #9: Returns the monitor where the overlay is currently positioned
+#[tauri::command]
+fn get_current_monitor(app: AppHandle) -> Result<Option<String>, String> {
+    if let Some(state) = app.state::<SharedState>().try_get() {
+        let state_guard = state.lock().map_err(|e| format!("State lock error: {}", e))?;
+        Ok(state_guard.current_monitor.clone())
+    } else {
+        Ok(None)
     }
 }
 
@@ -757,6 +773,7 @@ pub fn run() {
             hide_overlay,
             focus_overlay,
             get_overlay_state,
+            get_current_monitor,
             get_monitor_info,
             get_cursor_monitor,
             set_overlay_position,

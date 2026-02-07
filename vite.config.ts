@@ -6,7 +6,8 @@ export default defineConfig(async () => ({
   plugins: [react()],
   clearScreen: false,
   server: {
-    port: 3000,
+    host: "127.0.0.1",
+    port: 1420,
     strictPort: false,
     watch: {
       ignored: ["**/src-tauri/**"],

@@ -152,11 +152,21 @@ export function drawText(
 
 /**
  * Draw any shape on the canvas
+ * @param ctx - Canvas rendering context
+ * @param shape - Shape to draw
+ * @param opacity - Optional opacity value (0-1) for fading
  */
 export function drawShape(
   ctx: CanvasRenderingContext2D,
-  shape: Shape
+  shape: Shape,
+  opacity?: number
 ): void {
+  // Feature #35: Apply opacity if provided (for auto-fade)
+  const previousAlpha = ctx.globalAlpha;
+  if (opacity !== undefined && opacity < 1.0) {
+    ctx.globalAlpha = opacity;
+  }
+
   switch (shape.tool) {
     case "arrow":
       drawArrow(ctx, shape as ArrowShape);
@@ -179,6 +189,11 @@ export function drawShape(
     default:
       console.warn("Unknown shape type:", shape);
   }
+
+  // Feature #35: Restore previous alpha
+  if (opacity !== undefined && opacity < 1.0) {
+    ctx.globalAlpha = previousAlpha;
+  }
 }
 
 /**
@@ -191,11 +206,18 @@ export function clearCanvas(ctx: CanvasRenderingContext2D): void {
 
 /**
  * Redraw all shapes on the canvas
+ * @param ctx - Canvas rendering context
+ * @param shapes - Array of shapes to redraw
+ * @param opacities - Optional map of shape IDs to opacity values for fading
  */
 export function redrawShapes(
   ctx: CanvasRenderingContext2D,
-  shapes: Shape[]
+  shapes: Shape[],
+  opacities?: Record<string, number>
 ): void {
   clearCanvas(ctx);
-  shapes.forEach((shape) => drawShape(ctx, shape));
+  shapes.forEach((shape) => {
+    const opacity = opacities?.[shape.id];
+    drawShape(ctx, shape, opacity);
+  });
 }
