@@ -86,3 +86,41 @@
 3. src-tauri/src/lib.rs - Implemented storage commands
 4. src/lib/storage.ts - Created storage utilities
 5. src/App.tsx - Added storage testing UI
+
+## Session: 2025-02-07 (Feature #13, #14, #15 Completed)
+
+### Assigned Features
+- Feature #13: Overlay window management (show/hide/focus)
+- Feature #14: Click-through prevention during drawing mode
+- Feature #15: Z-index management to stay above other windows
+
+### Implementation Summary
+
+All three features were already implemented. Verified implementations:
+
+#### Feature #13 - Overlay window management - COMPLETED
+Commands in src-tauri/src/lib.rs:
+- show_overlay: Shows and focuses overlay, ensures always-on-top
+- hide_overlay: Hides overlay without destroying it
+- focus_overlay: Brings overlay to foreground
+- get_overlay_state: Returns current visibility state
+
+Components: Shared state (Arc<Mutex<OverlayState>>), window label-based lookup, HTML files for overlay/mini-panel, UI controls in App.tsx
+
+Commit: b4a1e46
+
+#### Feature #14 - Click-through prevention - COMPLETED
+Commands in src-tauri/src/lib.rs:
+- enable_mouse_capture: set_ignore_cursor_events(false)
+- disable_mouse_capture: set_ignore_cursor_events(true)
+
+Frontend integration in App.tsx with UI controls.
+
+#### Feature #15 - Z-index management - COMPLETED
+1. Static: alwaysOnTop: true in tauri.conf.json
+2. Runtime: overlay_window.set_always_on_top(true) in show_overlay
+
+### Current Status
+- Features #13, #14, #15: All PASSING
+- Total passing: 3/135 (2.2%)
+
