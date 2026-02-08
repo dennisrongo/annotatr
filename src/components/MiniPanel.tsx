@@ -726,6 +726,7 @@ export default function MiniPanel() {
       setFontSize(reloadedSettings.fontSize);
       setFadeDuration(reloadedSettings.fadeDuration);
       setPanelTransparency(reloadedSettings.panelTransparency);
+      setPanelCollapsed(reloadedSettings.panelCollapsed);
 
       // Clear any hotkey conflicts
       setHotkeyConflicts({});
@@ -792,6 +793,7 @@ export default function MiniPanel() {
           setFontSize(imported.fontSize);
           setFadeDuration(imported.fadeDuration);
           setPanelTransparency(imported.panelTransparency);
+          setPanelCollapsed(imported.panelCollapsed);
 
           // Clear any hotkey conflicts
           setHotkeyConflicts({});
@@ -1087,13 +1089,17 @@ export default function MiniPanel() {
         </div>
       </div>
 
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: "4px",
-        }}
-      >
+      {/* Feature #133: Collapsible panel content */}
+      {!panelCollapsed ? (
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "4px",
+            transition: "all 0.3s ease",
+            overflow: "hidden",
+          }}
+        >
         <ToolButton tool={ToolType.ARROW} label="Arrow" />
         <ToolButton tool={ToolType.CIRCLE} label="Circle" />
         <ToolButton tool={ToolType.BOX} label="Box" />
@@ -1128,7 +1134,6 @@ export default function MiniPanel() {
         >
           ⚙️ Settings
         </button>
-      </div>
 
       {/* Feature #44: Color picker section */}
       <div
@@ -1545,48 +1550,160 @@ export default function MiniPanel() {
           </span>
         </div>
       </div>
-
-      <div
-        style={{
-          marginTop: "12px",
-          padding: "8px",
-          backgroundColor: "rgba(0, 0, 0, 0.05)",
-          borderRadius: "4px",
-          fontSize: "11px",
-          color: "#666",
-          textAlign: "center",
-        }}
-      >
-        {selectedTool ? (
-          <>Active: <strong>{selectedTool}</strong></>
-        ) : (
-          <>Select a tool to draw</>
-        )}
-      </div>
-
-      <div
-        style={{
-          marginTop: "8px",
-          fontSize: "10px",
-          color: "#999",
-          textAlign: "center",
-        }}
-      >
-        Click & drag on overlay to draw
-      </div>
-
-      {/* Feature #19: Position indicator */}
-      {/* Feature #50: Also shows current monitor */}
-      <div
-        style={{
-          marginTop: "4px",
-          fontSize: "9px",
-          color: "#aaa",
-          textAlign: "center",
-        }}
-      >
-        Pos: ({position.x}, {position.y}) on {currentMonitor}
-      </div>
+        </div>
+      ) : (
+        // Feature #133: Collapsed view - show only tool icons in a horizontal row
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "row",
+            gap: "4px",
+            padding: "8px 0",
+            justifyContent: "center",
+            transition: "all 0.3s ease",
+          }}
+        >
+          {/* Icon-only tool buttons for collapsed mode */}
+          <button
+            type="button"
+            onClick={() => selectTool(ToolType.ARROW)}
+            style={{
+              width: "32px",
+              height: "32px",
+              padding: "0",
+              backgroundColor: selectedTool === ToolType.ARROW ? "#2563eb" : "rgba(255, 255, 255, 0.9)",
+              color: selectedTool === ToolType.ARROW ? "white" : "#213547",
+              border: selectedTool === ToolType.ARROW ? "1px solid #2563eb" : "1px solid transparent",
+              borderRadius: "6px",
+              cursor: "pointer",
+              fontSize: "16px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              transition: "all 0.2s",
+            }}
+            title="Arrow tool"
+            aria-label="Arrow tool"
+          >
+            ↗
+          </button>
+          <button
+            type="button"
+            onClick={() => selectTool(ToolType.CIRCLE)}
+            style={{
+              width: "32px",
+              height: "32px",
+              padding: "0",
+              backgroundColor: selectedTool === ToolType.CIRCLE ? "#2563eb" : "rgba(255, 255, 255, 0.9)",
+              color: selectedTool === ToolType.CIRCLE ? "white" : "#213547",
+              border: selectedTool === ToolType.CIRCLE ? "1px solid #2563eb" : "1px solid transparent",
+              borderRadius: "6px",
+              cursor: "pointer",
+              fontSize: "16px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              transition: "all 0.2s",
+            }}
+            title="Circle tool"
+            aria-label="Circle tool"
+          >
+            ○
+          </button>
+          <button
+            type="button"
+            onClick={() => selectTool(ToolType.BOX)}
+            style={{
+              width: "32px",
+              height: "32px",
+              padding: "0",
+              backgroundColor: selectedTool === ToolType.BOX ? "#2563eb" : "rgba(255, 255, 255, 0.9)",
+              color: selectedTool === ToolType.BOX ? "white" : "#213547",
+              border: selectedTool === ToolType.BOX ? "1px solid #2563eb" : "1px solid transparent",
+              borderRadius: "6px",
+              cursor: "pointer",
+              fontSize: "16px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              transition: "all 0.2s",
+            }}
+            title="Box tool"
+            aria-label="Box tool"
+          >
+            □
+          </button>
+          <button
+            type="button"
+            onClick={() => selectTool(ToolType.FREEHAND)}
+            style={{
+              width: "32px",
+              height: "32px",
+              padding: "0",
+              backgroundColor: selectedTool === ToolType.FREEHAND ? "#2563eb" : "rgba(255, 255, 255, 0.9)",
+              color: selectedTool === ToolType.FREEHAND ? "white" : "#213547",
+              border: selectedTool === ToolType.FREEHAND ? "1px solid #2563eb" : "1px solid transparent",
+              borderRadius: "6px",
+              cursor: "pointer",
+              fontSize: "16px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              transition: "all 0.2s",
+            }}
+            title="Freehand tool"
+            aria-label="Freehand tool"
+          >
+            ✎
+          </button>
+          <button
+            type="button"
+            onClick={() => selectTool(ToolType.HIGHLIGHTER)}
+            style={{
+              width: "32px",
+              height: "32px",
+              padding: "0",
+              backgroundColor: selectedTool === ToolType.HIGHLIGHTER ? "#2563eb" : "rgba(255, 255, 255, 0.9)",
+              color: selectedTool === ToolType.HIGHLIGHTER ? "white" : "#213547",
+              border: selectedTool === ToolType.HIGHLIGHTER ? "1px solid #2563eb" : "1px solid transparent",
+              borderRadius: "6px",
+              cursor: "pointer",
+              fontSize: "16px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              transition: "all 0.2s",
+            }}
+            title="Highlighter tool"
+            aria-label="Highlighter tool"
+          >
+            🖍
+          </button>
+          <button
+            type="button"
+            onClick={() => selectTool(ToolType.TEXT)}
+            style={{
+              width: "32px",
+              height: "32px",
+              padding: "0",
+              backgroundColor: selectedTool === ToolType.TEXT ? "#2563eb" : "rgba(255, 255, 255, 0.9)",
+              color: selectedTool === ToolType.TEXT ? "white" : "#213547",
+              border: selectedTool === ToolType.TEXT ? "1px solid #2563eb" : "1px solid transparent",
+              borderRadius: "6px",
+              cursor: "pointer",
+              fontSize: "16px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              transition: "all 0.2s",
+            }}
+            title="Text tool"
+            aria-label="Text tool"
+          >
+            T
+          </button>
+        </div>
+      )}
 
       {/* Feature #48: Settings modal */}
       {showSettingsModal && (

@@ -204,6 +204,31 @@ export default function Overlay() {
   }, [getCanvasContext, shapeOpacities]);
 
   /**
+   * Feature #120: Cleanup opacity tracking for specific shape IDs
+   * Prevents memory leaks when shapes are removed
+   */
+  const cleanupOpacityTracking = useCallback((shapeIds: string | string[]) => {
+    const idsToRemove = Array.isArray(shapeIds) ? shapeIds : [shapeIds];
+
+    if (idsToRemove.length === 0) return;
+
+    const newOpacities = { ...shapeOpacities };
+    let cleanedCount = 0;
+
+    idsToRemove.forEach(id => {
+      if (newOpacities[id]) {
+        delete newOpacities[id];
+        cleanedCount++;
+      }
+    });
+
+    if (cleanedCount > 0) {
+      setShapeOpacities(newOpacities);
+      console.log(`[Feature #120] Cleaned up opacity tracking for ${cleanedCount} shape(s)`);
+    }
+  }, [shapeOpacities]);
+
+  /**
    * Feature #123: Undo the most recently created shape
    * Removes the last shape from the shapes array and redraws the canvas
    */
@@ -216,11 +241,9 @@ export default function Overlay() {
     // Remove the last shape
     const removedShape = shapesRef.current.pop();
 
-    // Remove opacity tracking for the undone shape
-    if (removedShape && shapeOpacities[removedShape.id]) {
-      const newOpacities = { ...shapeOpacities };
-      delete newOpacities[removedShape.id];
-      setShapeOpacities(newOpacities);
+    // Feature #120: Clean up opacity tracking using centralized function
+    if (removedShape) {
+      cleanupOpacityTracking(removedShape.id);
     }
 
     console.log(`[Undo] Removed shape: ${removedShape?.tool} (${removedShape?.id})`);
@@ -228,7 +251,7 @@ export default function Overlay() {
 
     // Redraw the canvas
     redrawAllShapes();
-  }, [shapeOpacities, redrawAllShapes]);
+  }, [cleanupOpacityTracking, redrawAllShapes]);
 
   /**
    * Feature #67: Show visual feedback when a hotkey is triggered
@@ -786,6 +809,10 @@ export default function Overlay() {
     const unlistenOverlayDismissed = listen("overlay-dismissed", () => {
       console.log("Overlay dismissed event received - cleaning up");
 
+      // Feature #120: Clean up all opacity tracking before clearing shapes
+      const allShapeIds = shapesRef.current.map(shape => shape.id);
+      cleanupOpacityTracking(allShapeIds);
+
       // Clear all shapes
       shapesRef.current = [];
 
@@ -818,6 +845,10 @@ export default function Overlay() {
     // Feature #20: Listen for clear all shapes event
     const unlistenClearShapes = listen("clear-all-shapes", () => {
       console.log("Clear all shapes event received");
+
+      // Feature #120: Clean up all opacity tracking before clearing shapes
+      const allShapeIds = shapesRef.current.map(shape => shape.id);
+      cleanupOpacityTracking(allShapeIds);
 
       // Clear all shapes
       shapesRef.current = [];
@@ -860,6 +891,27 @@ export default function Overlay() {
     window.addEventListener("focus", handleFocus);
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
+    // Feature #120: Handle app shutdown cleanup
+    const handleBeforeUnload = () => {
+      console.log("[Feature #120] App shutting down - cleaning up resources");
+
+      // Clean up all opacity tracking
+      const allShapeIds = shapesRef.current.map(shape => shape.id);
+      if (allShapeIds.length > 0) {
+        cleanupOpacityTracking(allShapeIds);
+      }
+
+      // Clear all shapes
+      shapesRef.current = [];
+
+      // Clear opacity state
+      setShapeOpacities({});
+
+      console.log("[Feature #120] Shutdown cleanup complete");
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
     // Feature #15: Periodic z-index check every 5 seconds to ensure overlay stays on top
     const zIndexCheckInterval = setInterval(async () => {
       if (isVisible) {
@@ -876,6 +928,7 @@ export default function Overlay() {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
       clearInterval(zIndexCheckInterval);
       unlistenToggle.then((fn) => fn());
       unlistenDrawingMode.then((fn) => fn());
@@ -887,8 +940,15 @@ export default function Overlay() {
       if (hotkeyFeedbackTimerRef.current) {
         clearTimeout(hotkeyFeedbackTimerRef.current);
       }
+
+      // Feature #120: Clean up all opacity tracking on unmount
+      const allShapeIds = shapesRef.current.map(shape => shape.id);
+      if (allShapeIds.length > 0) {
+        cleanupOpacityTracking(allShapeIds);
+      }
+      console.log("[Feature #120] Cleanup complete on component unmount");
     };
-  }, [isVisible, drawingState, redrawAllShapes, undoLastShape]);
+  }, [isVisible, drawingState, redrawAllShapes, undoLastShape, cleanupOpacityTracking]);
 
   // Initialize canvas
   useEffect(() => {
@@ -956,12 +1016,20 @@ export default function Overlay() {
       // Update current monitor state
       setCurrentMonitor(newMonitorId);
 
-      // Filter shapes to only show those for this monitor
+      // Feature #120: Collect IDs of shapes that will be removed
       const shapesBefore = shapesRef.current.length;
+      const removedShapeIds = shapesRef.current
+        .filter(shape => shape.monitorId !== newMonitorId)
+        .map(shape => shape.id);
+
+      // Filter shapes to only show those for this monitor
       shapesRef.current = shapesRef.current.filter(
         shape => shape.monitorId === newMonitorId
       );
       const shapesAfter = shapesRef.current.length;
+
+      // Feature #120: Clean up opacity tracking for removed shapes
+      cleanupOpacityTracking(removedShapeIds);
 
       console.log(`[Feature #9] Filtered shapes: ${shapesBefore} -> ${shapesAfter} (removed ${shapesBefore - shapesAfter} shapes from other monitors)`);
 
@@ -972,7 +1040,7 @@ export default function Overlay() {
     return () => {
       unlistenMonitorChanged.then((fn) => fn()).catch(console.error);
     };
-  }, [redrawAllShapes]);
+  }, [cleanupOpacityTracking, redrawAllShapes]);
 
   // Feature #35 & #73: Auto-fade system with smooth opacity transitions
   useEffect(() => {

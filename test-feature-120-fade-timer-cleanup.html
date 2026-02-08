@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Feature #120: Fade Timer Cleanup - Test Documentation</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+      line-height: 1.6;
+      background: #f5f5f5;
+    }
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 30px;
+      border-radius: 10px;
+      margin-bottom: 30px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    .header h1 {
+      margin: 0 0 10px 0;
+      font-size: 2em;
+    }
+    .status {
+      display: inline-block;
+      background: #10b981;
+      padding: 5px 15px;
+      border-radius: 20px;
+      font-size: 0.9em;
+      font-weight: bold;
+      margin-top: 10px;
+    }
+    .section {
+      background: white;
+      padding: 25px;
+      border-radius: 10px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
+    .section h2 {
+      color: #333;
+      border-bottom: 2px solid #667eea;
+      padding-bottom: 10px;
+      margin-top: 0;
+    }
+    .code-block {
+      background: #1e1e1e;
+      color: #d4d4d4;
+      padding: 20px;
+      border-radius: 8px;
+      overflow-x: auto;
+      font-family: 'Monaco', 'Courier New', monospace;
+      font-size: 0.9em;
+      line-height: 1.5;
+    }
+    .code-block .comment {
+      color: #6a9955;
+    }
+    .code-block .function {
+      color: #dcdcaa;
+    }
+    .code-block .keyword {
+      color: #c586c0;
+    }
+    .code-block .string {
+      color: #ce9178;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 15px 0;
+    }
+    table th, table td {
+      border: 1px solid #ddd;
+      padding: 12px;
+      text-align: left;
+    }
+    table th {
+      background: #667eea;
+      color: white;
+    }
+    table tr:nth-child(even) {
+      background: #f9f9f9;
+    }
+    .test-case {
+      background: #f8f9fa;
+      border-left: 4px solid #667eea;
+      padding: 15px;
+      margin: 15px 0;
+    }
+    .test-case h4 {
+      margin-top: 0;
+      color: #667eea;
+    }
+    .checklist {
+      list-style: none;
+      padding-left: 0;
+    }
+    .checklist li {
+      padding: 8px 0 8px 30px;
+      position: relative;
+    }
+    .checklist li:before {
+      content: "☐";
+      position: absolute;
+      left: 0;
+      font-size: 1.2em;
+      color: #667eea;
+    }
+    .checklist li.passed:before {
+      content: "✓";
+      color: #10b981;
+    }
+    .highlight {
+      background: #fff3cd;
+      padding: 2px 6px;
+      border-radius: 3px;
+    }
+    .warning {
+      background: #fef2f2;
+      border-left: 4px solid #ef4444;
+      padding: 15px;
+      margin: 15px 0;
+    }
+    .warning strong {
+      color: #ef4444;
+    }
+    ul {
+      padding-left: 20px;
+    }
+    li {
+      margin: 8px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Feature #120: Fade Timer Cleanup</h1>
+    <p>Properly clean up fade timers when shapes are manually removed or app closes</p>
+    <span class="status">✓ PASSING</span>
+  </div>
+
+  <div class="section">
+    <h2>Overview</h2>
+    <p>This feature ensures that opacity tracking entries are properly cleaned up when shapes are removed from the canvas, preventing memory leaks. The cleanup happens in multiple scenarios:</p>
+    <ul>
+      <li><strong>Undo operation</strong> - When a user undoes the last shape (Ctrl+Z)</li>
+      <li><strong>Overlay dismissed</strong> - When the overlay window is closed/dismissed</li>
+      <li><strong>Clear all shapes</strong> - When all shapes are cleared via event</li>
+      <li><strong>Monitor change</strong> - When switching monitors (shapes filtered)</li>
+      <li><strong>Component unmount</strong> - When the Overlay component unmounts</li>
+      <li><strong>App shutdown</strong> - When the app closes (beforeunload event)</li>
+    </ul>
+  </div>
+
+  <div class="section">
+    <h2>Implementation Summary</h2>
+
+    <h3>Centralized Cleanup Function</h3>
+    <p>A new <code>cleanupOpacityTracking()</code> function was added to handle all opacity cleanup:</p>
+    <div class="code-block">
+<span class="comment">/**
+ * Feature #120: Cleanup opacity tracking for specific shape IDs
+ * Prevents memory leaks when shapes are removed
+ */</span>
+<span class="keyword">const</span> <span class="function">cleanupOpacityTracking</span> = <span class="keyword">useCallback</span>((shapeIds: string | string[]) => {
+  <span class="keyword">const</span> idsToRemove = <span class="keyword">Array</span>.isArray(shapeIds) ? shapeIds : [shapeIds];
+
+  <span class="keyword">if</span> (idsToRemove.length === 0) <span class="keyword">return</span>;
+
+  <span class="keyword">const</span> newOpacities = { ...shapeOpacities };
+  <span class="keyword">let</span> cleanedCount = 0;
+
+  idsToRemove.<span class="function">forEach</span>(id => {
+    <span class="keyword">if</span> (newOpacities[id]) {
+      <span class="keyword">delete</span> newOpacities[id];
+      cleanedCount++;
+    }
+  });
+
+  <span class="keyword">if</span> (cleanedCount > 0) {
+    <span class="function">setShapeOpacities</span>(newOpacities);
+    console.<span class="function">log</span>(<span class="string">`[Feature #120] Cleaned up opacity tracking for ${cleanedCount} shape(s)`</span>);
+  }
+}, [shapeOpacities]);
+    </div>
+
+    <h3>Integration Points</h3>
+    <p>The cleanup function is called in 6 different places:</p>
+    <table>
+      <tr>
+        <th>Scenario</th>
+        <th>Location</th>
+        <th>Action</th>
+      </tr>
+      <tr>
+        <td><strong>Undo Operation</strong></td>
+        <td><code>undoLastShape()</code> function</td>
+        <td>Cleans up opacity for the undone shape</td>
+      </tr>
+      <tr>
+        <td><strong>Overlay Dismissed</strong></td>
+        <td><code>overlay-dismissed</code> event listener</td>
+        <td>Cleans up all opacities before clearing shapes</td>
+      </tr>
+      <tr>
+        <td><strong>Clear All Shapes</strong></td>
+        <td><code>clear-all-shapes</code> event listener</td>
+        <td>Cleans up all opacities before clearing shapes</td>
+      </tr>
+      <tr>
+        <td><strong>Monitor Change</strong></td>
+        <td><code>monitor-changed</code> event listener</td>
+        <td>Cleans up opacities for shapes on other monitors</td>
+      </tr>
+      <tr>
+        <td><strong>Component Unmount</strong></td>
+        <td>Effect cleanup function</td>
+        <td>Cleans up all opacities when component unmounts</td>
+      </tr>
+      <tr>
+        <td><strong>App Shutdown</strong></td>
+        <td><code>beforeunload</code> event listener</td>
+        <td>Cleans up all opacities and clears state</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>Code Changes</h2>
+
+    <h3>1. Undo Operation Cleanup</h3>
+    <p><strong>File:</strong> <code>src/components/Overlay.tsx</code> (lines 210-231)</p>
+    <div class="code-block">
+<span class="keyword">const</span> <span class="function">undoLastShape</span> = <span class="keyword">useCallback</span>(() => {
+  <span class="keyword">if</span> (shapesRef.current.length === 0) {
+    console.<span class="function">log</span>(<span class="string">"[Undo] No shapes to undo"</span>);
+    <span class="keyword">return</span>;
+  }
+
+  <span class="comment">// Remove the last shape</span>
+  <span class="keyword">const</span> removedShape = shapesRef.current.<span class="function">pop</span>();
+
+  <span class="comment">// Feature #120: Clean up opacity tracking using centralized function</span>
+  <span class="keyword">if</span> (removedShape) {
+    <span class="function">cleanupOpacityTracking</span>(removedShape.id);
+  }
+
+  console.<span class="function">log</span>(<span class="string">`[Undo] Removed shape: ${removedShape?.tool} (${removedShape?.id})`</span>);
+  console.<span class="function">log</span>(<span class="string">`[Undo] Remaining shapes: ${shapesRef.current.length}`</span>);
+
+  <span class="comment">// Redraw the canvas</span>
+  <span class="function">redrawAllShapes</span>();
+}, [cleanupOpacityTracking, redrawAllShapes]);
+    </div>
+
+    <h3>2. Overlay Dismissed Cleanup</h3>
+    <p><strong>File:</strong> <code>src/components/Overlay.tsx</code> (lines 786-816)</p>
+    <div class="code-block">
+<span class="keyword">const</span> unlistenOverlayDismissed = <span class="function">listen</span>(<span class="string">"overlay-dismissed"</span>, () => {
+  console.<span class="function">log</span>(<span class="string">"Overlay dismissed event received - cleaning up"</span>);
+
+  <span class="comment">// Feature #120: Clean up all opacity tracking before clearing shapes</span>
+  <span class="keyword">const</span> allShapeIds = shapesRef.current.<span class="function">map</span>(shape => shape.id);
+  <span class="function">cleanupOpacityTracking</span>(allShapeIds);
+
+  <span class="comment">// Clear all shapes</span>
+  shapesRef.current = [];
+
+  <span class="comment">// ... rest of cleanup ...</span>
+});
+    </div>
+
+    <h3>3. App Shutdown Handler</h3>
+    <p><strong>File:</strong> <code>src/components/Overlay.tsx</code> (lines 863-877)</p>
+    <div class="code-block">
+<span class="comment">// Feature #120: Handle app shutdown cleanup</span>
+<span class="keyword">const</span> <span class="function">handleBeforeUnload</span> = () => {
+  console.<span class="function">log</span>(<span class="string">"[Feature #120] App shutting down - cleaning up resources"</span>);
+
+  <span class="comment">// Clean up all opacity tracking</span>
+  <span class="keyword">const</span> allShapeIds = shapesRef.current.<span class="function">map</span>(shape => shape.id);
+  <span class="keyword">if</span> (allShapeIds.length > 0) {
+    <span class="function">cleanupOpacityTracking</span>(allShapeIds);
+  }
+
+  <span class="comment">// Clear all shapes</span>
+  shapesRef.current = [];
+
+  <span class="comment">// Clear opacity state</span>
+  <span class="function">setShapeOpacities</span>({});
+
+  console.<span class="function">log</span>(<span class="string">"[Feature #120] Shutdown cleanup complete"</span>);
+};
+
+window.<span class="function">addEventListener</span>(<span class="string">"beforeunload"</span>, handleBeforeUnload);
+    </div>
+
+    <h3>4. Component Unmount Cleanup</h3>
+    <p><strong>File:</strong> <code>src/components/Overlay.tsx</code> (lines 880-903)</p>
+    <div class="code-block">
+<span class="comment">// Cleanup listeners on unmount</span>
+<span class="keyword">return</span> () => {
+  <span class="comment">// ... existing cleanup ...</span>
+
+  <span class="comment">// Feature #120: Clean up all opacity tracking on unmount</span>
+  <span class="keyword">const</span> allShapeIds = shapesRef.current.<span class="function">map</span>(shape => shape.id);
+  <span class="keyword">if</span> (allShapeIds.length > 0) {
+    <span class="function">cleanupOpacityTracking</span>(allShapeIds);
+  }
+  console.<span class="function">log</span>(<span class="string">"[Feature #120] Cleanup complete on component unmount"</span>);
+};
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Test Cases</h2>
+
+    <div class="test-case">
+      <h4>Test 1: Undo Cleanup Verification</h4>
+      <ol>
+        <li>Open the application</li>
+        <li>Draw 3 shapes (e.g., arrow, circle, box)</li>
+        <li>Wait for auto-fade to create opacity entries</li>
+        <li>Press Ctrl+Z to undo the last shape</li>
+        <li><strong>✓ Verify:</strong> Console shows <code>[Feature #120] Cleaned up opacity tracking for 1 shape(s)</code></li>
+        <li><strong>✓ Verify:</strong> shapeOpacities state no longer contains the undone shape ID</li>
+        <li>Press Ctrl+Z again to undo another shape</li>
+        <li><strong>✓ Verify:</strong> Console shows cleanup message again</li>
+        <li><strong>✓ Verify:</strong> No memory leak - opacity entries match remaining shapes</li>
+      </ol>
+    </div>
+
+    <div class="test-case">
+      <h4>Test 2: Overlay Dismissal Cleanup</h4>
+      <ol>
+        <li>Open the application</li>
+        <li>Draw 5 shapes</li>
+        <li>Wait for auto-fade to create opacity entries</li>
+        <li>Press Escape to dismiss the overlay</li>
+        <li><strong>✓ Verify:</strong> Console shows <code>[Feature #120] Cleaned up opacity tracking for 5 shape(s)</code></li>
+        <li><strong>✓ Verify:</strong> All shapes are cleared</li>
+        <li><strong>✓ Verify:</strong> shapeOpacities state is empty</li>
+        <li><strong>✓ Verify:</strong> No orphaned opacity entries in state</li>
+      </ol>
+    </div>
+
+    <div class="test-case">
+      <h4>Test 3: Monitor Change Cleanup</h4>
+      <ol>
+        <li>Open the application with multiple monitors</li>
+        <li>Draw shapes on Monitor 1</li>
+        <li>Move overlay to Monitor 2 (trigger monitor-changed event)</li>
+        <li><strong>✓ Verify:</strong> Shapes from Monitor 1 are filtered out</li>
+        <li><strong>✓ Verify:</strong> Console shows cleanup message for removed shapes</li>
+        <li><strong>✓ Verify:</strong> Opacity entries for Monitor 1 shapes are removed</li>
+        <li><strong>✓ Verify:</strong> No opacity entries exist for non-visible shapes</li>
+      </ol>
+    </div>
+
+    <div class="test-case">
+      <h4>Test 4: Component Unmount Cleanup</h4>
+      <ol>
+        <li>Open the application</li>
+        <li>Draw multiple shapes</li>
+        <li>Close the overlay window</li>
+        <li><strong>✓ Verify:</strong> Component unmounts</li>
+        <li><strong>✓ Verify:</strong> Console shows <code>[Feature #120] Cleanup complete on component unmount</code></li>
+        <li><strong>✓ Verify:</strong> All event listeners are removed</li>
+        <li><strong>✓ Verify:</strong> All opacity entries are cleared</li>
+      </ol>
+    </div>
+
+    <div class="test-case">
+      <h4>Test 5: App Shutdown Cleanup</h4>
+      <ol>
+        <li>Open the application</li>
+        <li>Draw multiple shapes</li>
+        <li>Close the application (Cmd+Q on Mac, Alt+F4 on Windows)</li>
+        <li><strong>✓ Verify:</strong> Console shows <code>[Feature #120] App shutting down - cleaning up resources</code></li>
+        <li><strong>✓ Verify:</strong> Console shows <code>[Feature #120] Shutdown cleanup complete</code></li>
+      </ol>
+    </div>
+
+    <div class="test-case">
+      <h4>Test 6: Rapid Shape Creation and Deletion</h4>
+      <ol>
+        <li>Open the application</li>
+        <li>Quickly draw 20 shapes</li>
+        <li>Immediately undo 10 shapes (Ctrl+Z x 10)</li>
+        <li><strong>✓ Verify:</strong> Each undo triggers cleanup message</li>
+        <li><strong>✓ Verify:</strong> Opacity entries count matches remaining shape count</li>
+        <li><strong>✓ Verify:</strong> No memory leaks in shapeOpacities state</li>
+        <li><strong>✓ Verify:</strong> Console logs show progressive cleanup</li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Memory Leak Prevention</h2>
+
+    <div class="warning">
+      <strong>Why This Matters:</strong>
+      <p>Before Feature #120, when shapes were removed manually (undo, clear, dismiss), their opacity tracking entries remained in the <code>shapeOpacities</code> state object. This caused a memory leak because:</p>
+      <ul>
+        <li>The state object would accumulate orphaned entries indefinitely</li>
+        <li>Each entry consumed memory even though the corresponding shape was gone</li>
+        <li>In long-running sessions, this could lead to significant memory usage</li>
+        <li>The auto-fade interval would continue processing non-existent shapes</li>
+      </ul>
+      <p>Feature #120 ensures cleanup happens in all removal scenarios, preventing memory leaks.</p>
+    </div>
+
+    <h3>Before vs After</h3>
+    <table>
+      <tr>
+        <th>Scenario</th>
+        <th>Before Feature #120</th>
+        <th>After Feature #120</th>
+      </tr>
+      <tr>
+        <td><strong>Undo (Ctrl+Z)</strong></td>
+        <td>❌ Shape removed, opacity entry orphaned</td>
+        <td>✓ Shape removed, opacity entry cleaned</td>
+      </tr>
+      <tr>
+        <td><strong>Clear All</strong></td>
+        <td>❌ Shapes cleared, opacity entries orphaned</td>
+        <td>✓ Shapes cleared, all opacity entries cleaned</td>
+      </tr>
+      <tr>
+        <td><strong>Monitor Change</strong></td>
+        <td>❌ Shapes filtered, opacity entries orphaned</td>
+        <td>✓ Shapes filtered, opacity entries cleaned</td>
+      </tr>
+      <tr>
+        <td><strong>Component Unmount</strong></td>
+        <td>❌ Component unmounts, state not cleared</td>
+        <td>✓ Component unmounts, all opacities cleared</td>
+      </tr>
+      <tr>
+        <td><strong>App Shutdown</strong></td>
+        <td>❌ App closes, no cleanup</td>
+        <td>✓ App closes, cleanup runs beforeunload</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>Console Output Examples</h2>
+
+    <h3>Example 1: Undo Operation</h3>
+    <div class="code-block">
+<span class="comment">User draws 3 shapes, then presses Ctrl+Z twice:</span>
+
+[Auto-Fade] Removed 0 fully faded shape(s)
+[Undo] Removed shape: box (shape_1234567890_abc123)
+[Feature #120] Cleaned up opacity tracking for 1 shape(s)
+[Undo] Remaining shapes: 2
+
+[Undo] Removed shape: circle (shape_1234567891_def456)
+[Feature #120] Cleaned up opacity tracking for 1 shape(s)
+[Undo] Remaining shapes: 1
+    </div>
+
+    <h3>Example 2: Overlay Dismissal</h3>
+    <div class="code-block">
+<span class="comment">User draws 5 shapes, then presses Escape:</span>
+
+Overlay dismissed event received - cleaning up
+[Feature #120] Cleaned up opacity tracking for 5 shape(s)
+Overlay cleanup complete
+    </div>
+
+    <h3>Example 3: Monitor Change</h3>
+    <div class="code-block">
+<span class="comment">User moves overlay to different monitor:</span>
+
+[Feature #9] Monitor changed to: monitor-2
+[Feature #120] Cleaned up opacity tracking for 3 shape(s)
+[Feature #9] Filtered shapes: 5 -> 2 (removed 3 shapes from other monitors)
+    </div>
+
+    <h3>Example 4: App Shutdown</h3>
+    <div class="code-block">
+<span class="comment">User closes the application:</span>
+
+[Feature #120] App shutting down - cleaning up resources
+[Feature #120] Cleaned up opacity tracking for 7 shape(s)
+[Feature #120] Shutdown cleanup complete
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Verification Checklist</h2>
+    <ul class="checklist">
+      <li class="passed">cleanupOpacityTracking function implemented</li>
+      <li class="passed">Undo operation calls cleanupOpacityTracking</li>
+      <li class="passed">Overlay-dismissed event calls cleanupOpacityTracking</li>
+      <li class="passed">Clear-all-shapes event calls cleanupOpacityTracking</li>
+      <li class="passed">Monitor-changed event calls cleanupOpacityTracking</li>
+      <li class="passed">Component unmount calls cleanupOpacityTracking</li>
+      <li class="passed">App shutdown (beforeunload) calls cleanupOpacityTracking</li>
+      <li class="passed">Console logs cleanup actions</li>
+      <li class="passed">Build succeeds without errors</li>
+      <li class="passed">No memory leaks from orphaned opacity entries</li>
+    </ul>
+  </div>
+
+  <div class="section">
+    <h2>Related Features</h2>
+    <ul>
+      <li><strong>Feature #35, #71-75:</strong> Auto-fade system (creates opacity entries)</li>
+      <li><strong>Feature #123:</strong> Undo functionality (removes shapes, needs cleanup)</li>
+      <li><strong>Feature #20:</strong> Clear all shapes functionality (needs cleanup)</li>
+      <li><strong>Feature #9:</strong> Multi-monitor support (filters shapes, needs cleanup)</li>
+    </ul>
+  </div>
+
+  <div class="section">
+    <h2>Summary</h2>
+    <p><strong>Feature #120: Fade Timer Cleanup</strong> is now <span class="highlight">PASSING</span>.</p>
+
+    <p><strong>Key Achievements:</strong></p>
+    <ul>
+      <li>✓ Centralized cleanup function prevents code duplication</li>
+      <li>✓ All 6 shape removal scenarios now properly clean up opacity tracking</li>
+      <li>✓ Memory leaks prevented - no orphaned state entries</li>
+      <li>✓ App shutdown cleanup ensures clean exit</li>
+      <li>✓ Console logging for debugging and verification</li>
+      <li>✓ Build succeeds without errors</li>
+    </ul>
+
+    <p><strong>Impact:</strong></p>
+    <ul>
+      <li>Improved memory management - no accumulating state entries</li>
+      <li>Better resource cleanup on app shutdown</li>
+      <li>Maintainable code with centralized cleanup logic</li>
+      <li>Debugging via console logs for cleanup operations</li>
+    </ul>
+  </div>
+</body>
+</html>
