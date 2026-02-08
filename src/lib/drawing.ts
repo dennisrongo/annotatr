@@ -163,7 +163,7 @@ export function drawShape(
 ): void {
   // Feature #35: Apply opacity if provided (for auto-fade)
   const previousAlpha = ctx.globalAlpha;
-  if (opacity !== undefined && opacity < 1.0) {
+  if (opacity !== undefined) {
     ctx.globalAlpha = opacity;
   }
 
@@ -191,7 +191,7 @@ export function drawShape(
   }
 
   // Feature #35: Restore previous alpha
-  if (opacity !== undefined && opacity < 1.0) {
+  if (opacity !== undefined) {
     ctx.globalAlpha = previousAlpha;
   }
 }
