@@ -64,6 +64,24 @@ export default function MiniPanel() {
   const settingsColorInputRef = useRef<HTMLInputElement>(null);
   const [editingColorForTool, setEditingColorForTool] = useState<string | null>(null);
 
+  /**
+   * Feature #88: Load tool colors from settings on mount
+   * Ensures that color customizations persist across app restarts
+   */
+  useEffect(() => {
+    const loadColors = async () => {
+      try {
+        const settings = await loadSettings();
+        setCurrentColorForTool(settings.colors);
+        setSelectedColor(settings.colors.arrow); // Update selected color to match
+        console.log("Tool colors loaded from storage:", settings.colors);
+      } catch (error) {
+        console.error("Failed to load tool colors from storage:", error);
+      }
+    };
+    loadColors();
+  }, []);
+
   // Feature #46: Line thickness control state
   const [lineThickness, setLineThickness] = useState(DEFAULT_SETTINGS.lineThickness);
 
