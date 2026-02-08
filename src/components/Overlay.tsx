@@ -66,11 +66,8 @@ export default function Overlay() {
   const defaultLineThickness = 12;
   const defaultFontSize = 24;
 
-  // Feature #35: Auto-fade system - track fade timers for shapes
-  // TODO: Implement auto-fade logic
-  // const fadeTimersRef = useRef<Map<string, number>>(new Map());
-  // const fadingShapesRef = useRef<Set<string>>(new Set());
-  // const [shapeOpacities, setShapeOpacities] = useState<Record<string, number>>({});
+  // Feature #73: Auto-fade system - track shape opacities for smooth fade-out
+  const [shapeOpacities, setShapeOpacities] = useState<Record<string, number>>({});
 
   // Feature #17: Tool-specific visual indicators (icons, colors, labels)
   const toolIndicators: Record<ToolType, { icon: string; color: string; label: string }> = {
@@ -103,15 +100,45 @@ export default function Overlay() {
   }, []);
 
   /**
-   * Redraw all existing shapes
+   * Feature #73: Smooth easing function for fade-out animation
+   * Uses ease-out cubic for smooth deceleration
+   */
+  const getFadeOpacity = useCallback((age: number, fadeDuration: number): number => {
+    // Start fading when shape is 80% through its lifetime
+    const fadeStart = fadeDuration * 0.8;
+    const fadeEnd = fadeDuration;
+    const fadeDurationActual = fadeEnd - fadeStart;
+
+    // Before fade starts, full opacity
+    if (age < fadeStart) {
+      return 1.0;
+    }
+
+    // After fade ends, zero opacity
+    if (age >= fadeEnd) {
+      return 0.0;
+    }
+
+    // During fade, use ease-out cubic: 1 - (1 - t)^3
+    // t goes from 0 (start of fade) to 1 (end of fade)
+    const t = (age - fadeStart) / fadeDurationActual;
+    const opacity = 1 - Math.pow(1 - t, 3);
+
+    // Invert opacity (1.0 -> 0.0)
+    return 1 - opacity;
+  }, []);
+
+  /**
+   * Redraw all existing shapes with opacity support
+   * Feature #73: Apply smooth fade-out opacities
    */
   const redrawAllShapes = useCallback(() => {
     const context = getCanvasContext();
     if (!context) return;
 
     const { ctx } = context;
-    redrawShapes(ctx, shapesRef.current);
-  }, [getCanvasContext]);
+    redrawShapes(ctx, shapesRef.current, shapeOpacities);
+  }, [getCanvasContext, shapeOpacities]);
 
   /**
    * Feature #67: Show visual feedback when a hotkey is triggered
@@ -831,28 +858,54 @@ export default function Overlay() {
     };
   }, [redrawAllShapes]);
 
-  // Feature #35: Auto-fade system - remove old shapes
+  // Feature #35 & #73: Auto-fade system with smooth opacity transitions
   useEffect(() => {
     const fadeCheckInterval = setInterval(() => {
       const now = Date.now();
       const fadeDurationMs = (settings?.fadeDuration || 10) * 1000;
 
-      // Find and remove shapes older than fade duration
-      const shapesBefore = shapesRef.current.length;
-      shapesRef.current = shapesRef.current.filter(shape => {
+      // Calculate new opacities for all shapes
+      const newOpacities: Record<string, number> = {};
+      const shapesToRemove: string[] = [];
+
+      shapesRef.current.forEach(shape => {
         const age = now - shape.createdAt;
-        return age < fadeDurationMs;
+
+        // Calculate opacity using smooth easing
+        const opacity = getFadeOpacity(age, fadeDurationMs);
+        newOpacities[shape.id] = opacity;
+
+        // Mark for removal if completely faded
+        if (opacity <= 0) {
+          shapesToRemove.push(shape.id);
+        }
       });
 
-      const shapesRemoved = shapesBefore - shapesRef.current.length;
-      if (shapesRemoved > 0) {
-        console.log(`[Auto-Fade] Removed ${shapesRemoved} old shape(s)`);
-        redrawAllShapes();
+      // Update opacities state (triggers redraw with new values)
+      setShapeOpacities(newOpacities);
+
+      // Remove fully faded shapes
+      if (shapesToRemove.length > 0) {
+        const shapesBefore = shapesRef.current.length;
+        shapesRef.current = shapesRef.current.filter(shape =>
+          !shapesToRemove.includes(shape.id)
+        );
+        const shapesRemoved = shapesBefore - shapesRef.current.length;
+
+        // Clean up opacities for removed shapes
+        const cleanedOpacities = { ...newOpacities };
+        shapesToRemove.forEach(id => delete cleanedOpacities[id]);
+        setShapeOpacities(cleanedOpacities);
+
+        console.log(`[Auto-Fade] Removed ${shapesRemoved} fully faded shape(s)`);
       }
-    }, 1000); // Check every second
+
+      // Trigger redraw with updated opacities
+      redrawAllShapes();
+    }, 50); // Update every 50ms for smooth animation (20fps)
 
     return () => clearInterval(fadeCheckInterval);
-  }, [settings?.fadeDuration, redrawAllShapes]);
+  }, [settings?.fadeDuration, redrawAllShapes, getFadeOpacity]);
 
   if (!isVisible) {
     return null;
