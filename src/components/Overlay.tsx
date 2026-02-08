@@ -317,6 +317,7 @@ export default function Overlay() {
    * Create arrow shape from drawing state
    * Feature #9: Includes monitorId for per-monitor shape confinement
    * Feature #128: Includes customFadeDuration if set
+   * Feature #131: Includes arrow head style from settings
    */
   const createArrowShape = useCallback((
     startX: number,
@@ -333,6 +334,7 @@ export default function Overlay() {
       lineThickness: getToolLineThickness(ToolType.ARROW), // Feature #106: Use tool-specific line thickness
       createdAt: Date.now(),
       monitorId: currentMonitor || "default", // Feature #9: Track monitor ID
+      arrowHeadStyle: settings?.arrowHeadStyle, // Feature #131: Arrow head style customization
     };
 
     // Feature #128: Add custom fade duration if set
@@ -342,7 +344,7 @@ export default function Overlay() {
     }
 
     return shape;
-  }, [generateShapeId, currentMonitor, getToolColor, getToolLineThickness, customFadeDuration]);
+  }, [generateShapeId, currentMonitor, getToolColor, getToolLineThickness, customFadeDuration, settings]);
 
   /**
    * Create circle shape from drawing state

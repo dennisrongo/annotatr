@@ -1217,6 +1217,31 @@ fn get_platform_info() -> Result<serde_json::Value, String> {
     }))
 }
 
+// Feature #135: Platform-specific performance optimizations
+/// Get platform-specific optimizations configuration
+#[tauri::command]
+fn get_platform_optimizations() -> serde_json::Value {
+    platform_optimizations::get_platform_optimizations()
+}
+
+/// Get recommended canvas rendering settings for the current platform
+#[tauri::command]
+fn get_canvas_optimizations() -> serde_json::Value {
+    platform_optimizations::get_canvas_optimizations()
+}
+
+/// Get platform-specific performance tips
+#[tauri::command]
+fn get_performance_tips() -> Vec<String> {
+    platform_optimizations::get_performance_tips()
+}
+
+/// Benchmark platform performance
+#[tauri::command]
+fn benchmark_platform() -> serde_json::Value {
+    platform_optimizations::benchmark_platform()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Initialize shared state
@@ -1268,7 +1293,12 @@ pub fn run() {
             restore_mini_panel_position,
             toggle_mini_panel,
             hide_mini_panel,
-            show_mini_panel
+            show_mini_panel,
+            // Feature #135: Platform-specific optimizations
+            get_platform_optimizations,
+            get_canvas_optimizations,
+            get_performance_tips,
+            benchmark_platform
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
