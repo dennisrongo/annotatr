@@ -115,6 +115,33 @@ export default function Overlay() {
     [ToolType.TEXT]: { icon: "T", color: "#8b5cf6", label: "Text" },
   };
 
+  // Feature #107: Tool-specific cursor styles
+  const getToolCursor = useCallback((tool: ToolType | null, drawingMode: boolean): string => {
+    // If not in drawing mode or no tool selected, use default cursor
+    if (!drawingMode || !tool) {
+      return "default";
+    }
+
+    // Return tool-specific cursor
+    // Using CSS cursor values that provide good visual feedback
+    switch (tool) {
+      case ToolType.ARROW:
+        return "crosshair"; // Precision cursor for arrow drawing
+      case ToolType.CIRCLE:
+        return "crosshair"; // Precision cursor for circle drawing
+      case ToolType.BOX:
+        return "crosshair"; // Precision cursor for box drawing
+      case ToolType.FREEHAND:
+        return "crosshair"; // Standard drawing cursor for freehand
+      case ToolType.HIGHLIGHTER:
+        return "crosshair"; // Standard drawing cursor for highlighter
+      case ToolType.TEXT:
+        return "text"; // Text cursor (I-beam) for text input
+      default:
+        return "crosshair";
+    }
+  }, []);
+
   /**
    * Generate a unique ID for shapes
    */
@@ -965,8 +992,8 @@ export default function Overlay() {
         pointerEvents: "auto",
         backgroundColor: "transparent",
         zIndex: 9999,
-        // Feature #16: Change cursor based on drawing mode
-        cursor: isDrawingMode ? "crosshair" : "default",
+        // Feature #16 & #107: Change cursor based on drawing mode and selected tool
+        cursor: getToolCursor(currentTool, isDrawingMode),
       }}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}

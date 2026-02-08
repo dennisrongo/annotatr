@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feature #107: Tool-Specific Cursor Changes Test</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #2563eb;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #2563eb;
+            margin-top: 30px;
+        }
+        .test-section {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .cursor-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        .cursor-table th, .cursor-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .cursor-table th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #333;
+        }
+        .cursor-preview {
+            display: inline-block;
+            padding: 8px 16px;
+            background: #f3f4f6;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+        .checklist {
+            list-style: none;
+            padding: 0;
+        }
+        .checklist li {
+            padding: 10px;
+            margin: 5px 0;
+            background: #f8f9fa;
+            border-radius: 4px;
+            border-left: 4px solid #2563eb;
+        }
+        .checklist li strong {
+            color: #2563eb;
+        }
+        .steps {
+            background: #e7f3ff;
+            border-left: 4px solid #2563eb;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .steps ol {
+            margin: 0;
+            padding-left: 20px;
+        }
+        .steps li {
+            margin: 8px 0;
+        }
+        .implementation-note {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .implementation-note h4 {
+            margin-top: 0;
+            color: #856404;
+        }
+        pre {
+            background: #f3f4f6;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 0.85em;
+        }
+    </style>
+</head>
+<body>
+    <h1>Feature #107: Tool-Specific Cursor Changes Test</h1>
+    <p>Test that the cursor changes appearance based on the currently selected drawing tool.</p>
+
+    <div class="test-section">
+        <h2>Overview</h2>
+        <p>Feature #107 enhances the user experience by changing the cursor appearance to match the selected drawing tool. This provides immediate visual feedback about which tool is active and what action the cursor will perform.</p>
+        <p>Previously, the cursor simply changed to "crosshair" when drawing mode was active. Now, each tool has an appropriate cursor style.</p>
+    </div>
+
+    <div class="test-section">
+        <h2>Tool-Specific Cursor Styles</h2>
+        <table class="cursor-table">
+            <thead>
+                <tr>
+                    <th>Tool</th>
+                    <th>Cursor Style</th>
+                    <th>Preview</th>
+                    <th>Purpose</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>Arrow</strong></td>
+                    <td><code>crosshair</code></td>
+                    <td><span class="cursor-preview" style="cursor: crosshair;">+</span></td>
+                    <td>Precision cursor for accurate arrow placement</td>
+                </tr>
+                <tr>
+                    <td><strong>Circle</strong></td>
+                    <td><code>crosshair</code></td>
+                    <td><span class="cursor-preview" style="cursor: crosshair;">+</span></td>
+                    <td>Precision cursor for accurate circle drawing</td>
+                </tr>
+                <tr>
+                    <td><strong>Box</strong></td>
+                    <td><code>crosshair</code></td>
+                    <td><span class="cursor-preview" style="cursor: crosshair;">+</span></td>
+                    <td>Precision cursor for accurate box placement</td>
+                </tr>
+                <tr>
+                    <td><strong>Freehand</strong></td>
+                    <td><code>crosshair</code></td>
+                    <td><span class="cursor-preview" style="cursor: crosshair;">+</span></td>
+                    <td>Standard drawing cursor for freehand sketching</td>
+                </tr>
+                <tr>
+                    <td><strong>Highlighter</strong></td>
+                    <td><code>crosshair</code></td>
+                    <td><span class="cursor-preview" style="cursor: crosshair;">+</span></td>
+                    <td>Standard drawing cursor for highlighting</td>
+                </tr>
+                <tr>
+                    <td><strong>Text</strong></td>
+                    <td><code>text</code></td>
+                    <td><span class="cursor-preview" style="cursor: text;">I</span></td>
+                    <td>I-beam cursor indicating text input capability</td>
+                </tr>
+                <tr>
+                    <td><strong>No Tool / Drawing Mode Off</strong></td>
+                    <td><code>default</code></td>
+                    <td><span class="cursor-preview" style="cursor: default;">↖</span></td>
+                    <td>Standard cursor for normal interaction</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="test-section">
+        <h2>Verification Checklist</h2>
+        <ul class="checklist">
+            <li><strong>Tool-specific cursors defined:</strong> Each tool has an appropriate cursor style defined</li>
+            <li><strong>Cursor changes on tool selection:</strong> Cursor updates immediately when switching tools</li>
+            <li><strong>Text tool uses text cursor:</strong> Text tool shows I-beam (text) cursor</li>
+            <li><strong>Drawing tools use crosshair:</strong> All drawing tools use crosshair for precision</li>
+            <li><strong>Default cursor when not drawing:</strong> Cursor returns to default when drawing mode is off</li>
+            <li><strong>Cursor visibility:</strong> All cursor styles are visible and recognizable</li>
+        </ul>
+    </div>
+
+    <div class="test-section">
+        <h2>Test Steps</h2>
+        <div class="steps">
+            <ol>
+                <li>Launch the Annotatr application</li>
+                <li>Open the Mini Panel (should appear automatically)</li>
+                <li>Click the "Arrow" tool button</li>
+                <li>Verify cursor changes to crosshair (+) on the overlay</li>
+                <li>Click the "Circle" tool button</li>
+                <li>Verify cursor remains crosshair (+) on the overlay</li>
+                <li>Click the "Box" tool button</li>
+                <li>Verify cursor remains crosshair (+) on the overlay</li>
+                <li>Click the "Freehand" tool button</li>
+                <li>Verify cursor remains crosshair (+) on the overlay</li>
+                <li>Click the "Highlighter" tool button</li>
+                <li>Verify cursor remains crosshair (+) on the overlay</li>
+                <li>Click the "Text" tool button</li>
+                <li>Verify cursor changes to I-beam (text) cursor on the overlay</li>
+                <li>Press Escape key or toggle drawing mode off</li>
+                <li>Verify cursor returns to default (pointer) cursor</li>
+            </ol>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>Implementation Details</h2>
+
+        <div class="implementation-note">
+            <h4>✓ getToolCursor() Function (src/components/Overlay.tsx)</h4>
+            <p>Added a helper function that returns the appropriate cursor based on the current tool and drawing mode:</p>
+            <pre>
+const getToolCursor = useCallback((tool: ToolType | null, drawingMode: boolean): string => {
+  // If not in drawing mode or no tool selected, use default cursor
+  if (!drawingMode || !tool) {
+    return "default";
+  }
+
+  // Return tool-specific cursor
+  switch (tool) {
+    case ToolType.ARROW:
+      return "crosshair"; // Precision cursor for arrow drawing
+    case ToolType.CIRCLE:
+      return "crosshair"; // Precision cursor for circle drawing
+    case ToolType.BOX:
+      return "crosshair"; // Precision cursor for box drawing
+    case ToolType.FREEHAND:
+      return "crosshair"; // Standard drawing cursor for freehand
+    case ToolType.HIGHLIGHTER:
+      return "crosshair"; // Standard drawing cursor for highlighter
+    case ToolType.TEXT:
+      return "text"; // Text cursor (I-beam) for text input
+    default:
+      return "crosshair";
+  }
+}, []);</pre>
+        </div>
+
+        <div class="implementation-note">
+            <h4>✓ Cursor Style Application</h4>
+            <p>The overlay's cursor style is now set dynamically based on the current tool:</p>
+            <pre>
+cursor: getToolCursor(currentTool, isDrawingMode)</pre>
+            <p>This replaces the previous implementation that only checked <code>isDrawingMode</code>.</p>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>Why These Cursors Were Chosen</h2>
+        <table class="cursor-table">
+            <thead>
+                <tr>
+                    <th>Cursor Type</th>
+                    <th>Tools Using It</th>
+                    <th>Rationale</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>crosshair</code></td>
+                    <td>Arrow, Circle, Box, Freehand, Highlighter</td>
+                    <td>The crosshair cursor (+) provides precision targeting, which is ideal for all drawing tools. It helps users accurately place the start and end points of shapes.</td>
+                </tr>
+                <tr>
+                    <td><code>text</code></td>
+                    <td>Text</td>
+                    <td>The text cursor (I-beam) is the universal standard for text input. It clearly indicates to users that clicking will allow them to type text.</td>
+                </tr>
+                <tr>
+                    <td><code>default</code></td>
+                    <td>No tool / Drawing mode off</td>
+                    <td>The default pointer cursor indicates normal interaction and that drawing is not active.</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="test-section">
+        <h2>Expected Results</h2>
+        <p>When Feature #107 is fully working:</p>
+        <ul>
+            <li>✅ Cursor changes immediately when selecting different tools</li>
+            <li>✅ Text tool shows I-beam cursor (indicates text input)</li>
+            <li>✅ All drawing tools show crosshair cursor (precision targeting)</li>
+            <li>✅ Cursor returns to default when drawing mode is disabled</li>
+            <li>✅ No cursor lag or delay when switching tools</li>
+            <li>✅ Cursor styles are consistent across all platforms</li>
+        </ul>
+    </div>
+
+    <div class="test-section">
+        <h2>Future Enhancements</h2>
+        <p>Potential improvements to cursor functionality:</p>
+        <ul>
+            <li><strong>Custom cursors:</strong> Use SVG or image-based cursors that show tool icons</li>
+            <li><strong>Size preview:</strong> Show line thickness as cursor size</li>
+            <li><strong>Color preview:</strong> Show selected color in cursor</li>
+            <li><strong>Animated cursors:</strong> Subtle animations for tool feedback</li>
+        </ul>
+    </div>
+</body>
+</html>

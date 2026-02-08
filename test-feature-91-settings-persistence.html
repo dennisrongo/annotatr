@@ -59,25 +59,25 @@
         <div class="test-case">
             <strong>save_settings (lib.rs:56-75)</strong>
             <pre>async fn save_settings(app: AppHandle, key: String, value: serde_json::Value)
-→ Writes to settings.json via Tauri store plugin
-→ Emits "settings_updated" event
-→ Returns Result<(), String></pre>
+Writes to settings.json via Tauri store plugin
+Emits "settings_updated" event
+Returns Result&lt;(), String&gt;</pre>
         </div>
 
         <div class="test-case">
             <strong>load_settings (lib.rs:80-93)</strong>
             <pre>async fn load_settings(app: AppHandle)
-→ Reads from settings.json
-→ Returns complete settings object as JSON
-→ Returns empty object if file doesn't exist</pre>
+Reads from settings.json
+Returns complete settings object as JSON
+Returns empty object if file doesn't exist</pre>
         </div>
 
         <div class="test-case">
             <strong>reset_settings (lib.rs:114-137)</strong>
             <pre>async fn reset_settings(app: AppHandle)
-→ Clears all settings from store
-→ Writes default values
-→ Emits "settings_updated" event</pre>
+Clears all settings from store
+Writes default values
+Emits "settings_updated" event</pre>
         </div>
     </div>
 

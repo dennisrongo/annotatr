@@ -184,7 +184,7 @@ pub fn get_platform_window_hints() -> &'static str {
       <h4>3. Window Management Commands (src-tauri/src/lib.rs)</h4>
       <div class="code-block">
 // Tauri's unified API works across all platforms
-fn show_overlay(app: AppHandle) -> Result<(), String> {
+fn show_overlay(app: AppHandle) -&gt; Result&lt;(), String&gt; {
     let overlay_window = app.get_webview_window("overlay")?;
     overlay_window.show()?;                      // Windows: ShowWindow(hwnd, SW_SHOW)
     overlay_window.set_focus()?;                  // Windows: SetForegroundWindow(hwnd)
@@ -384,7 +384,7 @@ Platform::Linux => {
     <div class="code-block">
 // lib.rs - SAME CODE for all platforms
 #[tauri::command]
-fn show_overlay(app: AppHandle) -> Result<(), String> {
+fn show_overlay(app: AppHandle) -&gt; Result&lt;(), String&gt; {
     let overlay_window = app.get_webview_window("overlay")?;
     overlay_window.show()?;
     overlay_window.set_focus()?;
