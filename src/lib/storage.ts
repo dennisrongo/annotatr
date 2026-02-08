@@ -36,6 +36,8 @@ export interface Settings {
   fadeDuration: number;
   // Feature #126: Panel transparency (0.0 = fully transparent, 1.0 = fully opaque)
   panelTransparency: number;
+  // Feature #133: Panel collapsed state (true = show only tool icons, false = show full panel)
+  panelCollapsed: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -69,6 +71,8 @@ export const DEFAULT_SETTINGS: Settings = {
   fadeDuration: 10,
   // Feature #126: Panel transparency default (0.95 = mostly opaque)
   panelTransparency: 0.95,
+  // Feature #133: Panel collapsed default (false = show full panel)
+  panelCollapsed: false,
 };
 
 /**

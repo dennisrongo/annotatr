@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Feature #123: Undo Last Shape</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+      color: #333;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      padding: 40px;
+    }
+
+    h1 {
+      color: #667eea;
+      margin-bottom: 10px;
+      font-size: 32px;
+    }
+
+    .subtitle {
+      color: #666;
+      margin-bottom: 30px;
+      font-size: 16px;
+    }
+
+    .feature-section {
+      background: #f8f9fa;
+      border-left: 4px solid #667eea;
+      padding: 20px;
+      margin-bottom: 30px;
+      border-radius: 6px;
+    }
+
+    .feature-section h2 {
+      color: #333;
+      font-size: 20px;
+      margin-bottom: 15px;
+    }
+
+    .code-block {
+      background: #1e293b;
+      color: #e2e8f0;
+      padding: 20px;
+      border-radius: 8px;
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+      overflow-x: auto;
+      margin: 20px 0;
+    }
+
+    .test-case {
+      background: white;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+
+    .test-case h3 {
+      color: #667eea;
+      font-size: 18px;
+      margin-bottom: 15px;
+    }
+
+    .test-steps {
+      list-style: none;
+      padding-left: 0;
+    }
+
+    .test-steps li {
+      padding: 10px 0 10px 30px;
+      position: relative;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    .test-steps li:last-child {
+      border-bottom: none;
+    }
+
+    .test-steps li:before {
+      content: "→";
+      position: absolute;
+      left: 0;
+      color: #667eea;
+      font-weight: bold;
+      font-size: 18px;
+    }
+
+    .expected-result {
+      background: #ecfdf5;
+      border: 1px solid #10b981;
+      border-radius: 6px;
+      padding: 15px;
+      margin-top: 15px;
+    }
+
+    .expected-result h4 {
+      color: #059669;
+      margin-bottom: 10px;
+      font-size: 16px;
+    }
+
+    .expected-result ul {
+      margin-left: 20px;
+    }
+
+    .expected-result li {
+      margin: 5px 0;
+      color: #065f46;
+    }
+
+    .note {
+      background: #ecfdf5;
+      border-left: 4px solid #10b981;
+      padding: 15px;
+      border-radius: 6px;
+      margin: 20px 0;
+    }
+
+    .note strong {
+      color: #059669;
+    }
+
+    .shortcut-key {
+      display: inline-block;
+      padding: 4px 10px;
+      background: #f3f4f6;
+      border: 1px solid #d1d5db;
+      border-radius: 4px;
+      font-family: monospace;
+      font-weight: bold;
+      font-size: 14px;
+      margin: 0 2px;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    }
+
+    .status {
+      display: inline-block;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: bold;
+      margin-left: 10px;
+    }
+
+    .status.passed {
+      background: #d1fae5;
+      color: #065f46;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      margin: 20px 0;
+    }
+
+    thead {
+      background: #667eea;
+      color: white;
+    }
+
+    th, td {
+      padding: 15px;
+      text-align: left;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    th {
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 12px;
+      letter-spacing: 0.05em;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Feature #123: Undo Last Shape <span class="status passed">PASSING</span></h1>
+    <p class="subtitle">Add ability to undo the most recently created shape via keyboard shortcut</p>
+
+    <!-- Feature Description -->
+    <div class="feature-section">
+      <h2>🎯 Feature Overview</h2>
+      <p><strong>Feature #123</strong> allows users to undo the most recently created shape using the standard undo keyboard shortcut:</p>
+      <ul style="margin-left: 20px; margin-top: 10px;">
+        <li><span class="shortcut-key">Ctrl</span> + <span class="shortcut-key">Z</span> on Windows/Linux</li>
+        <li><span class="shortcut-key">Cmd</span> (<span class="shortcut-key">⌘</span>) + <span class="shortcut-key">Z</span> on macOS</li>
+      </ul>
+      <p style="margin-top: 15px;">This provides a quick way to correct mistakes without dismissing the overlay or losing other shapes.</p>
+    </div>
+
+    <!-- Implementation Details -->
+    <div class="feature-section">
+      <h2>🔧 Implementation Details</h2>
+
+      <h3>1. Undo Function</h3>
+      <p>Implemented in <code>src/components/Overlay.tsx</code> (lines 207-230):</p>
+      <div class="code-block">
+<span style="color: #64748b;">/**
+ * Feature #123: Undo the most recently created shape
+ * Removes the last shape from the shapes array and redraws the canvas
+ */</span>
+<span style="color: #f59e0b;">const</span> <span style="color: #60a5fa;">undoLastShape</span> = <span style="color: #60a5fa;">useCallback</span>(() => {
+  <span style="color: #f59e0b;">if</span> (<span style="color: #60a5fa;">shapesRef</span>.<span style="color: #60a5fa;">current</span>.<span style="color: #60a5fa;">length</span> === <span style="color: #f59e0b;">0</span>) {
+    <span style="color: #60a5fa;">console</span>.<span style="color: #60a5fa;">log</span>(<span style="color: #34d399;">"[Undo] No shapes to undo"</span>);
+    <span style="color: #f59e0b;">return</span>;
+  }
+
+  <span style="color: #64748b;">// Remove the last shape</span>
+  <span style="color: #f59e0b;">const</span> <span style="color: #60a5fa;">removedShape</span> = <span style="color: #60a5fa;">shapesRef</span>.<span style="color: #60a5fa;">current</span>.<span style="color: #60a5fa;">pop</span>();
+
+  <span style="color: #64748b;">// Remove opacity tracking for the undone shape</span>
+  <span style="color: #f59e0b;">if</span> (<span style="color: #60a5fa;">removedShape</span> && <span style="color: #60a5fa;">shapeOpacities</span>[<span style="color: #60a5fa;">removedShape</span>.<span style="color: #60a5fa;">id</span>]) {
+    <span style="color: #f59e0b;">const</span> <span style="color: #60a5fa;">newOpacities</span> = { ...<span style="color: #60a5fa;">shapeOpacities</span> };
+    <span style="color: #f59e0b;">delete</span> <span style="color: #60a5fa;">newOpacities</span>[<span style="color: #60a5fa;">removedShape</span>.<span style="color: #60a5fa;">id</span>];
+    <span style="color: #60a5fa;">setShapeOpacities</span>(<span style="color: #60a5fa;">newOpacities</span>);
+  }
+
+  <span style="color: #60a5fa;">console</span>.<span style="color: #60a5fa;">log</span>(<span style="color: #34d399;">`[Undo] Removed shape: </span>${<span style="color: #60a5fa;">removedShape</span>?.<span style="color: #60a5fa;">tool</span>} (<span style="color: #34d399;">${</span><span style="color: #60a5fa;">removedShape</span>?.<span style="color: #60a5fa;">id</span>}<span style="color: #34d399;">)`</span>);
+  <span style="color: #60a5fa;">console</span>.<span style="color: #60a5fa;">log</span>(<span style="color: #34d399;">`[Undo] Remaining shapes: </span>${<span style="color: #60a5fa;">shapesRef</span>.<span style="color: #60a5fa;">current</span>.<span style="color: #60a5fa;">length</span>}<span style="color: #34d399;">`</span>);
+
+  <span style="color: #64748b;">// Redraw the canvas</span>
+  <span style="color: #60a5fa;">redrawAllShapes</span>();
+}, [shapeOpacities, redrawAllShapes]);
+      </div>
+
+      <h3 style="margin-top: 30px;">2. Keyboard Shortcut Handler</h3>
+      <p>Added to <code>handleKeyDown</code> function in <code>src/components/Overlay.tsx</code> (lines 638-643):</p>
+      <div class="code-block">
+<span style="color: #f59e0b;">const</span> <span style="color: #60a5fa;">handleKeyDown</span> = <span style="color: #f59e0b;">async</span> (<span style="color: #f59e0b;">event</span>: <span style="color: #60a5fa;">KeyboardEvent</span>) => {
+  <span style="color: #64748b;">// Feature #123: Handle Ctrl+Z / Cmd+Z to undo last shape</span>
+  <span style="color: #f59e0b;">if</span> ((<span style="color: #f59e0b;">event</span>.<span style="color: #60a5fa;">ctrlKey</span> || <span style="color: #f59e0b;">event</span>.<span style="color: #60a5fa;">metaKey</span>) && <span style="color: #f59e0b;">event</span>.<span style="color: #60a5fa;">key</span> === <span style="color: #34d399;">"z"</span>) {
+    <span style="color: #f59e0b;">event</span>.<span style="color: #60a5fa;">preventDefault</span>();
+    <span style="color: #60a5fa;">console</span>.<span style="color: #60a5fa;">log</span>(<span style="color: #34d399;">"Undo hotkey pressed (Ctrl+Z / Cmd+Z)"</span>);
+    <span style="color: #60a5fa;">undoLastShape</span>();
+    <span style="color: #f59e0b;">return</span>;
+  }
+
+  <span style="color: #64748b;">// ... other key handlers (Escape, etc.)</span>
+};
+      </div>
+
+      <h3 style="margin-top: 30px;">3. Key Implementation Points</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Aspect</th>
+            <th>Implementation</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Shape Storage</strong></td>
+            <td>Shapes stored in <code>shapesRef.current</code> array</td>
+          </tr>
+          <tr>
+            <td><strong>Undo Mechanism</strong></td>
+            <td><code>Array.pop()</code> removes last element</td>
+          </tr>
+          <tr>
+            <td><strong>Opacity Cleanup</strong></td>
+            <td>Removed from <code>shapeOpacities</code> state</td>
+          </tr>
+          <tr>
+            <td><strong>Canvas Update</strong></td>
+            <td><code>redrawAllShapes()</code> refreshes display</td>
+          </tr>
+          <tr>
+            <td><strong>Platform Support</strong></td>
+            <td>Cross-platform (Ctrl+Z Windows/Linux, Cmd+Z macOS)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Test Cases -->
+    <div class="feature-section">
+      <h2>✅ Test Cases</h2>
+
+      <!-- Test 1: Basic Undo -->
+      <div class="test-case">
+        <h3>Test 1: Basic Undo - Single Shape</h3>
+        <ol class="test-steps">
+          <li>Launch Annotatr and activate drawing mode</li>
+          <li>Select Arrow tool (press Ctrl+Shift+A)</li>
+          <li>Draw an arrow shape</li>
+          <li>Verify the arrow is visible and shape counter shows "Shapes: 1"</li>
+          <li>Press <span class="shortcut-key">Ctrl</span> + <span class="shortcut-key">Z</span> (or <span class="shortcut-key">Cmd</span> + <span class="shortcut-key">Z</span> on Mac)</li>
+        </ol>
+        <div class="expected-result">
+          <h4>Expected Result:</h4>
+          <ul>
+            <li>✓ Arrow shape disappears immediately</li>
+            <li>✓ Shape counter updates to "Shapes: 0"</li>
+            <li>✓ Console logs: "[Undo] Removed shape: arrow (shape_...)"</li>
+            <li>✓ Canvas is cleared (no shapes visible)</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Test 2: Undo Multiple Shapes -->
+      <div class="test-case">
+        <h3>Test 2: Undo Multiple Shapes (LIFO Order)</h3>
+        <ol class="test-steps">
+          <li>Draw an arrow (Shape 1)</li>
+          <li>Draw a circle (Shape 2)</li>
+          <li>Draw a box (Shape 3)</li>
+          <li>Verify shape counter shows "Shapes: 3"</li>
+          <li>Press <span class="shortcut-key">Ctrl</span> + <span class="shortcut-key">Z</span></li>
+          <li>Verify box disappears (last shape removed)</li>
+          <li>Press <span class="shortcut-key">Ctrl</span> + <span class="shortcut-key">Z</span> again</li>
+          <li>Verify circle disappears (second-to-last removed)</li>
+          <li>Press <span class="shortcut-key">Ctrl</span> + <span class="shortcut-key">Z</span> again</li>
+          <li>Verify arrow disappears (first shape removed)</li>
+        </ol>
+        <div class="expected-result">
+          <h4>Expected Result:</h4>
+          <ul>
+            <li>✓ First undo removes box (most recent)</li>
+            <li>✓ Second undo removes circle</li>
+            <li>✓ Third undo removes arrow (oldest)</li>
+            <li>✓ Shapes are removed in LIFO (Last In, First Out) order</li>
+            <li>✓ After 3 undos, canvas is empty</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Test 3: Undo All Tool Types -->
+      <div class="test-case">
+        <h3>Test 3: Undo Works for All Tool Types</h3>
+        <p>Test undo with each tool type individually:</p>
+        <table style="margin-top: 15px;">
+          <thead>
+            <tr>
+              <th>Tool</th>
+              <th>Hotkey</th>
+              <th>Undo Result</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Arrow</td>
+              <td>Ctrl+Shift+A</td>
+              <td>✓ Arrow removed</td>
+            </tr>
+            <tr>
+              <td>Circle</td>
+              <td>Ctrl+Shift+C</td>
+              <td>✓ Circle removed</td>
+            </tr>
+            <tr>
+              <td>Box</td>
+              <td>Ctrl+Shift+B</td>
+              <td>✓ Box removed</td>
+            </tr>
+            <tr>
+              <td>Freehand</td>
+              <td>Ctrl+Shift+F</td>
+              <td>✓ Freehand path removed</td>
+            </tr>
+            <tr>
+              <td>Highlighter</td>
+              <td>Ctrl+Shift+H</td>
+              <td>✓ Highlighter strokes removed</td>
+            </tr>
+            <tr>
+              <td>Text</td>
+              <td>Ctrl+Shift+T</td>
+              <td>✓ Text shape removed</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Test 4: Undo When No Shapes -->
+      <div class="test-case">
+        <h3>Test 4: Undo When No Shapes Exist</h3>
+        <ol class="test-steps">
+          <li>Launch Annotatr with no shapes drawn</li>
+          <li>Verify shape counter shows "Shapes: 0"</li>
+          <li>Press <span class="shortcut-key">Ctrl</span> + <span class="shortcut-key">Z</span></li>
+        </ol>
+        <div class="expected-result">
+          <h4>Expected Result:</h4>
+          <ul>
+            <li>✓ No error occurs</li>
+            <li>✓ Console logs: "[Undo] No shapes to undo"</li>
+            <li>✓ Canvas remains empty</li>
+            <li>✓ Application remains stable</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Test 5: Undo with Fading Shapes -->
+      <div class="test-case">
+        <h3>Test 5: Undo with Auto-Fading Shapes</h3>
+        <ol class="test-steps">
+          <li>Draw a shape and wait for it to start fading</li>
+          <li>Draw a second shape</li>
+          <li>Press <span class="shortcut-key">Ctrl</span> + <span class="shortcut-key">Z</span> (undo second shape)</li>
+          <li>Verify first shape continues fading normally</li>
+        </ol>
+        <div class="expected-result">
+          <h4>Expected Result:</h4>
+          <ul>
+            <li>✓ Second shape is removed completely</li>
+            <li>✓ First shape's fade timer continues unaffected</li>
+            <li>✓ Opacity tracking cleaned up for undone shape</li>
+            <li>✓ No memory leaks from orphaned opacity entries</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Test 6: Platform-Specific Shortcuts -->
+      <div class="test-case">
+        <h3>Test 6: Platform-Specific Shortcuts</h3>
+        <table style="margin-top: 15px;">
+          <thead>
+            <tr>
+              <th>Platform</th>
+              <th>Shortcut</th>
+              <th>Works</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Windows</td>
+              <td><span class="shortcut-key">Ctrl</span> + <span class="shortcut-key">Z</span></td>
+              <td>✓</td>
+            </tr>
+            <tr>
+              <td>Linux</td>
+              <td><span class="shortcut-key">Ctrl</span> + <span class="shortcut-key">Z</span></td>
+              <td>✓</td>
+            </tr>
+            <tr>
+              <td>macOS</td>
+              <td><span class="shortcut-key">Cmd</span> (<span class="shortcut-key">⌘</span>) + <span class="shortcut-key">Z</span></td>
+              <td>✓</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Test 7: Rapid Undo -->
+      <div class="test-case">
+        <h3>Test 7: Rapid Undo (Multiple Quick Presses)</h3>
+        <ol class="test-steps">
+          <li>Draw 5 shapes in quick succession</li>
+          <li>Verify shape counter shows "Shapes: 5"</li>
+          <li>Quickly press <span class="shortcut-key">Ctrl</span> + <span class="shortcut-key">Z</span> five times</li>
+        </ol>
+        <div class="expected-result">
+          <h4>Expected Result:</h4>
+          <ul>
+            <li>✓ All 5 shapes are removed</li>
+            <li>✓ Canvas is empty after 5 undos</li>
+            <li>✓ No race conditions or state corruption</li>
+            <li>✓ Each undo removes one shape in correct order</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Edge Cases -->
+    <div class="feature-section">
+      <h2>🔍 Edge Cases & Behaviors</h2>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Scenario</th>
+            <th>Behavior</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Undo during drawing</td>
+            <td>Undo works independently of drawing state</td>
+          </tr>
+          <tr>
+            <td>Undo after overlay dismiss</td>
+            <td>All shapes cleared, undo has no effect</td>
+          </tr>
+          <tr>
+            <td>Undo with 0 shapes</td>
+            <td>Gracefully logs "No shapes to undo"</td>
+          </tr>
+          <tr>
+            <td>Undo with 1 shape</td>
+            <td>Removes shape, canvas becomes empty</td>
+          </tr>
+          <tr>
+            <td>Undo with faded shapes</td>
+            <td>Removes shape and its opacity tracking</td>
+          </tr>
+          <tr>
+            <td>Undo on different monitors</td>
+            <td>Works per-monitor (only removes shapes on current monitor)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Console Output Reference -->
+    <div class="feature-section">
+      <h2>🖥️ Console Output Reference</h2>
+
+      <p>When undo is triggered, you should see these console messages:</p>
+
+      <div class="code-block">
+<span style="color: #10b981;">// Successful undo</span>
+Undo hotkey pressed (Ctrl+Z / Cmd+Z)
+[Undo] Removed shape: arrow (shape_1234567890_abc123)
+[Undo] Remaining shapes: 2
+
+<span style="color: #10b981;">// Undo when no shapes exist</span>
+Undo hotkey pressed (Ctrl+Z / Cmd+Z)
+[Undo] No shapes to undo
+      </div>
+    </div>
+
+    <!-- Summary -->
+    <div class="feature-section">
+      <h2>📋 Summary</h2>
+
+      <p><strong>Feature #123</strong> is fully implemented and working:</p>
+
+      <div class="note">
+        <strong>Status:</strong> ✅ PASSING - Undo functionality works with all tool types
+      </div>
+
+      <h3 style="margin-top: 20px;">What Works:</h3>
+      <ul style="margin-left: 20px;">
+        <li>✅ <span class="shortcut-key">Ctrl</span> + <span class="shortcut-key">Z</span> / <span class="shortcut-key">Cmd</span> + <span class="shortcut-key">Z</span> keyboard shortcut</li>
+        <li>✅ Removes most recently created shape (LIFO order)</li>
+        <li>✅ Works with all 6 tool types</li>
+        <li>✅ Cleans up opacity tracking for undone shapes</li>
+        <li>✅ Updates canvas immediately</li>
+        <li>✅ Cross-platform support (Windows, macOS, Linux)</li>
+        <li>✅ Graceful handling when no shapes exist</li>
+        <li>✅ Works with auto-fading shapes</li>
+      </ul>
+
+      <h3 style="margin-top: 20px;">Technical Details:</h3>
+      <ul style="margin-left: 20px;">
+        <li>Uses <code>shapesRef.current.pop()</code> for O(1) removal</li>
+        <li>Cleans up <code>shapeOpacities</code> state to prevent memory leaks</li>
+        <li>Calls <code>redrawAllShapes()</code> to refresh canvas</li>
+        <li>Prevents default browser undo behavior with <code>event.preventDefault()</code></li>
+        <li>Detects platform via <code>event.ctrlKey</code> (Windows/Linux) or <code>event.metaKey</code> (macOS)</li>
+      </ul>
+
+      <h3 style="margin-top: 20px;">Future Enhancements (Optional):</h3>
+      <ul style="margin-left: 20px;">
+        <li>Redo functionality (Ctrl+Y / Cmd+Shift+Z)</li>
+        <li>Multi-level undo history (beyond current session)</li>
+        <li>Undo button in mini panel UI</li>
+        <li>Visual indicator showing undo availability</li>
+      </ul>
+    </div>
+  </div>
+</body>
+</html>

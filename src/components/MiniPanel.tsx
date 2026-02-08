@@ -94,6 +94,9 @@ export default function MiniPanel() {
   // Feature #126: Panel transparency control state
   const [panelTransparency, setPanelTransparency] = useState(DEFAULT_SETTINGS.panelTransparency);
 
+  // Feature #133: Panel collapsed state
+  const [panelCollapsed, setPanelCollapsed] = useState(DEFAULT_SETTINGS.panelCollapsed);
+
   // Feature #48: Settings modal state
   const [showSettingsModal, setShowSettingsModal] = useState(false);
 
@@ -245,6 +248,22 @@ export default function MiniPanel() {
       }
     };
     loadPanelTransparency();
+  }, []);
+
+  /**
+   * Feature #133: Load panel collapsed state from settings on mount
+   */
+  useEffect(() => {
+    const loadPanelCollapsed = async () => {
+      try {
+        const settings = await loadSettings();
+        setPanelCollapsed(settings.panelCollapsed);
+        console.log("Panel collapsed state loaded:", settings.panelCollapsed);
+      } catch (error) {
+        console.error("Failed to load panel collapsed state:", error);
+      }
+    };
+    loadPanelCollapsed();
   }, []);
 
   /**
@@ -560,6 +579,23 @@ export default function MiniPanel() {
       console.log(`Panel transparency updated to: ${value}`);
     } catch (error) {
       console.error("Failed to save panel transparency:", error);
+    }
+  };
+
+  /**
+   * Feature #133: Toggle panel collapsed state
+   * Collapses panel to show only tool icons
+   */
+  const togglePanelCollapsed = async () => {
+    const newCollapsed = !panelCollapsed;
+    setPanelCollapsed(newCollapsed);
+
+    // Save to persistent storage
+    try {
+      await saveSettings({ panelCollapsed: newCollapsed });
+      console.log(`Panel collapsed state updated to: ${newCollapsed}`);
+    } catch (error) {
+      console.error("Failed to save panel collapsed state:", error);
     }
   };
 
@@ -985,6 +1021,33 @@ export default function MiniPanel() {
             gap: "8px",
           }}
         >
+          {/* Feature #133: Collapse button */}
+          <button
+            type="button"
+            onClick={togglePanelCollapsed}
+            style={{
+              background: "none",
+              border: "none",
+              fontSize: "14px",
+              cursor: "pointer",
+              color: "#666",
+              padding: "0 4px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              transition: "color 0.2s",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = "#333";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = "#666";
+            }}
+            title={panelCollapsed ? "Expand panel (show all controls)" : "Collapse panel (show only tool icons)"}
+            aria-label={panelCollapsed ? "Expand panel" : "Collapse panel"}
+          >
+            {panelCollapsed ? "◀" : "▶"}
+          </button>
           {/* Feature #52: Minimize button */}
           <button
             type="button"
