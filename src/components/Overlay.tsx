@@ -53,6 +53,14 @@ export default function Overlay() {
   // Feature #9: Track current monitor ID for shape confinement
   const [currentMonitor, setCurrentMonitor] = useState<string | null>(null);
 
+  // Feature #67: Visual feedback when hotkey triggers
+  const [hotkeyFeedback, setHotkeyFeedback] = useState<{
+    visible: boolean;
+    tool: string;
+    icon: string;
+  }>({ visible: false, tool: "", icon: "" });
+  const hotkeyFeedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Default drawing settings (fallbacks until settings load)
   const defaultColor = "#FF0000";
   const defaultLineThickness = 12;
@@ -104,6 +112,35 @@ export default function Overlay() {
     const { ctx } = context;
     redrawShapes(ctx, shapesRef.current);
   }, [getCanvasContext]);
+
+  /**
+   * Feature #67: Show visual feedback when a hotkey is triggered
+   * Displays a brief flash notification with the tool name and icon
+   */
+  const showHotkeyFeedback = useCallback((tool: ToolType) => {
+    // Clear any existing timer
+    if (hotkeyFeedbackTimerRef.current) {
+      clearTimeout(hotkeyFeedbackTimerRef.current);
+    }
+
+    // Get tool indicator
+    const indicator = toolIndicators[tool];
+    if (!indicator) return;
+
+    // Show feedback
+    setHotkeyFeedback({
+      visible: true,
+      tool: indicator.label,
+      icon: indicator.icon,
+    });
+
+    // Hide after 800ms
+    hotkeyFeedbackTimerRef.current = setTimeout(() => {
+      setHotkeyFeedback({ visible: false, tool: "", icon: "" });
+    }, 800);
+
+    console.log(`Hotkey feedback shown for: ${indicator.label}`);
+  }, [toolIndicators]);
 
   /**
    * Create arrow shape from drawing state
@@ -575,6 +612,9 @@ export default function Overlay() {
       if (Object.values(ToolType).includes(tool)) {
         setCurrentTool(tool);
         console.log(`Tool changed to: ${tool}`);
+
+        // Feature #67: Show visual feedback when hotkey triggers
+        showHotkeyFeedback(tool);
       }
     });
 
@@ -678,6 +718,11 @@ export default function Overlay() {
       unlistenToolSelected.then((fn) => fn()).catch(console.error);
       unlistenOverlayDismissed.then((fn) => fn()).catch(console.error);
       unlistenClearShapes.then((fn) => fn()).catch(console.error);
+
+      // Feature #67: Cleanup hotkey feedback timer
+      if (hotkeyFeedbackTimerRef.current) {
+        clearTimeout(hotkeyFeedbackTimerRef.current);
+      }
     };
   }, [isVisible]);
 
@@ -937,6 +982,46 @@ export default function Overlay() {
           }}
           placeholder="Type text and press Enter..."
         />
+      )}
+
+      {/* Feature #67: Visual feedback when hotkey triggers */}
+      {hotkeyFeedback.visible && (
+        <div
+          style={{
+            position: "fixed",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            padding: "20px 40px",
+            backgroundColor: "rgba(0, 0, 0, 0.85)",
+            color: "white",
+            borderRadius: "12px",
+            fontSize: "24px",
+            fontWeight: "bold",
+            boxShadow: "0 8px 32px rgba(0, 0, 0, 0.5)",
+            pointerEvents: "none",
+            zIndex: 10001,
+            display: "flex",
+            alignItems: "center",
+            gap: "16px",
+            animation: "fadeInOut 0.8s ease-in-out",
+            border: "3px solid rgba(255, 255, 255, 0.2)",
+          }}
+        >
+          <span style={{ fontSize: "36px" }}>{hotkeyFeedback.icon}</span>
+          <span>{hotkeyFeedback.tool}</span>
+          <style>
+            {`
+              @keyframes fadeInOut {
+                0% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+                15% { opacity: 1; transform: translate(-50%, -50%) scale(1.05); }
+                30% { transform: translate(-50%, -50%) scale(1); }
+                70% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+                100% { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
+              }
+            `}
+          </style>
+        </div>
       )}
     </div>
   );
