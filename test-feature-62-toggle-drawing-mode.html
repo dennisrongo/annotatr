@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Feature #62 - Global Hotkey to Toggle Drawing Mode (Ctrl+Shift+D)</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        h1 {
+            color: #2563eb;
+            border-bottom: 2px solid #2563eb;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #1e40af;
+            margin-top: 30px;
+        }
+        .feature {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .feature h3 {
+            margin-top: 0;
+            color: #0891b2;
+        }
+        .status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        .status.implemented {
+            background: #dcfce7;
+            color: #166534;
+        }
+        .status.testing {
+            background: #fef9c3;
+            color: #854d0e;
+        }
+        code {
+            background: #f1f5f9;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 14px;
+        }
+        pre {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-size: 13px;
+        }
+        pre code {
+            background: transparent;
+            padding: 0;
+            color: inherit;
+        }
+        .test-steps {
+            background: #fffbeb;
+            border-left: 4px solid #f59e0b;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .test-steps ol {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        .test-steps li {
+            margin: 8px 0;
+        }
+        .implementation-details {
+            background: #f0fdf4;
+            border-left: 4px solid #22c55e;
+            padding: 15px;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Test Feature #62 - Global Hotkey to Toggle Drawing Mode (Ctrl+Shift+D)</h1>
+
+    <div class="feature">
+        <h3>Feature #62: Global hotkey to toggle drawing mode (Ctrl+Shift+D) <span class="status implemented">IMPLEMENTED</span></h3>
+        <p>Register global hotkey <code>Ctrl+Shift+D</code> to toggle drawing mode on/off</p>
+
+        <div class="implementation-details">
+            <h4>Implementation Details:</h4>
+            <ul>
+                <li><strong>Backend (Rust):</strong> Added <code>toggle_drawing_mode</code> command in <code>src-tauri/src/lib.rs</code> (lines 746-777)</li>
+                <li><strong>Toggle Logic:</strong> Shows overlay and enables drawing mode if disabled, or dismisses overlay if enabled</li>
+                <li><strong>State Management:</strong> Updates <code>SharedState</code> to track drawing mode status</li>
+                <li><strong>Event Emission:</strong> Emits <code>drawing-mode-changed</code> event for UI updates</li>
+                <li><strong>Hotkey Registration:</strong> Modified <code>register_hotkeys</code> to detect <code>toggleDrawingMode</code> and register separately (lines 531-541)</li>
+                <li><strong>Default Hotkey:</strong> <code>Ctrl+Shift+D</code> defined in <code>DEFAULT_SETTINGS</code></li>
+            </ul>
+        </div>
+
+        <div class="test-steps">
+            <h4>Test Steps:</h4>
+            <ol>
+                <li>Start the Annotatr application</li>
+                <li>Verify the overlay is initially hidden</li>
+                <li>Press <code>Ctrl+Shift+D</code> (Cmd+Shift+D on macOS)</li>
+                <li><strong>Expected:</strong> Overlay should appear and drawing mode should be enabled (crosshair cursor)</li>
+                <li>Draw a test shape to verify drawing mode is active</li>
+                <li>Press <code>Ctrl+Shift+D</code> again</li>
+                <li><strong>Expected:</strong> Overlay should be dismissed and all shapes should be cleared</li>
+                <li>Press <code>Ctrl+Shift+D</code> a third time</li>
+                <li><strong>Expected:</strong> Overlay should reappear with clean state</li>
+            </ol>
+        </div>
+
+        <div class="implementation-details">
+            <h4>Key Implementation Points:</h4>
+            <pre><code>// src-tauri/src/lib.rs - toggle_drawing_mode command
+#[tauri::command]
+fn toggle_drawing_mode(app: AppHandle) -> Result&lt;bool, String&gt; {
+    let overlay_window = app.get_webview_window("overlay")
+        .ok_or("Overlay window not found")?;
+
+    let is_visible = overlay_window.is_visible()?;
+
+    if is_visible {
+        // Overlay is visible - dismiss it (turn off drawing mode)
+        dismiss_overlay(app)?;
+        println!("Drawing mode toggled OFF (overlay dismissed)");
+        Ok(false)
+    } else {
+        // Overlay is hidden - show it and enable drawing mode
+        show_overlay(app)?;
+
+        // Update state to enable drawing mode
+        if let Some(state) = app.state::&lt;SharedState&gt;.try_get() {
+            let mut state_guard = state.lock()
+                .map_err(|e| format!("State lock error: {}", e))?;
+            state_guard.is_visible = true;
+            state_guard.drawing_mode = true;
+        }
+
+        // Emit drawing mode enabled event
+        app.emit("drawing-mode-changed", true)?;
+
+        println!("Drawing mode toggled ON (overlay shown, drawing mode enabled)");
+        Ok(true)
+    }
+}</code></pre>
+
+            <pre><code>// src-tauri/src/lib.rs - Modified register_hotkeys function
+// Feature #62: Check if this is the toggle drawing mode hotkey
+if hotkey_name == "toggleDrawingMode" {
+    // Register toggle drawing mode hotkey
+    app.global_shortcut().register(shortcut, move || {
+        if let Err(e) = toggle_drawing_mode(app_handle.clone()) {
+            eprintln!("Failed to toggle drawing mode: {}", e);
+        }
+    })?;
+    println!("Registered toggle hotkey '{}' for drawing mode", hotkey_value);
+}</code></pre>
+        </div>
+
+        <div class="test-steps">
+            <h4>Verification Checklist:</h4>
+            <ul>
+                <li>✓ Hotkey <code>Ctrl+Shift+D</code> is registered on app startup</li>
+                <li>✓ First press shows overlay and enables drawing mode</li>
+                <li>✓ Drawing mode state is properly tracked</li>
+                <li>✓ Second press dismisses overlay and clears shapes</li>
+                <li>✓ Toggle works repeatedly without state issues</li>
+                <li>✓ Console logs show toggle state changes</li>
+                <li>✓ <code>drawing-mode-changed</code> event is emitted</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="feature">
+        <h3>Related Features</h3>
+        <p>This feature builds upon:</p>
+        <ul>
+            <li><strong>Feature #56, #57, #58:</strong> Global hotkeys for Arrow, Circle, Box tools</li>
+            <li><strong>Feature #18:</strong> Overlay activation via hotkey or mini panel</li>
+            <li><strong>Feature #10:</strong> Overlay dismissal and toggle functionality</li>
+        </ul>
+    </div>
+
+    <div class="feature">
+        <h3>Usage Example</h3>
+        <pre><code>// User workflow:
+// 1. Working in an app (e.g., presentation software)
+// 2. Press Ctrl+Shift+D -> overlay appears, drawing mode enabled
+// 3. Draw annotations on screen
+// 4. Press Ctrl+Shift+D -> overlay dismissed, annotations cleared
+// 5. Continue working in the app</code></pre>
+    </div>
+</body>
+</html>

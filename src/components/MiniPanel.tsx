@@ -69,6 +69,14 @@ export default function MiniPanel() {
   // Feature #48: Settings modal state
   const [showSettingsModal, setShowSettingsModal] = useState(false);
 
+  // Feature #63: Hotkey conflict detection state
+  const [hotkeyConflicts, setHotkeyConflicts] = useState<Record<string, any>>({});
+
+  // Feature #64: Hotkey customization state
+  const [hotkeys, setHotkeys] = useState<Record<string, string>>(DEFAULT_SETTINGS.hotkeys);
+  const [editingHotkey, setEditingHotkey] = useState<string | null>(null);
+  const [capturedHotkey, setCapturedHotkey] = useState<string>("");
+
   /**
    * Feature #52: Toggle panel minimize/hide
    * Hides the Tauri window when minimized
@@ -193,6 +201,53 @@ export default function MiniPanel() {
   }, []);
 
   /**
+   * Feature #63: Check for hotkey conflicts with system shortcuts
+   * Runs on mount and displays warnings if conflicts are detected
+   */
+  useEffect(() => {
+    const checkConflicts = async () => {
+      try {
+        const settings = await loadSettings();
+        const conflictsResult = await invoke<Record<string, any>>("check_hotkey_conflicts", {
+          hotkeyConfig: settings,
+        });
+
+        if (conflictsResult.has_conflicts) {
+          setHotkeyConflicts(conflictsResult.conflicts);
+          console.warn("Hotkey conflicts detected:", conflictsResult.conflicts);
+
+          // Display console warnings for each conflict
+          Object.entries(conflictsResult.conflicts).forEach(([hotkeyName, info]: [string, any]) => {
+            if (info.conflict) {
+              console.warn(
+                `⚠️ Hotkey conflict: "${hotkeyName}" (${info.hotkey}) conflicts with system function: ${info.system_function}`
+              );
+            }
+          });
+        }
+      } catch (error) {
+        console.error("Failed to check hotkey conflicts:", error);
+      }
+    };
+    checkConflicts();
+  }, []);
+
+  /**
+   * Feature #64: Load hotkeys from storage on mount
+   */
+  useEffect(() => {
+    const loadHotkeys = async () => {
+      try {
+        const settings = await loadSettings();
+        setHotkeys(settings.hotkeys);
+      } catch (error) {
+        console.error("Failed to load hotkeys:", error);
+      }
+    };
+    loadHotkeys();
+  }, []);
+
+  /**
    * Handle tool selection
    * Feature #18: Also activate overlay when a tool is selected via mini panel
    */
@@ -261,6 +316,113 @@ export default function MiniPanel() {
    */
   const openCustomColorPicker = () => {
     customColorInputRef.current?.click();
+  };
+
+  /**
+   * Feature #64: Start editing a hotkey
+   * Sets the hotkey into edit mode for capture
+   */
+  const startEditingHotkey = (hotkeyName: string) => {
+    setEditingHotkey(hotkeyName);
+    setCapturedHotkey("");
+  };
+
+  /**
+   * Feature #64: Cancel hotkey editing
+   */
+  const cancelEditingHotkey = () => {
+    setEditingHotkey(null);
+    setCapturedHotkey("");
+  };
+
+  /**
+   * Feature #64: Handle keyboard input during hotkey capture
+   * Captures the key combination and formats it as a hotkey string
+   */
+  const handleHotkeyCapture = (e: React.KeyboardEvent) => {
+    if (!editingHotkey) return;
+
+    e.preventDefault();
+
+    const keys: string[] = [];
+
+    // Capture modifier keys
+    if (e.ctrlKey) keys.push("Ctrl");
+    if (e.shiftKey) keys.push("Shift");
+    if (e.altKey) keys.push("Alt");
+    if (e.metaKey || e.key === "Meta") keys.push(isMac() ? "Cmd" : "Win");
+
+    // Capture the main key
+    const mainKey = e.key;
+    if (
+      !["Control", "Shift", "Alt", "Meta"].includes(mainKey) &&
+      mainKey.length === 1
+    ) {
+      keys.push(mainKey.toUpperCase());
+    } else if (
+      !["Control", "Shift", "Alt", "Meta"].includes(mainKey) &&
+      mainKey.length > 1
+    ) {
+      // Handle special keys like F1, Escape, etc.
+      keys.push(mainKey);
+    }
+
+    // Format as hotkey string (e.g., "Ctrl+Shift+A")
+    if (keys.length >= 2) {
+      const hotkeyString = keys.join("+");
+      setCapturedHotkey(hotkeyString);
+    }
+  };
+
+  /**
+   * Feature #64: Helper to detect if running on macOS
+   */
+  const isMac = (): boolean => {
+    return navigator.platform.toUpperCase().indexOf("MAC") >= 0;
+  };
+
+  /**
+   * Feature #64: Save the edited hotkey
+   * Validates the hotkey, checks for conflicts, and saves to storage
+   */
+  const saveHotkey = async () => {
+    if (!editingHotkey || !capturedHotkey) return;
+
+    try {
+      // Update local state
+      const updatedHotkeys = {
+        ...hotkeys,
+        [editingHotkey]: capturedHotkey,
+      };
+      setHotkeys(updatedHotkeys);
+
+      // Save to persistent storage
+      await saveSettings({ hotkeys: updatedHotkeys as any });
+      console.log(`Updated hotkey ${editingHotkey} to: ${capturedHotkey}`);
+
+      // Re-register hotkeys with the new configuration
+      const settings = await loadSettings();
+      await invoke("register_hotkeys", { hotkeyConfig: settings });
+      console.log("Hotkeys re-registered with new configuration");
+
+      // Check for conflicts with the new hotkey
+      const conflictsResult = await invoke<Record<string, any>>("check_hotkey_conflicts", {
+        hotkeyConfig: settings,
+      });
+
+      if (conflictsResult.has_conflicts) {
+        setHotkeyConflicts(conflictsResult.conflicts);
+        console.warn("Hotkey conflicts detected after update:", conflictsResult.conflicts);
+      } else {
+        // Clear conflicts if no conflicts exist
+        setHotkeyConflicts({});
+      }
+
+      // Exit edit mode
+      cancelEditingHotkey();
+    } catch (error) {
+      console.error("Failed to save hotkey:", error);
+    }
   };
 
   /**
@@ -977,6 +1139,224 @@ export default function MiniPanel() {
                   <li><strong>Fade Duration:</strong> 10 seconds</li>
                   <li><strong>Colors:</strong> Configured per tool</li>
                 </ul>
+              </div>
+
+              {/* Feature #63: Hotkey conflict warnings */}
+              {Object.keys(hotkeyConflicts).length > 0 && (
+                <div
+                  style={{
+                    backgroundColor: "#fef3c7",
+                    padding: "12px",
+                    borderRadius: "4px",
+                    marginTop: "15px",
+                    border: "1px solid #f59e0b",
+                  }}
+                >
+                  <h3
+                    style={{
+                      fontSize: "14px",
+                      margin: "0 0 10px 0",
+                      color: "#92400e",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                    }}
+                  >
+                    <span>⚠️</span>
+                    <span>Hotkey Conflicts Detected</span>
+                  </h3>
+                  <p
+                    style={{
+                      fontSize: "12px",
+                      margin: "0 0 10px 0",
+                      color: "#78350f",
+                    }}
+                  >
+                    The following hotkeys may conflict with system shortcuts:
+                  </p>
+                  <ul
+                    style={{
+                      margin: 0,
+                      paddingLeft: "20px",
+                      fontSize: "12px",
+                    }}
+                  >
+                    {Object.entries(hotkeyConflicts).map(
+                      ([hotkeyName, info]: [string, any]) =>
+                        info.conflict && (
+                          <li key={hotkeyName} style={{ marginBottom: "8px" }}>
+                            <strong style={{ color: "#92400e" }}>
+                              {hotkeyName} ({info.hotkey})
+                            </strong>
+                            : Used by system for "{info.system_function}"
+                          </li>
+                        )
+                    )}
+                  </ul>
+                  <p
+                    style={{
+                      fontSize: "11px",
+                      margin: "10px 0 0 0",
+                      color: "#78350f",
+                      fontStyle: "italic",
+                    }}
+                  >
+                    💡 You may want to change these hotkeys in Settings to avoid conflicts.
+                  </p>
+                </div>
+              )}
+
+              {/* Feature #64: Hotkey customization */}
+              <div
+                style={{
+                  backgroundColor: "#f8f9fa",
+                  padding: "12px",
+                  borderRadius: "4px",
+                  marginTop: "15px",
+                }}
+              >
+                <h3
+                  style={{
+                    fontSize: "14px",
+                    margin: "0 0 10px 0",
+                    color: "#333",
+                  }}
+                >
+                  Keyboard Shortcuts
+                </h3>
+                <div
+                  style={{
+                    fontSize: "12px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "8px",
+                  }}
+                >
+                  {Object.entries(hotkeys).map(([hotkeyName, hotkeyValue]: [string, string]) => (
+                    <div
+                      key={hotkeyName}
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        padding: "6px 8px",
+                        backgroundColor: "white",
+                        borderRadius: "4px",
+                        border: "1px solid #e5e7eb",
+                      }}
+                    >
+                      <span style={{ fontWeight: 500, color: "#374151" }}>
+                        {hotkeyName
+                          .replace(/([A-Z])/g, " $1")
+                          .replace(/^./, (str) => str.toUpperCase())
+                          .trim()}
+                      </span>
+                      {editingHotkey === hotkeyName ? (
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: "8px",
+                            alignItems: "center",
+                          }}
+                          tabIndex={0}
+                          onKeyDown={handleHotkeyCapture}
+                          autoFocus
+                        >
+                          <code
+                            style={{
+                              padding: "4px 8px",
+                              backgroundColor: capturedHotkey ? "#10b981" : "#fef3c7",
+                              borderRadius: "3px",
+                              minWidth: "100px",
+                              textAlign: "center",
+                              display: "inline-block",
+                            }}
+                          >
+                            {capturedHotkey || "Press keys..."}
+                          </code>
+                          <button
+                            type="button"
+                            onClick={saveHotkey}
+                            disabled={!capturedHotkey}
+                            style={{
+                              padding: "4px 8px",
+                              backgroundColor: capturedHotkey ? "#10b981" : "#d1d5db",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "3px",
+                              cursor: capturedHotkey ? "pointer" : "not-allowed",
+                              fontSize: "11px",
+                            }}
+                          >
+                            ✓
+                          </button>
+                          <button
+                            type="button"
+                            onClick={cancelEditingHotkey}
+                            style={{
+                              padding: "4px 8px",
+                              backgroundColor: "#ef4444",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "3px",
+                              cursor: "pointer",
+                              fontSize: "11px",
+                            }}
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ) : (
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: "8px",
+                            alignItems: "center",
+                          }}
+                        >
+                          <code
+                            style={{
+                              padding: "4px 8px",
+                              backgroundColor: "#f3f4f6",
+                              borderRadius: "3px",
+                              minWidth: "100px",
+                              textAlign: "center",
+                              display: "inline-block",
+                            }}
+                          >
+                            {hotkeyValue}
+                          </code>
+                          <button
+                            type="button"
+                            onClick={() => startEditingHotkey(hotkeyName)}
+                            style={{
+                              padding: "4px 8px",
+                              backgroundColor: "#3b82f6",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "3px",
+                              cursor: "pointer",
+                              fontSize: "11px",
+                            }}
+                            title="Change hotkey"
+                          >
+                            Edit
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <p
+                  style={{
+                    fontSize: "11px",
+                    margin: "10px 0 0 0",
+                    color: "#6b7280",
+                    fontStyle: "italic",
+                  }}
+                >
+                  💡 Click "Edit" then press your desired key combination to change a hotkey.
+                </p>
               </div>
 
               <div

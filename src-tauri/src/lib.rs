@@ -28,6 +28,21 @@ impl Default for OverlayState {
 
 type SharedState = Arc<Mutex<OverlayState>>;
 
+// Feature #65: Track registered hotkeys for deregistration
+struct HotkeyRegistry {
+    registered_hotkeys: Vec<String>,
+}
+
+impl Default for HotkeyRegistry {
+    fn default() -> Self {
+        Self {
+            registered_hotkeys: Vec::new(),
+        }
+    }
+}
+
+type SharedHotkeyRegistry = Arc<Mutex<HotkeyRegistry>>;
+
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -511,13 +526,49 @@ fn clear_all_shapes(app: AppHandle) -> Result<(), String> {
 }
 
 // Hotkey commands
+/// Feature #65: Unregister all currently registered hotkeys
+/// This is called before re-registering hotkeys with new settings
+#[tauri::command]
+fn unregister_all_hotkeys(app: AppHandle) -> Result<(), String> {
+    // Get the registry of registered hotkeys
+    if let Some(registry) = app.state::<SharedHotkeyRegistry>().try_get() {
+        let mut registry_guard = registry.lock()
+            .map_err(|e| format!("Registry lock error: {}", e))?;
+
+        // Unregister each hotkey
+        for hotkey_str in registry_guard.registered_hotkeys.iter() {
+            if let Ok(shortcut) = parse_hotkey_string(hotkey_str) {
+                app.global_shortcut().unregister(shortcut)
+                    .map_err(|e| format!("Failed to unregister hotkey '{}': {}", hotkey_str, e))?;
+                println!("Unregistered hotkey: {}", hotkey_str);
+            }
+        }
+
+        // Clear the registry
+        registry_guard.registered_hotkeys.clear();
+
+        println!("All hotkeys unregistered");
+    }
+
+    Ok(())
+}
+
 /// Feature #56, #57, #58, #62: Register global hotkeys for tools and toggle
 /// Registers shortcuts like Ctrl+Shift+A for Arrow tool, Ctrl+Shift+D for toggle
+/// Feature #65: Now tracks registered hotkeys and deregisters old ones before registering new
 #[tauri::command]
 fn register_hotkeys(app: AppHandle, hotkey_config: serde_json::Value) -> Result<(), String> {
+    // Feature #65: First, unregister all existing hotkeys
+    unregister_all_hotkeys(app.clone())?;
+
     // Get the hotkeys object from config
     let hotkeys_obj = hotkey_config["hotkeys"].as_object()
         .ok_or("Invalid hotkeys config: missing 'hotkeys' object")?;
+
+    // Get the registry to track registered hotkeys
+    let registry = app.state::<SharedHotkeyRegistry>();
+    let mut registry_guard = registry.lock()
+        .map_err(|e| format!("Registry lock error: {}", e))?;
 
     // Register each hotkey
     for (hotkey_name, hotkey_str) in hotkeys_obj.iter() {
@@ -538,6 +589,8 @@ fn register_hotkeys(app: AppHandle, hotkey_config: serde_json::Value) -> Result<
                     }
                 }).map_err(|e| format!("Failed to register toggle hotkey '{}': {}", hotkey_value, e))?;
 
+                // Feature #65: Track the registered hotkey
+                registry_guard.registered_hotkeys.push(hotkey_value.to_string());
                 println!("Registered toggle hotkey '{}' for drawing mode", hotkey_value);
             } else {
                 // Register tool hotkey
@@ -549,10 +602,14 @@ fn register_hotkeys(app: AppHandle, hotkey_config: serde_json::Value) -> Result<
                     }
                 }).map_err(|e| format!("Failed to register hotkey '{}' for tool '{}': {}", hotkey_value, hotkey_name, e))?;
 
+                // Feature #65: Track the registered hotkey
+                registry_guard.registered_hotkeys.push(hotkey_value.to_string());
                 println!("Registered hotkey '{}' for tool '{}'", hotkey_value, hotkey_name);
             }
         }
     }
+
+    println!("Total hotkeys registered: {}", registry_guard.registered_hotkeys.len());
 
     Ok(())
 }
@@ -643,6 +700,159 @@ fn convert_hotkey_tool_name(hotkey_key: &str) -> String {
         "textTool" => "text".to_string(),
         _ => hotkey_key.to_string(), // Return as-is if no match
     }
+}
+
+/// Feature #63: Get list of known system hotkeys for the current platform
+/// Returns a map of hotkey strings to descriptions of what they do
+fn get_system_hotkeys() -> Vec<(String, String)> {
+    let platform = std::env::consts::OS;
+
+    match platform {
+        "macos" => vec![
+            // macOS system shortcuts
+            ("Cmd+Space".to_string(), "Spotlight Search".to_string()),
+            ("Cmd+Tab".to_string(), "Application Switcher".to_string()),
+            ("Cmd+Q".to_string(), "Quit Application".to_string()),
+            ("Cmd+W".to_string(), "Close Window".to_string()),
+            ("Cmd+C".to_string(), "Copy".to_string()),
+            ("Cmd+V".to_string(), "Paste".to_string()),
+            ("Cmd+X".to_string(), "Cut".to_string()),
+            ("Cmd+Z".to_string(), "Undo".to_string()),
+            ("Cmd+Shift+Z".to_string(), "Redo".to_string()),
+            ("Cmd+A".to_string(), "Select All".to_string()),
+            ("Cmd+S".to_string(), "Save".to_string()),
+            ("Cmd+F".to_string(), "Find".to_string()),
+            ("Cmd+P".to_string(), "Print".to_string()),
+            ("Cmd+N".to_string(), "New Window/Document".to_string()),
+            ("Cmd+H".to_string(), "Hide Application".to_string()),
+            ("Cmd+Option+H".to_string(), "Hide Others".to_string()),
+            ("Cmd+M".to_string(), "Minimize".to_string()),
+            ("Cmd+Option+M".to_string(), "Minimize All".to_string()),
+            ("Cmd+Option+Esc".to_string(), "Force Quit Applications".to_string()),
+            ("Cmd+Shift+3".to_string(), "Screenshot (Full Screen)".to_string()),
+            ("Cmd+Shift+4".to_string(), "Screenshot (Selection)".to_string()),
+            ("Cmd+Shift+5".to_string(), "Screenshot (Screen Recording Tools)".to_string()),
+            ("F11".to_string(), "Show Desktop".to_string()),
+            ("F12".to_string(), "Dashboard (if enabled)".to_string()),
+            ("Cmd+Option+D".to_string(), "Show/Hide Dock".to_string()),
+        ],
+        "windows" => vec![
+            // Windows system shortcuts
+            ("Ctrl+Esc".to_string(), "Open Start Menu".to_string()),
+            ("Ctrl+Shift+Esc".to_string(), "Task Manager".to_string()),
+            ("Alt+Tab".to_string(), "Application Switcher".to_string()),
+            ("Alt+F4".to_string(), "Close Application".to_string()),
+            ("Ctrl+C".to_string(), "Copy".to_string()),
+            ("Ctrl+V".to_string(), "Paste".to_string()),
+            ("Ctrl+X".to_string(), "Cut".to_string()),
+            ("Ctrl+Z".to_string(), "Undo".to_string()),
+            ("Ctrl+Y".to_string(), "Redo".to_string()),
+            ("Ctrl+A".to_string(), "Select All".to_string()),
+            ("Ctrl+S".to_string(), "Save".to_string()),
+            ("Ctrl+F".to_string(), "Find".to_string()),
+            ("Ctrl+P".to_string(), "Print".to_string()),
+            ("Ctrl+N".to_string(), "New Window/Document".to_string()),
+            ("Win+D".to_string(), "Show Desktop".to_string()),
+            ("Win+L".to_string(), "Lock Computer".to_string()),
+            ("Win+E".to_string(), "Open File Explorer".to_string()),
+            ("Win+R".to_string(), "Run Dialog".to_string()),
+            ("Win+Tab".to_string(), "Task View".to_string()),
+            ("PrtScn".to_string(), "Screenshot (Full Screen)".to_string()),
+            ("Alt+PrtScn".to_string(), "Screenshot (Active Window)".to_string()),
+            ("Win+Shift+S".to_string(), "Screenshot (Selection)".to_string()),
+            ("F11".to_string(), "Fullscreen (in browsers/apps)".to_string()),
+        ],
+        "linux" => vec![
+            // Linux system shortcuts (common desktop environments)
+            ("Alt+Tab".to_string(), "Application Switcher".to_string()),
+            ("Alt+F4".to_string(), "Close Application".to_string()),
+            ("Ctrl+Alt+T".to_string(), "Terminal (GNOME/KDE)".to_string()),
+            ("Ctrl+Alt+L".to_string(), "Lock Screen (GNOME/KDE)".to_string()),
+            ("Ctrl+Alt+D".to_string(), "Show Desktop (GNOME)".to_string()),
+            ("Ctrl+Alt+ArrowLeft".to_string(), "Switch Workspace Left".to_string()),
+            ("Ctrl+Alt+ArrowRight".to_string(), "Switch Workspace Right".to_string()),
+            ("Super".to_string(), "Application Menu (GNOME/KDE)".to_string()),
+            ("Super+D".to_string(), "Show Desktop".to_string()),
+            ("Super+L".to_string(), "Lock Screen".to_string()),
+            ("Print".to_string(), "Screenshot".to_string()),
+            ("Ctrl+C".to_string(), "Copy".to_string()),
+            ("Ctrl+V".to_string(), "Paste".to_string()),
+            ("Ctrl+X".to_string(), "Cut".to_string()),
+            ("Ctrl+Z".to_string(), "Undo".to_string()),
+            ("Ctrl+Shift+Z".to_string(), "Redo".to_string()),
+        ],
+        _ => vec![],
+    }
+}
+
+/// Feature #63: Check if a hotkey conflicts with known system shortcuts
+/// Returns None if no conflict, or Some(description) if conflict exists
+fn check_hotkey_conflict(hotkey_str: &str) -> Option<String> {
+    let system_hotkeys = get_system_hotkeys();
+
+    // Normalize the hotkey string for comparison
+    let normalized = normalize_hotkey_string(hotkey_str);
+
+    for (system_hotkey, description) in system_hotkeys.iter() {
+        let system_normalized = normalize_hotkey_string(system_hotkey);
+        if normalized == system_normalized {
+            return Some(description.clone());
+        }
+    }
+
+    None
+}
+
+/// Normalize a hotkey string for comparison
+/// Converts "Ctrl+Shift+A" to "ctrl+shift+a" for case-insensitive comparison
+fn normalize_hotkey_string(s: &str) -> String {
+    s.to_lowercase()
+        .replace("control", "ctrl")
+        .replace("command", "cmd")
+        .replace("super", "win")
+        .replace("meta", "cmd")
+        .replace(" ", "")
+}
+
+/// Feature #63: Check all configured hotkeys for conflicts
+/// Returns a JSON object with conflict information for each hotkey
+#[tauri::command]
+fn check_hotkey_conflicts(hotkey_config: serde_json::Value) -> Result<serde_json::Value, String> {
+    let mut conflicts = serde_json::Map::new();
+
+    // Get the hotkeys object from config
+    let hotkeys_obj = hotkey_config["hotkeys"].as_object()
+        .ok_or("Invalid hotkeys config: missing 'hotkeys' object")?;
+
+    // Check each hotkey for conflicts
+    for (hotkey_name, hotkey_value) in hotkeys_obj.iter() {
+        if let Some(hotkey_str) = hotkey_value.as_str() {
+            if let Some(conflict_desc) = check_hotkey_conflict(hotkey_str) {
+                conflicts.insert(
+                    hotkey_name.clone(),
+                    serde_json::json!({
+                        "conflict": true,
+                        "hotkey": hotkey_str,
+                        "system_function": conflict_desc,
+                        "severity": "warning"
+                    })
+                );
+            } else {
+                conflicts.insert(
+                    hotkey_name.clone(),
+                    serde_json::json!({
+                        "conflict": false,
+                        "hotkey": hotkey_str
+                    })
+                );
+            }
+        }
+    }
+
+    Ok(serde_json::json!({
+        "has_conflicts": !conflicts.is_empty(),
+        "conflicts": conflicts
+    }))
 }
 
 /// Feature #18: Activate overlay and select a tool via hotkey
@@ -1010,12 +1220,15 @@ fn get_platform_info() -> Result<serde_json::Value, String> {
 pub fn run() {
     // Initialize shared state
     let overlay_state = SharedState::default();
+    // Feature #65: Initialize hotkey registry
+    let hotkey_registry = SharedHotkeyRegistry::default();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .manage(overlay_state)
+        .manage(hotkey_registry)
         .invoke_handler(tauri::generate_handler![
             greet,
             save_settings,
@@ -1040,6 +1253,8 @@ pub fn run() {
             create_shape,
             clear_all_shapes,
             register_hotkeys,
+            unregister_all_hotkeys,
+            check_hotkey_conflicts,
             activate_tool_hotkey,
             dismiss_overlay,
             toggle_overlay,
