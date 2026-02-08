@@ -82,8 +82,8 @@ export default function MiniPanel() {
     loadColors();
   }, []);
 
-  // Feature #46: Line thickness control state
-  const [lineThickness, setLineThickness] = useState(DEFAULT_SETTINGS.lineThickness);
+  // Feature #46: Line thickness control state (single value for all tools - UI simplicity)
+  const [lineThickness, setLineThickness] = useState(DEFAULT_SETTINGS.lineThickness.arrow);
 
   // Feature #47: Font size control state
   const [fontSize, setFontSize] = useState(DEFAULT_SETTINGS.fontSize);
@@ -177,13 +177,18 @@ export default function MiniPanel() {
 
   /**
    * Feature #46: Load line thickness from settings on mount
+   * Feature #106: Use arrow tool thickness as the global setting for backward compatibility
    */
   useEffect(() => {
     const loadLineThickness = async () => {
       try {
         const settings = await loadSettings();
-        setLineThickness(settings.lineThickness);
-        console.log("Line thickness loaded:", settings.lineThickness);
+        // Feature #106: Get arrow tool's thickness as the default thickness value
+        const thickness = typeof settings.lineThickness === 'number'
+          ? settings.lineThickness
+          : settings.lineThickness.arrow;
+        setLineThickness(thickness);
+        console.log("Line thickness loaded:", thickness);
       } catch (error) {
         console.error("Failed to load line thickness:", error);
       }
@@ -468,15 +473,24 @@ export default function MiniPanel() {
 
   /**
    * Feature #46: Handle line thickness change
-   * Updates line thickness and saves to settings
+   * Feature #106: Updates all tools' line thickness uniformly (global control)
    */
   const handleLineThicknessChange = async (value: number) => {
     setLineThickness(value);
 
-    // Save to persistent storage
+    // Save to persistent storage - update all tools' thickness
     try {
-      await saveSettings({ lineThickness: value });
-      console.log(`Line thickness updated to: ${value}`);
+      // Feature #106: Save line thickness for all tools
+      const thicknessObj = {
+        arrow: value,
+        circle: value,
+        box: value,
+        freehand: value,
+        highlighter: value,
+        text: value,
+      };
+      await saveSettings({ lineThickness: thicknessObj as any });
+      console.log(`Line thickness updated for all tools to: ${value}`);
     } catch (error) {
       console.error("Failed to save line thickness:", error);
     }
@@ -569,15 +583,25 @@ export default function MiniPanel() {
 
   /**
    * Feature #85: Handle settings save button click
-   * Provides explicit save with confirmation message
+   * Feature #106: Save per-tool line thickness
    */
   const handleSaveSettings = async () => {
     try {
+      // Feature #106: Create per-tool line thickness object
+      const thicknessObj = {
+        arrow: lineThickness,
+        circle: lineThickness,
+        box: lineThickness,
+        freehand: lineThickness,
+        highlighter: lineThickness,
+        text: lineThickness,
+      };
+
       // Save all current settings to storage
       const settingsToSave = {
         colors: currentColorForTool,
         hotkeys: hotkeys,
-        lineThickness: lineThickness,
+        lineThickness: thicknessObj as any, // Feature #106: Save as object
         fontSize: fontSize,
         fadeDuration: fadeDuration,
       };
@@ -618,11 +642,16 @@ export default function MiniPanel() {
       // Reload settings from storage
       const reloadedSettings = await loadSettings();
 
+      // Feature #106: Get arrow tool thickness for display
+      const thickness = typeof reloadedSettings.lineThickness === 'number'
+        ? reloadedSettings.lineThickness
+        : reloadedSettings.lineThickness.arrow;
+
       // Update all state variables with defaults
       setCurrentColorForTool(reloadedSettings.colors);
       setSelectedColor(reloadedSettings.colors.arrow);
       setHotkeys(reloadedSettings.hotkeys);
-      setLineThickness(reloadedSettings.lineThickness);
+      setLineThickness(thickness); // Feature #106: Use arrow thickness
       setFontSize(reloadedSettings.fontSize);
       setFadeDuration(reloadedSettings.fadeDuration);
 
@@ -678,11 +707,16 @@ export default function MiniPanel() {
           // Import and validate settings
           const imported = await importSettings(file);
 
+          // Feature #106: Get arrow tool thickness for display
+          const thickness = typeof imported.lineThickness === 'number'
+            ? imported.lineThickness
+            : imported.lineThickness.arrow;
+
           // Update all state variables with imported settings
           setCurrentColorForTool(imported.colors);
           setSelectedColor(imported.colors.arrow);
           setHotkeys(imported.hotkeys);
-          setLineThickness(imported.lineThickness);
+          setLineThickness(thickness); // Feature #106: Use arrow thickness
           setFontSize(imported.fontSize);
           setFadeDuration(imported.fadeDuration);
 

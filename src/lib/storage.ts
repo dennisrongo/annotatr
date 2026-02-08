@@ -23,7 +23,15 @@ export interface Settings {
     highlighter: string;
     text: string;
   };
-  lineThickness: number;
+  // Feature #106: Per-tool line thickness settings
+  lineThickness: {
+    arrow: number;
+    circle: number;
+    box: number;
+    freehand: number;
+    highlighter: number;
+    text: number; // Not used for text but included for consistency
+  };
   fontSize: number;
   fadeDuration: number;
 }
@@ -46,7 +54,15 @@ export const DEFAULT_SETTINGS: Settings = {
     highlighter: '#FFFF00',
     text: '#FF0000',
   },
-  lineThickness: 12,
+  // Feature #106: Per-tool line thickness defaults
+  lineThickness: {
+    arrow: 12,
+    circle: 12,
+    box: 12,
+    freehand: 12,
+    highlighter: 12,
+    text: 12, // Not used for text but included for consistency
+  },
   fontSize: 14,
   fadeDuration: 10,
 };
@@ -289,10 +305,17 @@ function validateImportedSettings(imported: unknown): Settings {
     throw new Error('Invalid settings: missing or invalid colors');
   }
 
-  // Validate line thickness
-  if (typeof settings.lineThickness !== 'number' ||
-      settings.lineThickness < 1 || settings.lineThickness > 50) {
-    throw new Error('Invalid settings: lineThickness must be between 1 and 50');
+  // Feature #106: Validate line thickness (per-tool object)
+  if (!settings.lineThickness || typeof settings.lineThickness !== 'object') {
+    throw new Error('Invalid settings: missing or invalid lineThickness');
+  }
+  const thickness = settings.lineThickness as Record<string, unknown>;
+  // Validate each tool's line thickness
+  for (const tool of ['arrow', 'circle', 'box', 'freehand', 'highlighter', 'text']) {
+    if (typeof thickness[tool] !== 'number' ||
+        (thickness[tool] as number) < 1 || (thickness[tool] as number) > 50) {
+      throw new Error(`Invalid settings: lineThickness.${tool} must be between 1 and 50`);
+    }
   }
 
   // Validate font size

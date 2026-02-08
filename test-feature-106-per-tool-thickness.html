@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feature #106: Per-Tool Line Thickness Configuration Test</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #2563eb;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #2563eb;
+            margin-top: 30px;
+        }
+        .test-section {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .checklist {
+            list-style: none;
+            padding: 0;
+        }
+        .checklist li {
+            padding: 10px;
+            margin: 5px 0;
+            background: #f8f9fa;
+            border-radius: 4px;
+            border-left: 4px solid #2563eb;
+        }
+        .checklist li strong {
+            color: #2563eb;
+        }
+        code {
+            background: #f3f4f6;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+        pre {
+            background: #f3f4f6;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 0.85em;
+        }
+        .implementation-note {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .implementation-note h4 {
+            margin-top: 0;
+            color: #856404;
+        }
+        .steps {
+            background: #e7f3ff;
+            border-left: 4px solid #2563eb;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .steps ol {
+            margin: 0;
+            padding-left: 20px;
+        }
+        .steps li {
+            margin: 8px 0;
+        }
+        .thickness-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin: 20px 0;
+        }
+        .thickness-card {
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 12px;
+            background: #fafafa;
+            text-align: center;
+        }
+        .thickness-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2563eb;
+        }
+    </style>
+</head>
+<body>
+    <h1>Feature #106: Per-Tool Line Thickness Configuration Test</h1>
+    <p>Test that each drawing tool can have its own configurable line thickness setting.</p>
+
+    <div class="test-section">
+        <h2>Overview</h2>
+        <p>Feature #106 ensures that each tool (Arrow, Circle, Box, Freehand, Highlighter) can have its own line thickness configured independently. The thickness values are stored in settings and persist across app restarts.</p>
+        <p><strong>Note:</strong> The Mini Panel currently has a single "Line Thickness" slider that updates all tools uniformly for simplicity. Per-tool thickness is stored in the settings structure, allowing for future per-tool thickness UI in the settings modal.</p>
+    </div>
+
+    <div class="test-section">
+        <h2>Default Tool Line Thickness Values</h2>
+        <div class="thickness-grid">
+            <div class="thickness-card">
+                <strong>Arrow</strong>
+                <div class="thickness-value">12px</div>
+            </div>
+            <div class="thickness-card">
+                <strong>Circle</strong>
+                <div class="thickness-value">12px</div>
+            </div>
+            <div class="thickness-card">
+                <strong>Box</strong>
+                <div class="thickness-value">12px</div>
+            </div>
+            <div class="thickness-card">
+                <strong>Freehand</strong>
+                <div class="thickness-value">12px</div>
+            </div>
+            <div class="thickness-card">
+                <strong>Highlighter</strong>
+                <div class="thickness-value">12px</div>
+            </div>
+            <div class="thickness-card">
+                <strong>Text</strong>
+                <div class="thickness-value">12px</div>
+                <small>(not used for text)</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>Verification Checklist</h2>
+        <ul class="checklist">
+            <li><strong>Per-tool thickness storage exists:</strong> Settings object has <code>lineThickness.arrow</code>, <code>lineThickness.circle</code>, etc.</li>
+            <li><strong>Thickness config per tool in settings:</strong> Settings structure supports per-tool thickness values</li>
+            <li><strong>Apply tool-specific thickness:</strong> Overlay component uses <code>getToolLineThickness()</code> to get thickness for current tool</li>
+            <li><strong>Shapes use correct thickness:</strong> Arrow shapes use arrow thickness, circles use circle thickness, etc.</li>
+            <li><strong>Thickness persists across restarts:</strong> Custom thickness values are saved and loaded on app restart</li>
+            <li><strong>Global slider updates all tools:</strong> Mini Panel slider updates all tools' thickness uniformly</li>
+        </ul>
+    </div>
+
+    <div class="test-section">
+        <h2>Test Steps</h2>
+        <div class="steps">
+            <ol>
+                <li>Launch the Annotatr application</li>
+                <li>Open the Mini Panel (should appear automatically)</li>
+                <li>Locate the "Line Thickness" slider (currently shows 12px)</li>
+                <li>Adjust the slider to 20px</li>
+                <li>Select Arrow tool and draw an arrow - verify line thickness is 20px</li>
+                <li>Select Circle tool and draw a circle - verify line thickness is 20px</li>
+                <li>Select Box tool and draw a box - verify line thickness is 20px</li>
+                <li>Select Freehand tool and draw - verify line thickness is 20px</li>
+                <li>Select Highlighter tool and draw - verify line thickness is 20px</li>
+                <li>Restart the application</li>
+                <li>Verify slider still shows 20px</li>
+                <li>Draw with each tool - verify thickness persists</li>
+            </ol>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>Implementation Details</h2>
+
+        <div class="implementation-note">
+            <h4>✓ Storage Layer (src/lib/storage.ts)</h4>
+            <p>Changed <code>lineThickness</code> from a single number to a per-tool object:</p>
+            <pre>
+lineThickness: {
+  arrow: number;
+  circle: number;
+  box: number;
+  freehand: number;
+  highlighter: number;
+  text: number;
+}</pre>
+            <p>All tools default to 12px thickness.</p>
+        </div>
+
+        <div class="implementation-note">
+            <h4>✓ Overlay Component (src/components/Overlay.tsx)</h4>
+            <p>Added <code>getToolLineThickness()</code> function that retrieves the thickness for a specific tool from settings:</p>
+            <pre>
+const getToolLineThickness = useCallback((tool: ToolType | null): number => {
+  if (!tool || !settings) return defaultLineThickness;
+
+  const toolThicknessKey: Record<ToolType, keyof Settings['lineThickness']> = {
+    [ToolType.ARROW]: 'arrow',
+    [ToolType.CIRCLE]: 'circle',
+    [ToolType.BOX]: 'box',
+    [ToolType.FREEHAND]: 'freehand',
+    [ToolType.HIGHLIGHTER]: 'highlighter',
+    [ToolType.TEXT]: 'text',
+  };
+
+  const thicknessKey = toolThicknessKey[tool];
+  return settings.lineThickness[thicknessKey] || defaultLineThickness;
+}, [settings, defaultLineThickness]);</pre>
+            <p>All shape creation functions now use <code>getToolLineThickness()</code> instead of the hardcoded <code>defaultLineThickness</code> variable.</p>
+        </div>
+
+        <div class="implementation-note">
+            <h4>✓ Mini Panel UI (src/components/MiniPanel.tsx)</h4>
+            <p>The line thickness slider now updates all tools uniformly for simplicity:</p>
+            <ul>
+                <li>Slider changes update <code>settings.lineThickness</code> object with same value for all tools</li>
+                <li>Loading settings uses <code>lineThickness.arrow</code> as the display value</li>
+                <li>This maintains backward compatibility while enabling future per-tool UI</li>
+            </ul>
+        </div>
+
+        <div class="implementation-note">
+            <h4>✓ Settings Validation (src/lib/storage.ts)</h4>
+            <p>Updated validation to check per-tool thickness values:</p>
+            <pre>
+// Validate each tool's line thickness
+for (const tool of ['arrow', 'circle', 'box', 'freehand', 'highlighter', 'text']) {
+  if (typeof thickness[tool] !== 'number' ||
+      (thickness[tool] as number) < 1 || (thickness[tool] as number) > 50) {
+    throw new Error(`Invalid settings: lineThickness.${tool} must be between 1 and 50`);
+  }
+}</pre>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>Architecture Decision</h2>
+        <p><strong>Why this approach is correct:</strong></p>
+        <ul>
+            <li>✅ <strong>Extensibility:</strong> Per-tool thickness structure allows future per-tool UI in settings</li>
+            <li>✅ <strong>Backward compatibility:</strong> Single slider updates all tools uniformly (existing UX)</li>
+            <li>✅ <strong>Type safety:</strong> TypeScript ensures all tool thickness values are properly typed</li>
+            <li>✅ <strong>Validation:</strong> Each tool's thickness is validated individually (1-50px range)</li>
+            <li>✅ <strong>Consistency:</strong> Mirrors the per-tool color structure from Feature #105</li>
+        </ul>
+    </div>
+
+    <div class="test-section">
+        <h2>Future Enhancements</h2>
+        <p>The per-tool thickness structure enables these future features:</p>
+        <ul>
+            <li><strong>Per-tool thickness UI in settings:</strong> Add individual sliders/inputs for each tool</li>
+            <li><strong>Tool-specific presets:</strong> Pre-configured thickness profiles (e.g., "Fine", "Medium", "Bold")</li>
+            <li><strong>Visual thickness indicators:</strong> Show current thickness value when a tool is selected</li>
+        </ul>
+    </div>
+
+    <div class="test-section">
+        <h2>Expected Results</h2>
+        <p>When Feature #106 is fully working:</p>
+        <ul>
+            <li>✅ Each tool's thickness can be independently configured in storage</li>
+            <li>✅ Shapes drawn with a tool use that tool's configured thickness</li>
+            <li>✅ Global slider updates all tools' thickness uniformly</li>
+            <li>✅ Custom thickness values persist across application restarts</li>
+            <li>✅ Settings export/import includes per-tool thickness values</li>
+            <li>✅ Reset to defaults restores all tool thickness to 12px</li>
+        </ul>
+    </div>
+</body>
+</html>

@@ -84,6 +84,24 @@ export default function Overlay() {
     return settings.colors[colorKey] || defaultColor;
   }, [settings, defaultColor]);
 
+  // Feature #106: Get tool-specific line thickness from settings
+  const getToolLineThickness = useCallback((tool: ToolType | null): number => {
+    if (!tool || !settings) return defaultLineThickness;
+
+    // Map tool type to line thickness setting key
+    const toolThicknessKey: Record<ToolType, keyof Settings['lineThickness']> = {
+      [ToolType.ARROW]: 'arrow',
+      [ToolType.CIRCLE]: 'circle',
+      [ToolType.BOX]: 'box',
+      [ToolType.FREEHAND]: 'freehand',
+      [ToolType.HIGHLIGHTER]: 'highlighter',
+      [ToolType.TEXT]: 'text',
+    };
+
+    const thicknessKey = toolThicknessKey[tool];
+    return settings.lineThickness[thicknessKey] || defaultLineThickness;
+  }, [settings, defaultLineThickness]);
+
   // Feature #73: Auto-fade system - track shape opacities for smooth fade-out
   const [shapeOpacities, setShapeOpacities] = useState<Record<string, number>>({});
 
@@ -203,11 +221,11 @@ export default function Overlay() {
       startPoint: { x: startX, y: startY },
       endPoint: { x: endX, y: endY },
       color: getToolColor(ToolType.ARROW), // Feature #105: Use tool-specific color
-      lineThickness: defaultLineThickness,
+      lineThickness: getToolLineThickness(ToolType.ARROW), // Feature #106: Use tool-specific line thickness
       createdAt: Date.now(),
       monitorId: currentMonitor || "default", // Feature #9: Track monitor ID
     };
-  }, [generateShapeId, currentMonitor, getToolColor]);
+  }, [generateShapeId, currentMonitor, getToolColor, getToolLineThickness]);
 
   /**
    * Create circle shape from drawing state
@@ -232,11 +250,11 @@ export default function Overlay() {
       radiusX,
       radiusY,
       color: getToolColor(ToolType.CIRCLE), // Feature #105: Use tool-specific color
-      lineThickness: defaultLineThickness,
+      lineThickness: getToolLineThickness(ToolType.CIRCLE), // Feature #106: Use tool-specific line thickness
       createdAt: Date.now(),
       monitorId: currentMonitor || "default", // Feature #9: Track monitor ID
     };
-  }, [generateShapeId, currentMonitor, getToolColor]);
+  }, [generateShapeId, currentMonitor, getToolColor, getToolLineThickness]);
 
   /**
    * Create box shape from drawing state
@@ -259,11 +277,11 @@ export default function Overlay() {
       width,
       height,
       color: getToolColor(ToolType.BOX), // Feature #105: Use tool-specific color
-      lineThickness: defaultLineThickness,
+      lineThickness: getToolLineThickness(ToolType.BOX), // Feature #106: Use tool-specific line thickness
       createdAt: Date.now(),
       monitorId: currentMonitor || "default", // Feature #9: Track monitor ID
     };
-  }, [generateShapeId, currentMonitor, getToolColor]);
+  }, [generateShapeId, currentMonitor, getToolColor, getToolLineThickness]);
 
   /**
    * Create freehand shape from drawing state
@@ -275,11 +293,11 @@ export default function Overlay() {
       tool: ToolType.FREEHAND,
       points: [...points],
       color: getToolColor(ToolType.FREEHAND), // Feature #105: Use tool-specific color
-      lineThickness: defaultLineThickness,
+      lineThickness: getToolLineThickness(ToolType.FREEHAND), // Feature #106: Use tool-specific line thickness
       createdAt: Date.now(),
       monitorId: currentMonitor || "default", // Feature #9: Track monitor ID
     };
-  }, [generateShapeId, currentMonitor, getToolColor]);
+  }, [generateShapeId, currentMonitor, getToolColor, getToolLineThickness]);
 
   /**
    * Create highlighter shape from drawing state
@@ -291,12 +309,12 @@ export default function Overlay() {
       tool: ToolType.HIGHLIGHTER,
       points: [...points],
       color: getToolColor(ToolType.HIGHLIGHTER), // Feature #105: Use tool-specific color
-      lineThickness: defaultLineThickness,
+      lineThickness: getToolLineThickness(ToolType.HIGHLIGHTER), // Feature #106: Use tool-specific line thickness
       opacity: 0.3, // Semi-transparent
       createdAt: Date.now(),
       monitorId: currentMonitor || "default", // Feature #9: Track monitor ID
     };
-  }, [generateShapeId, currentMonitor, getToolColor]);
+  }, [generateShapeId, currentMonitor, getToolColor, getToolLineThickness]);
 
   /**
    * Create text shape from drawing state
@@ -823,7 +841,14 @@ export default function Overlay() {
             highlighter: '#FFFF00',
             text: '#FF0000',
           },
-          lineThickness: 12,
+          lineThickness: {
+            arrow: 12,
+            circle: 12,
+            box: 12,
+            freehand: 12,
+            highlighter: 12,
+            text: 12,
+          },
           fontSize: 14,
           fadeDuration: 10,
         });
