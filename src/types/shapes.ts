@@ -11,6 +11,15 @@ export enum ToolType {
   TEXT = "text",
 }
 
+/**
+ * Feature #131: Arrow head styles
+ */
+export enum ArrowHeadStyle {
+  FILLED = "filled",     // Solid filled triangle
+  OPEN = "open",         // Open triangle (outline only)
+  DOUBLE_HEADED = "double", // Arrow heads on both ends
+}
+
 export interface Point {
   x: number;
   y: number;
@@ -30,6 +39,7 @@ export interface ArrowShape extends BaseShape {
   tool: ToolType.ARROW;
   startPoint: Point;
   endPoint: Point;
+  arrowHeadStyle?: ArrowHeadStyle; // Feature #131: Arrow head style customization
 }
 
 export interface CircleShape extends BaseShape {

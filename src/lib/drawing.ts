@@ -2,16 +2,73 @@
  * Drawing utilities for rendering shapes on canvas
  */
 
-import { Shape, ArrowShape, CircleShape, BoxShape, FreehandShape, HighlighterShape, TextShape } from "../types/shapes";
+import { Shape, ArrowShape, CircleShape, BoxShape, FreehandShape, HighlighterShape, TextShape, ArrowHeadStyle } from "../types/shapes";
+
+/**
+ * Draw an arrow head at the specified position
+ * @param ctx - Canvas rendering context
+ * @param x - X coordinate of arrow head tip
+ * @param y - Y coordinate of arrow head tip
+ * @param angle - Angle of arrow shaft (in radians)
+ * @param headLength - Length of arrow head
+ * @param color - Color of arrow head
+ * @param style - Arrow head style (filled, open, or double-headed)
+ * @param isStart - If true, draw head at start (for double-headed arrows)
+ */
+function drawArrowHead(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  angle: number,
+  headLength: number,
+  color: string,
+  style: ArrowHeadStyle,
+  isStart: boolean = false
+): void {
+  // Calculate angle offset for start vs end
+  const angleOffset = isStart ? Math.PI : 0;
+  const finalAngle = angle + angleOffset;
+
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = 2;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  // Calculate arrow head points
+  const leftX = x - headLength * Math.cos(finalAngle - Math.PI / 6);
+  const leftY = y - headLength * Math.sin(finalAngle - Math.PI / 6);
+  const rightX = x - headLength * Math.cos(finalAngle + Math.PI / 6);
+  const rightY = y - headLength * Math.sin(finalAngle + Math.PI / 6);
+
+  if (style === ArrowHeadStyle.OPEN) {
+    // Open arrow head (outline only)
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(leftX, leftY);
+    ctx.moveTo(x, y);
+    ctx.lineTo(rightX, rightY);
+    ctx.stroke();
+  } else {
+    // Filled arrow head (default and double-headed)
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(leftX, leftY);
+    ctx.lineTo(rightX, rightY);
+    ctx.closePath();
+    ctx.fill();
+  }
+}
 
 /**
  * Draw an arrow shape on the canvas
+ * Feature #131: Supports different arrow head styles
  */
 export function drawArrow(
   ctx: CanvasRenderingContext2D,
   shape: ArrowShape
 ): void {
-  const { startPoint, endPoint, color, lineThickness } = shape;
+  const { startPoint, endPoint, color, lineThickness, arrowHeadStyle = ArrowHeadStyle.FILLED } = shape;
 
   ctx.strokeStyle = color;
   ctx.fillStyle = color;
@@ -29,19 +86,18 @@ export function drawArrow(
   ctx.lineTo(endPoint.x, endPoint.y);
   ctx.stroke();
 
-  // Draw the arrow head
-  ctx.beginPath();
-  ctx.moveTo(endPoint.x, endPoint.y);
-  ctx.lineTo(
-    endPoint.x - headLength * Math.cos(angle - Math.PI / 6),
-    endPoint.y - headLength * Math.sin(angle - Math.PI / 6)
-  );
-  ctx.lineTo(
-    endPoint.x - headLength * Math.cos(angle + Math.PI / 6),
-    endPoint.y - headLength * Math.sin(angle + Math.PI / 6)
-  );
-  ctx.closePath();
-  ctx.fill();
+  // Draw arrow head(s) based on style
+  if (arrowHeadStyle === ArrowHeadStyle.DOUBLE_HEADED) {
+    // Draw arrow heads at both ends
+    drawArrowHead(ctx, endPoint.x, endPoint.y, angle, headLength, color, ArrowHeadStyle.FILLED, false);
+    drawArrowHead(ctx, startPoint.x, startPoint.y, angle, headLength, color, ArrowHeadStyle.FILLED, true);
+  } else if (arrowHeadStyle === ArrowHeadStyle.OPEN) {
+    // Draw open arrow head at end
+    drawArrowHead(ctx, endPoint.x, endPoint.y, angle, headLength, color, ArrowHeadStyle.OPEN, false);
+  } else {
+    // Draw filled arrow head at end (default)
+    drawArrowHead(ctx, endPoint.x, endPoint.y, angle, headLength, color, ArrowHeadStyle.FILLED, false);
+  }
 }
 
 /**

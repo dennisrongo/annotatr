@@ -4,6 +4,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import { ArrowHeadStyle } from '../types/shapes';
 
 export interface Settings {
   hotkeys: {
@@ -38,6 +39,8 @@ export interface Settings {
   panelTransparency: number;
   // Feature #133: Panel collapsed state (true = show only tool icons, false = show full panel)
   panelCollapsed: boolean;
+  // Feature #131: Arrow head style customization
+  arrowHeadStyle: ArrowHeadStyle;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -73,6 +76,8 @@ export const DEFAULT_SETTINGS: Settings = {
   panelTransparency: 0.95,
   // Feature #133: Panel collapsed default (false = show full panel)
   panelCollapsed: false,
+  // Feature #131: Arrow head style default (filled triangle)
+  arrowHeadStyle: ArrowHeadStyle.FILLED,
 };
 
 /**
