@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { emit } from "@tauri-apps/api/event";
-import { ToolType } from "../types/shapes";
+import { ToolType, ArrowHeadStyle } from "../types/shapes";
 import { loadSettings, saveSettings, DEFAULT_SETTINGS, exportSettings, importSettings } from "../lib/storage";
 
 /**
@@ -98,6 +98,9 @@ export default function MiniPanel() {
 
   // Feature #126: Panel transparency control state
   const [panelTransparency, setPanelTransparency] = useState(DEFAULT_SETTINGS.panelTransparency);
+
+  // Feature #131: Arrow head style control state
+  const [arrowHeadStyle, setArrowHeadStyle] = useState<ArrowHeadStyle>(DEFAULT_SETTINGS.arrowHeadStyle);
 
   // Feature #133: Panel collapsed state
   const [panelCollapsed, setPanelCollapsed] = useState(DEFAULT_SETTINGS.panelCollapsed);
@@ -269,6 +272,22 @@ export default function MiniPanel() {
       }
     };
     loadPanelCollapsed();
+  }, []);
+
+  /**
+   * Feature #131: Load arrow head style from settings on mount
+   */
+  useEffect(() => {
+    const loadArrowHeadStyle = async () => {
+      try {
+        const settings = await loadSettings();
+        setArrowHeadStyle(settings.arrowHeadStyle);
+        console.log("Arrow head style loaded:", settings.arrowHeadStyle);
+      } catch (error) {
+        console.error("Failed to load arrow head style:", error);
+      }
+    };
+    loadArrowHeadStyle();
   }, []);
 
   /**
@@ -1991,6 +2010,7 @@ export default function MiniPanel() {
                   <li><strong>Line Thickness:</strong> {lineThickness}px</li>
                   <li><strong>Fade Duration:</strong> {fadeDuration} seconds</li>
                   <li><strong>Panel Transparency:</strong> {Math.round(panelTransparency * 100)}%</li>
+                  <li><strong>Arrow Head Style:</strong> {arrowHeadStyle}</li>
                   <li><strong>Colors:</strong> Configured per tool</li>
                 </ul>
               </div>
@@ -2336,6 +2356,74 @@ export default function MiniPanel() {
                   }}
                 >
                   💡 Click a preset color or the rainbow button to choose custom colors for each tool.
+                </p>
+              </div>
+
+              {/* Feature #131: Arrow head style customization */}
+              <div
+                style={{
+                  backgroundColor: "#f8f9fa",
+                  padding: "12px",
+                  borderRadius: "4px",
+                  marginTop: "15px",
+                }}
+              >
+                <h3
+                  style={{
+                    fontSize: "14px",
+                    margin: "0 0 10px 0",
+                    color: "#333",
+                  }}
+                >
+                  Arrow Head Style
+                </h3>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "8px",
+                  }}
+                >
+                  {Object.values(ArrowHeadStyle).map((style) => (
+                    <label
+                      key={style}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                        fontSize: "13px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="arrowHeadStyle"
+                        value={style}
+                        checked={arrowHeadStyle === style}
+                        onChange={() => {
+                          setArrowHeadStyle(style);
+                          saveSettings({ arrowHeadStyle: style });
+                          console.log("[Feature #131] Arrow head style changed to:", style);
+                        }}
+                        style={{ cursor: "pointer" }}
+                      />
+                      <span>
+                        {style === ArrowHeadStyle.FILLED && "Filled (solid triangle)"}
+                        {style === ArrowHeadStyle.OPEN && "Open (outline only)"}
+                        {style === ArrowHeadStyle.DOUBLE_HEADED && "Double-headed (both ends)"}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                <p
+                  style={{
+                    fontSize: "11px",
+                    margin: "10px 0 0 0",
+                    color: "#6b7280",
+                    fontStyle: "italic",
+                  }}
+                >
+                  💡 Choose how arrow heads appear. Filled is the default style.
                 </p>
               </div>
 
