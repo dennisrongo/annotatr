@@ -27,6 +27,14 @@ const PRESET_COLORS = [
   "#808080", // Gray
 ];
 
+// Feature #134: Settings tabs definition
+const SETTINGS_TABS = [
+  { id: "general", label: "General", icon: "⚙️" },
+  { id: "shortcuts", label: "Shortcuts", icon: "⌨️" },
+  { id: "colors", label: "Colors", icon: "🎨" },
+  { id: "advanced", label: "Advanced", icon: "🔧" },
+];
+
 // Feature #50: Monitor info interface
 interface Monitor {
   id: string;
@@ -1974,6 +1982,51 @@ export default function MiniPanel() {
               </button>
             </div>
 
+            {/* Feature #134: Settings tabs navigation */}
+            <div
+              style={{
+                display: "flex",
+                gap: "4px",
+                borderBottom: "2px solid #e5e7eb",
+                marginBottom: "20px",
+              }}
+            >
+              {SETTINGS_TABS.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveSettingsTab(tab.id)}
+                  style={{
+                    padding: "10px 16px",
+                    backgroundColor: activeSettingsTab === tab.id ? "#3b82f6" : "transparent",
+                    color: activeSettingsTab === tab.id ? "white" : "#6b7280",
+                    border: "none",
+                    borderRadius: activeSettingsTab === tab.id ? "6px 6px 0 0" : "6px",
+                    cursor: "pointer",
+                    fontSize: "13px",
+                    fontWeight: activeSettingsTab === tab.id ? "600" : "400",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    transition: "all 0.2s",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (activeSettingsTab !== tab.id) {
+                      e.currentTarget.style.backgroundColor = "#f3f4f6";
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (activeSettingsTab !== tab.id) {
+                      e.currentTarget.style.backgroundColor = "transparent";
+                    }
+                  }}
+                >
+                  <span>{tab.icon}</span>
+                  <span>{tab.label}</span>
+                </button>
+              ))}
+            </div>
+
             <div
               style={{
                 fontSize: "14px",
@@ -1985,40 +2038,48 @@ export default function MiniPanel() {
                 Configure your Annotatr preferences. Changes are saved automatically.
               </p>
 
-              <div
-                style={{
-                  backgroundColor: "#f8f9fa",
-                  padding: "12px",
-                  borderRadius: "4px",
-                  marginTop: "15px",
-                }}
-              >
-                <h3
-                  style={{
-                    fontSize: "14px",
-                    margin: "0 0 10px 0",
-                    color: "#333",
-                  }}
-                >
-                  Current Settings
-                </h3>
-                <ul
-                  style={{
-                    margin: 0,
-                    paddingLeft: "20px",
-                    fontSize: "13px",
-                  }}
-                >
-                  <li><strong>Font Size:</strong> {fontSize}pt</li>
-                  <li><strong>Line Thickness:</strong> {lineThickness}px</li>
-                  <li><strong>Fade Duration:</strong> {fadeDuration} seconds</li>
-                  <li><strong>Panel Transparency:</strong> {Math.round(panelTransparency * 100)}%</li>
-                  <li><strong>Arrow Head Style:</strong> {arrowHeadStyle}</li>
-                  <li><strong>Colors:</strong> Configured per tool</li>
-                </ul>
-              </div>
+              {/* Feature #134: General Tab Content */}
+              {activeSettingsTab === "general" && (
+                <>
+                  <div
+                    style={{
+                      backgroundColor: "#f8f9fa",
+                      padding: "12px",
+                      borderRadius: "4px",
+                      marginTop: "15px",
+                    }}
+                  >
+                    <h3
+                      style={{
+                        fontSize: "14px",
+                        margin: "0 0 10px 0",
+                        color: "#333",
+                      }}
+                    >
+                      Current Settings
+                    </h3>
+                    <ul
+                      style={{
+                        margin: 0,
+                        paddingLeft: "20px",
+                        fontSize: "13px",
+                      }}
+                    >
+                      <li><strong>Font Size:</strong> {fontSize}pt</li>
+                      <li><strong>Line Thickness:</strong> {lineThickness}px</li>
+                      <li><strong>Fade Duration:</strong> {fadeDuration} seconds</li>
+                      <li><strong>Panel Transparency:</strong> {Math.round(panelTransparency * 100)}%</li>
+                      <li><strong>Arrow Head Style:</strong> {arrowHeadStyle}</li>
+                      <li><strong>Colors:</strong> Configured per tool</li>
+                    </ul>
+                  </div>
+                </>
+              )}
 
-              {/* Feature #63: Hotkey conflict warnings */}
+              {/* Feature #134: Shortcuts Tab Content */}
+              {activeSettingsTab === "shortcuts" && (
+                <>
+                  {/* Feature #63: Hotkey conflict warnings */}
               {Object.keys(hotkeyConflicts).length > 0 && (
                 <div
                   style={{
@@ -2235,8 +2296,13 @@ export default function MiniPanel() {
                   💡 Click "Edit" then press your desired key combination to change a hotkey.
                 </p>
               </div>
+                </>
+              )}
 
-              {/* Feature #81: Color picker for default tool colors */}
+              {/* Feature #134: Colors Tab Content */}
+              {activeSettingsTab === "colors" && (
+                <>
+                  {/* Feature #81: Color picker for default tool colors */}
               <div
                 style={{
                   backgroundColor: "#f8f9fa",
@@ -2361,8 +2427,13 @@ export default function MiniPanel() {
                   💡 Click a preset color or the rainbow button to choose custom colors for each tool.
                 </p>
               </div>
+                </>
+              )}
 
-              {/* Feature #131: Arrow head style customization */}
+              {/* Feature #134: Advanced Tab Content */}
+              {activeSettingsTab === "advanced" && (
+                <>
+                  {/* Feature #131: Arrow head style customization */}
               <div
                 style={{
                   backgroundColor: "#f8f9fa",
@@ -2429,7 +2500,10 @@ export default function MiniPanel() {
                   💡 Choose how arrow heads appear. Filled is the default style.
                 </p>
               </div>
+                </>
+              )}
 
+              {/* Feature #134: Tip section - show on all tabs */}
               <div
                 style={{
                   marginTop: "15px",
