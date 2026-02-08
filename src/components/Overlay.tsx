@@ -372,8 +372,8 @@ export default function Overlay() {
           shapeCenterY = (shape.startPoint.y + shape.endPoint.y) / 2;
           break;
         case ToolType.CIRCLE:
-          shapeCenterX = shape.centerPoint.x;
-          shapeCenterY = shape.centerPoint.y;
+          shapeCenterX = shape.center.x;
+          shapeCenterY = shape.center.y;
           break;
         case ToolType.BOX:
           shapeCenterX = (shape.startPoint.x + shape.endPoint.x) / 2;
@@ -1584,12 +1584,12 @@ export default function Overlay() {
             // Feature #30: Use font size from settings
             fontSize: settings ? `${Math.round(settings.fontSize * 1.7)}px` : "24px",
             padding: "4px 8px",
-            // Feature #31: Use text color from settings for border
+            // Feature #31: Use text color from settings for border and text
             border: `2px solid ${settings?.colors.text || "#FF0000"}`,
             borderRadius: "4px",
             outline: "none",
             backgroundColor: "rgba(255, 255, 255, 0.9)",
-            color: "#000000",
+            color: settings?.colors.text || "#FF0000",
             minWidth: "200px",
             minHeight: "60px",
             zIndex: 10000,
