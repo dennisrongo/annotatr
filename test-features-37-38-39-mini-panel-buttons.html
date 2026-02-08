@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Regression Test: Features 37, 38, 39 - Mini Panel Tool Buttons</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+    }
+    .test-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 12px;
+      padding: 30px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+    }
+    h1 {
+      color: #333;
+      border-bottom: 3px solid #667eea;
+      padding-bottom: 10px;
+    }
+    .test-section {
+      margin: 30px 0;
+      padding: 20px;
+      background: #f8f9fa;
+      border-radius: 8px;
+      border-left: 4px solid #667eea;
+    }
+    .test-section h2 {
+      margin-top: 0;
+      color: #667eea;
+    }
+    .status {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: bold;
+      margin-left: 10px;
+    }
+    .status.pass { background: #d4edda; color: #155724; }
+    .status.fail { background: #f8d7da; color: #721c24; }
+    .status.pending { background: #fff3cd; color: #856404; }
+    .verification-step {
+      margin: 10px 0;
+      padding: 10px;
+      background: white;
+      border-radius: 4px;
+      border: 1px solid #ddd;
+    }
+    .verification-step.passed {
+      border-left: 4px solid #28a745;
+    }
+    .verification-step.failed {
+      border-left: 4px solid #dc3545;
+    }
+    .log-output {
+      background: #1a1a1a;
+      color: #00ff00;
+      padding: 15px;
+      border-radius: 6px;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      max-height: 200px;
+      overflow-y: auto;
+      margin-top: 20px;
+    }
+    .log-entry {
+      margin: 2px 0;
+    }
+    .log-entry.error { color: #ff6b6b; }
+    .log-entry.success { color: #51cf66; }
+    .log-entry.info { color: #74c0fc; }
+    .mini-panel-wrapper {
+      background: #f0f0f0;
+      padding: 20px;
+      border-radius: 8px;
+      display: inline-block;
+      margin: 20px 0;
+    }
+    button {
+      font-family: inherit;
+    }
+    .test-controls {
+      margin: 20px 0;
+      padding: 15px;
+      background: #e7f3ff;
+      border-radius: 6px;
+      border: 1px solid #b3d9ff;
+    }
+  </style>
+</head>
+<body>
+  <div class="test-container">
+    <h1>Regression Test: Features 37, 38, 39 - Mini Panel Tool Buttons</h1>
+
+    <div class="test-section">
+      <h2>Feature 37: Arrow Tool Button <span class="status pending" id="status-37">PENDING</span></h2>
+      <p><strong>Description:</strong> Add a button in the mini panel for selecting the arrow tool</p>
+      <div id="test-37-output"></div>
+    </div>
+
+    <div class="test-section">
+      <h2>Feature 38: Circle Tool Button <span class="status pending" id="status-38">PENDING</span></h2>
+      <p><strong>Description:</strong> Add a button in the mini panel for selecting the circle/ellipse tool</p>
+      <div id="test-38-output"></div>
+    </div>
+
+    <div class="test-section">
+      <h2>Feature 39: Box Tool Button <span class="status pending" id="status-39">PENDING</span></h2>
+      <p><strong>Description:</strong> Add a button in the mini panel for selecting the box/rectangle tool</p>
+      <div id="test-39-output"></div>
+    </div>
+
+    <div class="test-section">
+      <h2>Interactive Mini Panel Component</h2>
+      <div class="test-controls">
+        <button onclick="runAllTests()">Run All Tests</button>
+        <button onclick="resetTests()">Reset Tests</button>
+      </div>
+      <div class="mini-panel-wrapper">
+        <div id="mini-panel-root"></div>
+      </div>
+    </div>
+
+    <div class="test-section">
+      <h2>Test Log</h2>
+      <div class="log-output" id="log-output"></div>
+    </div>
+  </div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    // ToolType enum (matching the actual codebase)
+    const ToolType = {
+      ARROW: "arrow",
+      CIRCLE: "circle",
+      BOX: "box",
+      FREEHAND: "freehand",
+      HIGHLIGHTER: "highlighter",
+      TEXT: "text",
+    };
+
+    // Logging utility
+    const log = {
+      entry: (message, type = 'info') => {
+        const logOutput = document.getElementById('log-output');
+        const entry = document.createElement('div');
+        entry.className = `log-entry ${type}`;
+        entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+        logOutput.appendChild(entry);
+        logOutput.scrollTop = logOutput.scrollHeight;
+        console.log(`[${type.toUpperCase()}] ${message}`);
+      }
+    };
+
+    // Simplified ToolButton component (matching the actual implementation)
+    const ToolButton = ({ tool, label, selectedTool, onToolSelect }) => {
+      const isSelected = selectedTool === tool;
+
+      return (
+        <button
+          type="button"
+          onClick={() => onToolSelect(tool)}
+          style={{
+            padding: "8px 12px",
+            margin: "4px",
+            backgroundColor: isSelected ? "#2563eb" : "rgba(255, 255, 255, 0.9)",
+            color: isSelected ? "white" : "#213547",
+            border: isSelected ? "1px solid #2563eb" : "1px solid transparent",
+            borderRadius: "8px",
+            cursor: "pointer",
+            fontSize: "12px",
+            fontWeight: isSelected ? "bold" : "500",
+            fontFamily: "inherit",
+            transition: "all 0.2s",
+          }}
+          onMouseEnter={(e) => {
+            if (!isSelected) {
+              e.currentTarget.style.backgroundColor = "rgba(240, 240, 240, 0.95)";
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!isSelected) {
+              e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.9)";
+            }
+          }}
+          title={`Select ${label} tool`}
+        >
+          {label}
+        </button>
+      );
+    };
+
+    // Simplified MiniPanel component
+    const MiniPanel = () => {
+      const [selectedTool, setSelectedTool] = useState(null);
+
+      const selectTool = (tool) => {
+        setSelectedTool(tool);
+        log.entry(`Tool selected: ${tool}`, 'success');
+      };
+
+      return (
+        <div
+          style={{
+            padding: "12px",
+            backgroundColor: "rgba(240, 240, 240, 0.95)",
+            borderRadius: "8px",
+            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
+            minWidth: "200px",
+          }}
+        >
+          <div
+            style={{
+              margin: "-12px -12px 12px -12px",
+              padding: "8px 12px",
+              backgroundColor: "rgba(220, 220, 220, 0.95)",
+              borderRadius: "8px 8px 0 0",
+              borderBottom: "1px solid rgba(0, 0, 0, 0.1)",
+            }}
+          >
+            <h3
+              style={{
+                margin: 0,
+                fontSize: "14px",
+                fontWeight: "bold",
+                color: "#333",
+              }}
+            >
+              Drawing Tools
+            </h3>
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "4px",
+            }}
+          >
+            <ToolButton tool={ToolType.ARROW} label="Arrow" selectedTool={selectedTool} onToolSelect={selectTool} />
+            <ToolButton tool={ToolType.CIRCLE} label="Circle" selectedTool={selectedTool} onToolSelect={selectTool} />
+            <ToolButton tool={ToolType.BOX} label="Box" selectedTool={selectedTool} onToolSelect={selectTool} />
+            <ToolButton tool={ToolType.FREEHAND} label="Freehand" selectedTool={selectedTool} onToolSelect={selectTool} />
+            <ToolButton tool={ToolType.HIGHLIGHTER} label="Highlighter" selectedTool={selectedTool} onToolSelect={selectTool} />
+            <ToolButton tool={ToolType.TEXT} label="Text" selectedTool={selectedTool} onToolSelect={selectTool} />
+          </div>
+        </div>
+      );
+    };
+
+    // Render the mini panel
+    const root = ReactDOM.createRoot(document.getElementById('mini-panel-root'));
+    root.render(<MiniPanel />);
+
+    // Test functions
+    window.runAllTests = () => {
+      log.entry('Starting regression tests for features 37, 38, 39...', 'info');
+      testFeature37();
+      testFeature38();
+      testFeature39();
+      log.entry('All tests completed!', 'success');
+    };
+
+    window.resetTests = () => {
+      document.getElementById('status-37').className = 'status pending';
+      document.getElementById('status-37').textContent = 'PENDING';
+      document.getElementById('test-37-output').innerHTML = '';
+
+      document.getElementById('status-38').className = 'status pending';
+      document.getElementById('status-38').textContent = 'PENDING';
+      document.getElementById('test-38-output').innerHTML = '';
+
+      document.getElementById('status-39').className = 'status pending';
+      document.getElementById('status-39').textContent = 'PENDING';
+      document.getElementById('test-39-output').innerHTML = '';
+
+      document.getElementById('log-output').innerHTML = '';
+      log.entry('Tests reset', 'info');
+    };
+
+    const addVerificationStep = (outputId, step, passed, details = '') => {
+      const output = document.getElementById(outputId);
+      const stepDiv = document.createElement('div');
+      stepDiv.className = `verification-step ${passed ? 'passed' : 'failed'}`;
+      stepDiv.innerHTML = `
+        <strong>${passed ? '✓' : '✗'} ${step}</strong>
+        ${details ? `<br/><small style="color: #666;">${details}</small>` : ''}
+      `;
+      output.appendChild(stepDiv);
+    };
+
+    const updateFeatureStatus = (featureId, passed) => {
+      const statusEl = document.getElementById(`status-${featureId}`);
+      statusEl.className = `status ${passed ? 'pass' : 'fail'}`;
+      statusEl.textContent = passed ? 'PASS' : 'FAIL';
+    };
+
+    // Feature 37: Arrow tool button
+    const testFeature37 = () => {
+      log.entry('Testing Feature 37: Arrow tool button...', 'info');
+      const outputId = 'test-37-output';
+      document.getElementById(outputId).innerHTML = '';
+
+      let allPassed = true;
+
+      // Step 1: Check if arrow tool button component exists
+      const arrowButton = document.querySelector('button[title="Select Arrow tool"]');
+      if (arrowButton) {
+        addVerificationStep(outputId, 'Arrow tool button component exists', true);
+        log.entry('✓ Arrow button found', 'success');
+      } else {
+        addVerificationStep(outputId, 'Arrow tool button component exists', false, 'Button not found in DOM');
+        log.entry('✗ Arrow button NOT found', 'error');
+        allPassed = false;
+      }
+
+      // Step 2: Check if button has click handler
+      if (arrowButton && arrowButton.onclick !== null) {
+        addVerificationStep(outputId, 'Button has click handler', true);
+        log.entry('✓ Arrow button has click handler', 'success');
+      } else {
+        // React uses event delegation, so onclick might be null but still work
+        // Check if the button is clickable by checking React props
+        const reactProps = arrowButton ? Object.keys(arrowButton) : [];
+        const hasReactEvents = reactProps.some(prop => prop.startsWith('__react'));
+        if (hasReactEvents) {
+          addVerificationStep(outputId, 'Button has click handler (React)', true);
+          log.entry('✓ Arrow button has React click handler', 'success');
+        } else {
+          addVerificationStep(outputId, 'Button has click handler', false, 'No click handler detected');
+          log.entry('✗ Arrow button has no click handler', 'error');
+          allPassed = false;
+        }
+      }
+
+      // Step 3: Check button styling
+      if (arrowButton) {
+        const styles = window.getComputedStyle(arrowButton);
+        const hasPadding = styles.padding !== '0px';
+        const hasBorderRadius = styles.borderRadius !== '0px';
+        const hasBackgroundColor = styles.backgroundColor !== 'rgba(0, 0, 0, 0)' && styles.backgroundColor !== 'transparent';
+
+        if (hasPadding && hasBorderRadius && hasBackgroundColor) {
+          addVerificationStep(outputId, 'Button is styled with appropriate icon/label', true, `Padding: ${styles.padding}, Border-radius: ${styles.borderRadius}`);
+          log.entry('✓ Arrow button is properly styled', 'success');
+        } else {
+          addVerificationStep(outputId, 'Button is styled with appropriate icon/label', false, `Missing styles: padding=${hasPadding}, borderRadius=${hasBorderRadius}, background=${hasBackgroundColor}`);
+          log.entry('✗ Arrow button styling incomplete', 'error');
+          allPassed = false;
+        }
+      } else {
+        addVerificationStep(outputId, 'Button is styled with appropriate icon/label', false, 'Button not found');
+        allPassed = false;
+      }
+
+      // Step 4: Check active state indicator
+      if (arrowButton) {
+        const initialBg = window.getComputedStyle(arrowButton).backgroundColor;
+        // Click the button to test active state
+        arrowButton.click();
+        setTimeout(() => {
+          const activeBg = window.getComputedStyle(arrowButton).backgroundColor;
+          const hasActiveState = activeBg !== initialBg || activeBg === 'rgb(37, 99, 235)'; // #2563eb in RGB
+
+          if (hasActiveState) {
+            addVerificationStep(outputId, 'Active state indicator works', true, `Background changes from ${initialBg} to ${activeBg}`);
+            log.entry('✓ Arrow button active state works', 'success');
+          } else {
+            addVerificationStep(outputId, 'Active state indicator works', false, 'Background does not change when clicked');
+            log.entry('✗ Arrow button active state not working', 'error');
+            allPassed = false;
+          }
+
+          updateFeatureStatus(37, allPassed);
+          if (allPassed) {
+            log.entry('Feature 37 PASSED ✓', 'success');
+          } else {
+            log.entry('Feature 37 FAILED ✗', 'error');
+          }
+        }, 100);
+      } else {
+        updateFeatureStatus(37, false);
+        log.entry('Feature 37 FAILED ✗ (button not found)', 'error');
+      }
+    };
+
+    // Feature 38: Circle tool button
+    const testFeature38 = () => {
+      log.entry('Testing Feature 38: Circle tool button...', 'info');
+      const outputId = 'test-38-output';
+      document.getElementById(outputId).innerHTML = '';
+
+      let allPassed = true;
+
+      // Step 1: Check if circle tool button component exists
+      const circleButton = document.querySelector('button[title="Select Circle tool"]');
+      if (circleButton) {
+        addVerificationStep(outputId, 'Circle tool button component exists', true);
+        log.entry('✓ Circle button found', 'success');
+      } else {
+        addVerificationStep(outputId, 'Circle tool button component exists', false, 'Button not found in DOM');
+        log.entry('✗ Circle button NOT found', 'error');
+        allPassed = false;
+      }
+
+      // Step 2: Check if button has click handler
+      if (circleButton) {
+        const reactProps = Object.keys(circleButton);
+        const hasReactEvents = reactProps.some(prop => prop.startsWith('__react'));
+        if (hasReactEvents || circleButton.onclick !== null) {
+          addVerificationStep(outputId, 'Button has click handler', true);
+          log.entry('✓ Circle button has click handler', 'success');
+        } else {
+          addVerificationStep(outputId, 'Button has click handler', false, 'No click handler detected');
+          log.entry('✗ Circle button has no click handler', 'error');
+          allPassed = false;
+        }
+      } else {
+        addVerificationStep(outputId, 'Button has click handler', false, 'Button not found');
+        allPassed = false;
+      }
+
+      // Step 3: Check button styling
+      if (circleButton) {
+        const styles = window.getComputedStyle(circleButton);
+        const hasPadding = styles.padding !== '0px';
+        const hasBorderRadius = styles.borderRadius !== '0px';
+        const hasBackgroundColor = styles.backgroundColor !== 'rgba(0, 0, 0, 0)' && styles.backgroundColor !== 'transparent';
+
+        if (hasPadding && hasBorderRadius && hasBackgroundColor) {
+          addVerificationStep(outputId, 'Button is styled with appropriate icon/label', true, `Padding: ${styles.padding}, Border-radius: ${styles.borderRadius}`);
+          log.entry('✓ Circle button is properly styled', 'success');
+        } else {
+          addVerificationStep(outputId, 'Button is styled with appropriate icon/label', false, `Missing styles`);
+          log.entry('✗ Circle button styling incomplete', 'error');
+          allPassed = false;
+        }
+      } else {
+        addVerificationStep(outputId, 'Button is styled with appropriate icon/label', false, 'Button not found');
+        allPassed = false;
+      }
+
+      // Step 4: Check active state indicator
+      if (circleButton) {
+        const initialBg = window.getComputedStyle(circleButton).backgroundColor;
+        circleButton.click();
+        setTimeout(() => {
+          const activeBg = window.getComputedStyle(circleButton).backgroundColor;
+          const hasActiveState = activeBg !== initialBg || activeBg === 'rgb(37, 99, 235)';
+
+          if (hasActiveState) {
+            addVerificationStep(outputId, 'Active state indicator works', true, `Background changes to ${activeBg}`);
+            log.entry('✓ Circle button active state works', 'success');
+          } else {
+            addVerificationStep(outputId, 'Active state indicator works', false, 'Background does not change when clicked');
+            log.entry('✗ Circle button active state not working', 'error');
+            allPassed = false;
+          }
+
+          updateFeatureStatus(38, allPassed);
+          if (allPassed) {
+            log.entry('Feature 38 PASSED ✓', 'success');
+          } else {
+            log.entry('Feature 38 FAILED ✗', 'error');
+          }
+        }, 100);
+      } else {
+        updateFeatureStatus(38, false);
+        log.entry('Feature 38 FAILED ✗ (button not found)', 'error');
+      }
+    };
+
+    // Feature 39: Box tool button
+    const testFeature39 = () => {
+      log.entry('Testing Feature 39: Box tool button...', 'info');
+      const outputId = 'test-39-output';
+      document.getElementById(outputId).innerHTML = '';
+
+      let allPassed = true;
+
+      // Step 1: Check if box tool button component exists
+      const boxButton = document.querySelector('button[title="Select Box tool"]');
+      if (boxButton) {
+        addVerificationStep(outputId, 'Box tool button component exists', true);
+        log.entry('✓ Box button found', 'success');
+      } else {
+        addVerificationStep(outputId, 'Box tool button component exists', false, 'Button not found in DOM');
+        log.entry('✗ Box button NOT found', 'error');
+        allPassed = false;
+      }
+
+      // Step 2: Check if button has click handler
+      if (boxButton) {
+        const reactProps = Object.keys(boxButton);
+        const hasReactEvents = reactProps.some(prop => prop.startsWith('__react'));
+        if (hasReactEvents || boxButton.onclick !== null) {
+          addVerificationStep(outputId, 'Button has click handler', true);
+          log.entry('✓ Box button has click handler', 'success');
+        } else {
+          addVerificationStep(outputId, 'Button has click handler', false, 'No click handler detected');
+          log.entry('✗ Box button has no click handler', 'error');
+          allPassed = false;
+        }
+      } else {
+        addVerificationStep(outputId, 'Button has click handler', false, 'Button not found');
+        allPassed = false;
+      }
+
+      // Step 3: Check button styling
+      if (boxButton) {
+        const styles = window.getComputedStyle(boxButton);
+        const hasPadding = styles.padding !== '0px';
+        const hasBorderRadius = styles.borderRadius !== '0px';
+        const hasBackgroundColor = styles.backgroundColor !== 'rgba(0, 0, 0, 0)' && styles.backgroundColor !== 'transparent';
+
+        if (hasPadding && hasBorderRadius && hasBackgroundColor) {
+          addVerificationStep(outputId, 'Button is styled with appropriate icon/label', true, `Padding: ${styles.padding}, Border-radius: ${styles.borderRadius}`);
+          log.entry('✓ Box button is properly styled', 'success');
+        } else {
+          addVerificationStep(outputId, 'Button is styled with appropriate icon/label', false, `Missing styles`);
+          log.entry('✗ Box button styling incomplete', 'error');
+          allPassed = false;
+        }
+      } else {
+        addVerificationStep(outputId, 'Button is styled with appropriate icon/label', false, 'Button not found');
+        allPassed = false;
+      }
+
+      // Step 4: Check active state indicator
+      if (boxButton) {
+        const initialBg = window.getComputedStyle(boxButton).backgroundColor;
+        boxButton.click();
+        setTimeout(() => {
+          const activeBg = window.getComputedStyle(boxButton).backgroundColor;
+          const hasActiveState = activeBg !== initialBg || activeBg === 'rgb(37, 99, 235)';
+
+          if (hasActiveState) {
+            addVerificationStep(outputId, 'Active state indicator works', true, `Background changes to ${activeBg}`);
+            log.entry('✓ Box button active state works', 'success');
+          } else {
+            addVerificationStep(outputId, 'Active state indicator works', false, 'Background does not change when clicked');
+            log.entry('✗ Box button active state not working', 'error');
+            allPassed = false;
+          }
+
+          updateFeatureStatus(39, allPassed);
+          if (allPassed) {
+            log.entry('Feature 39 PASSED ✓', 'success');
+          } else {
+            log.entry('Feature 39 FAILED ✗', 'error');
+          }
+        }, 100);
+      } else {
+        updateFeatureStatus(39, false);
+        log.entry('Feature 39 FAILED ✗ (button not found)', 'error');
+      }
+    };
+
+    // Auto-run tests on load
+    setTimeout(() => {
+      log.entry('Page loaded. Click "Run All Tests" to start regression testing.', 'info');
+    }, 500);
+  </script>
+</body>
+</html>

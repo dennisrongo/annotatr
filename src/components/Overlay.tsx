@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { ToolType, Shape, ArrowShape, CircleShape, BoxShape, FreehandShape, HighlighterShape, TextShape, Point } from "../types/shapes";
 import { drawShape, redrawShapes } from "../lib/drawing";
 import { loadSettings, Settings, DEFAULT_SETTINGS } from "../lib/storage";
+import { findShapeAtPoint, updateShapeProperty, drawSelectionIndicator } from "../lib/shapeEditing";
 
 interface DrawingState {
   isDrawing: boolean;
@@ -60,6 +61,11 @@ export default function Overlay() {
     icon: string;
   }>({ visible: false, tool: "", icon: "" });
   const hotkeyFeedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Feature #125: Shape editing mode
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [selectedShape, setSelectedShape] = useState<Shape | null>(null);
+  const [editPanelVisible, setEditPanelVisible] = useState(false);
 
   // Default drawing settings (fallbacks until settings load)
   const defaultColor = "#FF0000";
@@ -197,6 +203,7 @@ export default function Overlay() {
   /**
    * Redraw all existing shapes with opacity support
    * Feature #73: Apply smooth fade-out opacities
+   * Feature #125: Draw selection indicator for selected shape
    */
   const redrawAllShapes = useCallback(() => {
     const context = getCanvasContext();
@@ -204,7 +211,12 @@ export default function Overlay() {
 
     const { ctx } = context;
     redrawShapes(ctx, shapesRef.current, shapeOpacities);
-  }, [getCanvasContext, shapeOpacities]);
+
+    // Feature #125: Draw selection indicator if a shape is selected
+    if (selectedShape && isEditMode) {
+      drawSelectionIndicator(ctx, selectedShape);
+    }
+  }, [getCanvasContext, shapeOpacities, selectedShape, isEditMode]);
 
   /**
    * Feature #120: Cleanup opacity tracking for specific shape IDs
@@ -705,16 +717,42 @@ export default function Overlay() {
   }, [generateShapeId, settings, defaultFontSize, currentMonitor, getToolColor, customFadeDuration]);
 
   /**
-   * Handle mouse down - start drawing
+   * Handle mouse down - start drawing OR select shape in edit mode
+   * Feature #125: In edit mode, clicking on a shape selects it for editing
    */
   const handleMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
-    if (!isDrawingMode || !currentTool) return;
-
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
 
-    const startX = event.clientX - rect.left;
-    const startY = event.clientY - rect.top;
+    const clickX = event.clientX - rect.left;
+    const clickY = event.clientY - rect.top;
+
+    // Feature #125: If in edit mode, try to select a shape
+    if (isEditMode) {
+      const hitResult = findShapeAtPoint(shapesRef.current, { x: clickX, y: clickY });
+
+      if (hitResult.hit && hitResult.shape) {
+        console.log(`[Feature #125] Selected shape: ${hitResult.shape.tool} (${hitResult.shape.id})`);
+        setSelectedShape(hitResult.shape);
+        setEditPanelVisible(true);
+        redrawAllShapes();
+      } else {
+        // Clicked on empty space - deselect
+        if (selectedShape) {
+          console.log("[Feature #125] Deselected shape");
+          setSelectedShape(null);
+          setEditPanelVisible(false);
+          redrawAllShapes();
+        }
+      }
+      return;
+    }
+
+    // Normal drawing mode
+    if (!isDrawingMode || !currentTool) return;
+
+    const startX = clickX;
+    const startY = clickY;
 
     // For text tool, show inline input at click location
     if (currentTool === ToolType.TEXT) {
@@ -746,7 +784,7 @@ export default function Overlay() {
     });
 
     console.log(`Started drawing ${currentTool} at (${startX}, ${startY})`);
-  }, [isDrawingMode, currentTool]);
+  }, [isDrawingMode, currentTool, isEditMode, selectedShape, redrawAllShapes]);
 
   /**
    * Handle mouse move - update preview
@@ -1017,6 +1055,25 @@ export default function Overlay() {
         return;
       }
 
+      // Feature #125: Handle Ctrl+E / Cmd+E to toggle edit mode
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "e") {
+        event.preventDefault();
+        console.log("Edit mode toggle hotkey pressed (Ctrl+E / Cmd+E)");
+        setIsEditMode(prev => {
+          const newMode = !prev;
+          console.log(`Edit mode: ${newMode ? "ENABLED" : "DISABLED"}`);
+
+          // Clear selection when exiting edit mode
+          if (!newMode && selectedShape) {
+            setSelectedShape(null);
+            setEditPanelVisible(false);
+          }
+
+          return newMode;
+        });
+        return;
+      }
+
       if (event.key === "Escape") {
         event.preventDefault();
 
@@ -1035,6 +1092,15 @@ export default function Overlay() {
             textPosition: null,
           });
           // Redraw to clear any preview
+          redrawAllShapes();
+          return;
+        }
+
+        // Feature #125: If in edit mode with a selected shape, deselect it
+        if (isEditMode && selectedShape) {
+          console.log("Escape key pressed - deselecting shape");
+          setSelectedShape(null);
+          setEditPanelVisible(false);
           redrawAllShapes();
           return;
         }
@@ -1550,6 +1616,35 @@ export default function Overlay() {
         </div>
       )}
 
+      {/* Feature #125: Edit mode indicator */}
+      {isEditMode && (
+        <div
+          style={{
+            position: "absolute",
+            top: 20,
+            left: currentTool ? 200 : 20, // Position next to tool indicator if present
+            padding: "12px 16px",
+            backgroundColor: "#00BFFF",
+            color: "white",
+            borderRadius: "8px",
+            fontSize: "16px",
+            fontWeight: "bold",
+            pointerEvents: "none",
+            boxShadow: "0 4px 6px rgba(0, 0, 0, 0.3)",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            border: "2px solid rgba(255, 255, 255, 0.3)",
+          }}
+        >
+          <span style={{ fontSize: "24px" }}>✎</span>
+          <span>Edit Mode</span>
+          <span style={{ fontSize: "12px", marginLeft: "8px", opacity: 0.9 }}>
+            • Click shape to edit • Ctrl+E to exit
+          </span>
+        </div>
+      )}
+
       {/* Shape count indicator */}
       <div
         style={{
@@ -1637,6 +1732,158 @@ export default function Overlay() {
               }
             `}
           </style>
+        </div>
+      )}
+
+      {/* Feature #125: Edit panel for selected shape */}
+      {editPanelVisible && selectedShape && (
+        <div
+          style={{
+            position: "absolute",
+            bottom: 60,
+            left: 20,
+            padding: "16px",
+            backgroundColor: "rgba(40, 40, 40, 0.95)",
+            color: "white",
+            borderRadius: "12px",
+            fontSize: "14px",
+            boxShadow: "0 4px 20px rgba(0, 0, 0, 0.5)",
+            zIndex: 10002,
+            minWidth: "280px",
+            border: "2px solid #00BFFF",
+          }}
+        >
+          <div style={{ marginBottom: "12px", fontWeight: "bold", fontSize: "16px" }}>
+            Edit {selectedShape.tool} shape
+          </div>
+
+          {/* Color picker */}
+          <div style={{ marginBottom: "12px" }}>
+            <label style={{ display: "block", marginBottom: "4px", fontSize: "12px", opacity: 0.8 }}>
+              Color:
+            </label>
+            <input
+              type="color"
+              value={selectedShape.color}
+              onChange={(e) => {
+                const newColor = e.target.value;
+                const shapeIndex = shapesRef.current.findIndex(s => s.id === selectedShape.id);
+                if (shapeIndex !== -1) {
+                  shapesRef.current[shapeIndex] = updateShapeProperty(selectedShape, "color", newColor) as Shape;
+                  setSelectedShape(shapesRef.current[shapeIndex]);
+                  redrawAllShapes();
+                }
+              }}
+              style={{
+                width: "100%",
+                height: "36px",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+              }}
+            />
+          </div>
+
+          {/* Line thickness slider */}
+          <div style={{ marginBottom: "12px" }}>
+            <label style={{ display: "block", marginBottom: "4px", fontSize: "12px", opacity: 0.8 }}>
+              Line Thickness: {selectedShape.lineThickness}px
+            </label>
+            <input
+              type="range"
+              min="2"
+              max="50"
+              value={selectedShape.lineThickness}
+              onChange={(e) => {
+                const newThickness = parseInt(e.target.value);
+                const shapeIndex = shapesRef.current.findIndex(s => s.id === selectedShape.id);
+                if (shapeIndex !== -1) {
+                  shapesRef.current[shapeIndex] = updateShapeProperty(selectedShape, "lineThickness", newThickness) as Shape;
+                  setSelectedShape(shapesRef.current[shapeIndex]);
+                  redrawAllShapes();
+                }
+              }}
+              style={{
+                width: "100%",
+                cursor: "pointer",
+              }}
+            />
+          </div>
+
+          {/* Font size (for text shapes) */}
+          {selectedShape.tool === ToolType.TEXT && (
+            <div style={{ marginBottom: "12px" }}>
+              <label style={{ display: "block", marginBottom: "4px", fontSize: "12px", opacity: 0.8 }}>
+                Font Size: {(selectedShape as TextShape).fontSize}px
+              </label>
+              <input
+                type="range"
+                min="12"
+                max="72"
+                value={(selectedShape as TextShape).fontSize}
+                onChange={(e) => {
+                  const newFontSize = parseInt(e.target.value);
+                  const shapeIndex = shapesRef.current.findIndex(s => s.id === selectedShape.id);
+                  if (shapeIndex !== -1) {
+                    shapesRef.current[shapeIndex] = updateShapeProperty(selectedShape, "fontSize", newFontSize) as Shape;
+                    setSelectedShape(shapesRef.current[shapeIndex]);
+                    redrawAllShapes();
+                  }
+                }}
+                style={{
+                  width: "100%",
+                  cursor: "pointer",
+                }}
+              />
+            </div>
+          )}
+
+          {/* Action buttons */}
+          <div style={{ display: "flex", gap: "8px", marginTop: "16px" }}>
+            <button
+              onClick={() => {
+                setSelectedShape(null);
+                setEditPanelVisible(false);
+                redrawAllShapes();
+              }}
+              style={{
+                flex: 1,
+                padding: "8px 16px",
+                backgroundColor: "#666",
+                color: "white",
+                border: "none",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontSize: "14px",
+              }}
+            >
+              Done
+            </button>
+            <button
+              onClick={() => {
+                const shapeIndex = shapesRef.current.findIndex(s => s.id === selectedShape.id);
+                if (shapeIndex !== -1) {
+                  shapesRef.current.splice(shapeIndex, 1);
+                  cleanupOpacityTracking(selectedShape.id);
+                  setSelectedShape(null);
+                  setEditPanelVisible(false);
+                  redrawAllShapes();
+                }
+              }}
+              style={{
+                flex: 1,
+                padding: "8px 16px",
+                backgroundColor: "#ef4444",
+                color: "white",
+                border: "none",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontSize: "14px",
+              }}
+            >
+              Delete
+            </button>
+          </div>
         </div>
       )}
     </div>

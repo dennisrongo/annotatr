@@ -5,7 +5,7 @@
   "identifier": "com.annotatr.app",
   "build": {
     "beforeDevCommand": "npm run dev",
-    "devUrl": "http://localhost:18080",
+    "devUrl": "http://localhost:35421",
     "beforeBuildCommand": "npm run build",
     "frontendDist": "../dist"
   },
@@ -62,7 +62,6 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "identifier": "com.annotatr.app",
     "publisher": "Annotatr",
     "copyright": "Copyright © 2025 Annotatr",
     "category": "Graphics",
