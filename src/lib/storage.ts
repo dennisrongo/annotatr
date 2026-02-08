@@ -34,6 +34,8 @@ export interface Settings {
   };
   fontSize: number;
   fadeDuration: number;
+  // Feature #126: Panel transparency (0.0 = fully transparent, 1.0 = fully opaque)
+  panelTransparency: number;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -65,6 +67,8 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   fontSize: 14,
   fadeDuration: 10,
+  // Feature #126: Panel transparency default (0.95 = mostly opaque)
+  panelTransparency: 0.95,
 };
 
 /**
@@ -328,6 +332,14 @@ function validateImportedSettings(imported: unknown): Settings {
   if (typeof settings.fadeDuration !== 'number' ||
       settings.fadeDuration < 1 || settings.fadeDuration > 60) {
     throw new Error('Invalid settings: fadeDuration must be between 1 and 60');
+  }
+
+  // Feature #126: Validate panel transparency (0.0 to 1.0)
+  if (settings.panelTransparency !== undefined) {
+    if (typeof settings.panelTransparency !== 'number' ||
+        settings.panelTransparency < 0.0 || settings.panelTransparency > 1.0) {
+      throw new Error('Invalid settings: panelTransparency must be between 0.0 and 1.0');
+    }
   }
 
   // Merge with defaults to ensure all keys exist

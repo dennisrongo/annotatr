@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { ToolType, Shape, ArrowShape, CircleShape, BoxShape, FreehandShape, HighlighterShape, TextShape, Point } from "../types/shapes";
 import { drawShape, redrawShapes } from "../lib/drawing";
-import { loadSettings, Settings } from "../lib/storage";
+import { loadSettings, Settings, DEFAULT_SETTINGS } from "../lib/storage";
 
 interface DrawingState {
   isDrawing: boolean;
@@ -202,6 +202,33 @@ export default function Overlay() {
     const { ctx } = context;
     redrawShapes(ctx, shapesRef.current, shapeOpacities);
   }, [getCanvasContext, shapeOpacities]);
+
+  /**
+   * Feature #123: Undo the most recently created shape
+   * Removes the last shape from the shapes array and redraws the canvas
+   */
+  const undoLastShape = useCallback(() => {
+    if (shapesRef.current.length === 0) {
+      console.log("[Undo] No shapes to undo");
+      return;
+    }
+
+    // Remove the last shape
+    const removedShape = shapesRef.current.pop();
+
+    // Remove opacity tracking for the undone shape
+    if (removedShape && shapeOpacities[removedShape.id]) {
+      const newOpacities = { ...shapeOpacities };
+      delete newOpacities[removedShape.id];
+      setShapeOpacities(newOpacities);
+    }
+
+    console.log(`[Undo] Removed shape: ${removedShape?.tool} (${removedShape?.id})`);
+    console.log(`[Undo] Remaining shapes: ${shapesRef.current.length}`);
+
+    // Redraw the canvas
+    redrawAllShapes();
+  }, [shapeOpacities, redrawAllShapes]);
 
   /**
    * Feature #67: Show visual feedback when a hotkey is triggered
@@ -610,6 +637,14 @@ export default function Overlay() {
   useEffect(() => {
     // Feature #10 & #114: Handle Escape key to dismiss overlay or cancel drawing
     const handleKeyDown = async (event: KeyboardEvent) => {
+      // Feature #123: Handle Ctrl+Z / Cmd+Z to undo last shape
+      if ((event.ctrlKey || event.metaKey) && event.key === "z") {
+        event.preventDefault();
+        console.log("Undo hotkey pressed (Ctrl+Z / Cmd+Z)");
+        undoLastShape();
+        return;
+      }
+
       if (event.key === "Escape") {
         event.preventDefault();
 
@@ -853,7 +888,7 @@ export default function Overlay() {
         clearTimeout(hotkeyFeedbackTimerRef.current);
       }
     };
-  }, [isVisible, drawingState, redrawAllShapes]);
+  }, [isVisible, drawingState, redrawAllShapes, undoLastShape]);
 
   // Initialize canvas
   useEffect(() => {
@@ -889,35 +924,7 @@ export default function Overlay() {
       } catch (error) {
         console.error("Failed to load settings:", error);
         // Use defaults if loading fails
-        setSettings({
-          hotkeys: {
-            toggleDrawingMode: 'Ctrl+Shift+D',
-            arrowTool: 'Ctrl+Shift+A',
-            circleTool: 'Ctrl+Shift+C',
-            boxTool: 'Ctrl+Shift+B',
-            freehandTool: 'Ctrl+Shift+F',
-            highlighterTool: 'Ctrl+Shift+H',
-            textTool: 'Ctrl+Shift+T',
-          },
-          colors: {
-            arrow: '#FF0000',
-            circle: '#FF0000',
-            box: '#FF0000',
-            freehand: '#FF0000',
-            highlighter: '#FFFF00',
-            text: '#FF0000',
-          },
-          lineThickness: {
-            arrow: 12,
-            circle: 12,
-            box: 12,
-            freehand: 12,
-            highlighter: 12,
-            text: 12,
-          },
-          fontSize: 14,
-          fadeDuration: 10,
-        });
+        setSettings(DEFAULT_SETTINGS);
       }
     };
 

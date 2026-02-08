@@ -91,6 +91,9 @@ export default function MiniPanel() {
   // Feature #70: Fade duration control state
   const [fadeDuration, setFadeDuration] = useState(DEFAULT_SETTINGS.fadeDuration);
 
+  // Feature #126: Panel transparency control state
+  const [panelTransparency, setPanelTransparency] = useState(DEFAULT_SETTINGS.panelTransparency);
+
   // Feature #48: Settings modal state
   const [showSettingsModal, setShowSettingsModal] = useState(false);
 
@@ -226,6 +229,22 @@ export default function MiniPanel() {
       }
     };
     loadFadeDuration();
+  }, []);
+
+  /**
+   * Feature #126: Load panel transparency from settings on mount
+   */
+  useEffect(() => {
+    const loadPanelTransparency = async () => {
+      try {
+        const settings = await loadSettings();
+        setPanelTransparency(settings.panelTransparency);
+        console.log("Panel transparency loaded:", settings.panelTransparency);
+      } catch (error) {
+        console.error("Failed to load panel transparency:", error);
+      }
+    };
+    loadPanelTransparency();
   }, []);
 
   /**
@@ -529,6 +548,22 @@ export default function MiniPanel() {
   };
 
   /**
+   * Feature #126: Handle panel transparency change
+   * Updates panel transparency and saves to settings
+   */
+  const handlePanelTransparencyChange = async (value: number) => {
+    setPanelTransparency(value);
+
+    // Save to persistent storage
+    try {
+      await saveSettings({ panelTransparency: value });
+      console.log(`Panel transparency updated to: ${value}`);
+    } catch (error) {
+      console.error("Failed to save panel transparency:", error);
+    }
+  };
+
+  /**
    * Feature #81: Handle tool color selection from preset in settings
    * Updates the default color for a specific tool
    */
@@ -654,6 +689,7 @@ export default function MiniPanel() {
       setLineThickness(thickness); // Feature #106: Use arrow thickness
       setFontSize(reloadedSettings.fontSize);
       setFadeDuration(reloadedSettings.fadeDuration);
+      setPanelTransparency(reloadedSettings.panelTransparency);
 
       // Clear any hotkey conflicts
       setHotkeyConflicts({});
@@ -719,6 +755,7 @@ export default function MiniPanel() {
           setLineThickness(thickness); // Feature #106: Use arrow thickness
           setFontSize(imported.fontSize);
           setFadeDuration(imported.fadeDuration);
+          setPanelTransparency(imported.panelTransparency);
 
           // Clear any hotkey conflicts
           setHotkeyConflicts({});
@@ -904,7 +941,7 @@ export default function MiniPanel() {
         // Feature #50: No CSS positioning - using Tauri window positioning instead
         // This allows the panel window to be positioned on any monitor
         padding: "12px",
-        backgroundColor: "rgba(240, 240, 240, 0.95)",
+        backgroundColor: `rgba(240, 240, 240, ${panelTransparency})`,
         borderRadius: "8px",
         boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
         zIndex: 10000,
@@ -921,7 +958,7 @@ export default function MiniPanel() {
         style={{
           margin: "-12px -12px 12px -12px",
           padding: "8px 12px",
-          backgroundColor: "rgba(220, 220, 220, 0.95)",
+          backgroundColor: `rgba(220, 220, 220, ${panelTransparency})`,
           borderRadius: "8px 8px 0 0",
           cursor: "grab",
           borderBottom: "1px solid rgba(0, 0, 0, 0.1)",
@@ -1370,6 +1407,82 @@ export default function MiniPanel() {
         </div>
       </div>
 
+      {/* Feature #126: Panel transparency control section */}
+      <div
+        style={{
+          marginTop: "12px",
+          paddingTop: "12px",
+          borderTop: "1px solid rgba(0, 0, 0, 0.1)",
+        }}
+      >
+        <div
+          style={{
+            fontSize: "11px",
+            fontWeight: "bold",
+            color: "#333",
+            marginBottom: "6px",
+            textAlign: "center",
+          }}
+        >
+          Panel Transparency
+        </div>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            padding: "4px 8px",
+            backgroundColor: "rgba(255, 255, 255, 0.5)",
+            borderRadius: "4px",
+          }}
+        >
+          <span
+            style={{
+              fontSize: "10px",
+              color: "#666",
+              minWidth: "20px",
+            }}
+          >
+            0%
+          </span>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            step="5"
+            value={Math.round(panelTransparency * 100)}
+            onChange={(e) => handlePanelTransparencyChange(parseInt(e.target.value, 10) / 100)}
+            style={{
+              flex: 1,
+              height: "6px",
+              cursor: "pointer",
+            }}
+            aria-label="Panel transparency"
+            title={`Panel transparency: ${Math.round(panelTransparency * 100)}%`}
+          />
+          <span
+            style={{
+              fontSize: "10px",
+              color: "#666",
+              minWidth: "25px",
+            }}
+          >
+            100%
+          </span>
+          <span
+            style={{
+              fontSize: "11px",
+              fontWeight: "bold",
+              color: "#2563eb",
+              minWidth: "45px",
+              textAlign: "right",
+            }}
+          >
+            {Math.round(panelTransparency * 100)}%
+          </span>
+        </div>
+      </div>
+
       <div
         style={{
           marginTop: "12px",
@@ -1516,6 +1629,7 @@ export default function MiniPanel() {
                   <li><strong>Font Size:</strong> {fontSize}pt</li>
                   <li><strong>Line Thickness:</strong> {lineThickness}px</li>
                   <li><strong>Fade Duration:</strong> {fadeDuration} seconds</li>
+                  <li><strong>Panel Transparency:</strong> {Math.round(panelTransparency * 100)}%</li>
                   <li><strong>Colors:</strong> Configured per tool</li>
                 </ul>
               </div>
