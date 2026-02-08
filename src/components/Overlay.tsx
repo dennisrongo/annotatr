@@ -608,12 +608,32 @@ export default function Overlay() {
   }, [drawingState, currentTool, createArrowShape, createCircleShape, createBoxShape, createFreehandShape, createHighlighterShape, redrawAllShapes]);
 
   useEffect(() => {
-    // Feature #10: Handle Escape key to dismiss overlay
+    // Feature #10 & #114: Handle Escape key to dismiss overlay or cancel drawing
     const handleKeyDown = async (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        console.log("Escape key pressed - dismissing overlay");
         event.preventDefault();
 
+        // Feature #114: If currently drawing, cancel the in-progress shape
+        if (drawingState.isDrawing) {
+          console.log("Escape key pressed - canceling in-progress drawing");
+          setDrawingState({
+            isDrawing: false,
+            currentTool: null,
+            startX: 0,
+            startY: 0,
+            currentX: 0,
+            currentY: 0,
+            freehandPoints: [],
+            textInput: "",
+            textPosition: null,
+          });
+          // Redraw to clear any preview
+          redrawAllShapes();
+          return;
+        }
+
+        // Otherwise, dismiss the overlay
+        console.log("Escape key pressed - dismissing overlay");
         try {
           // Call dismiss_overlay command
           await invoke("dismiss_overlay");
@@ -645,6 +665,25 @@ export default function Overlay() {
     // Listen for toggle events from hotkeys
     const unlistenToggle = listen<boolean>("toggle-overlay", async (event) => {
       console.log("Toggle overlay event received:", event.payload);
+
+      // Feature #114: If currently drawing, cancel the in-progress shape
+      if (drawingState.isDrawing) {
+        console.log("Toggle hotkey pressed - canceling in-progress drawing");
+        setDrawingState({
+          isDrawing: false,
+          currentTool: null,
+          startX: 0,
+          startY: 0,
+          currentX: 0,
+          currentY: 0,
+          freehandPoints: [],
+          textInput: "",
+          textPosition: null,
+        });
+        // Redraw to clear any preview
+        redrawAllShapes();
+        return;
+      }
 
       try {
         const newState = await invoke<boolean>("toggle_overlay");
@@ -814,7 +853,7 @@ export default function Overlay() {
         clearTimeout(hotkeyFeedbackTimerRef.current);
       }
     };
-  }, [isVisible]);
+  }, [isVisible, drawingState, redrawAllShapes]);
 
   // Initialize canvas
   useEffect(() => {
