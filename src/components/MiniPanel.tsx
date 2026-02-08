@@ -108,6 +108,9 @@ export default function MiniPanel() {
   // Feature #48: Settings modal state
   const [showSettingsModal, setShowSettingsModal] = useState(false);
 
+  // Feature #134: Settings tabs organization
+  const [activeSettingsTab, setActiveSettingsTab] = useState<string>("general");
+
   // Feature #63: Hotkey conflict detection state
   const [hotkeyConflicts, setHotkeyConflicts] = useState<Record<string, any>>({});
 
