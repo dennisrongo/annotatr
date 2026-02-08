@@ -1,0 +1,236 @@
+## Session 32 Complete
+
+### Overview
+
+This session completed Feature #125 (Shape Editing After Placement), which was previously deferred in Session 31. This feature enables users to select and edit existing shapes on the overlay.
+
+### Feature #125: Shape Editing After Placement ✓
+
+**Status:** PASSING (Implemented)
+
+**Implementation Summary:**
+
+Added comprehensive shape editing functionality that allows users to select, modify, and delete existing shapes on the overlay.
+
+**Code Changes:**
+
+1. **New Module: src/lib/shapeEditing.ts** (650+ lines):
+   - `findShapeAtPoint(shapes, point)` - Finds topmost shape at given coordinates
+   - `updateShapeProperty(shape, property, value)` - Updates shape properties
+   - `drawSelectionIndicator(ctx, shape)` - Draws cyan dashed border around selected shape
+   - Hit detection functions for all 6 shape types:
+     - `testArrowHit()` - Point-to-line distance + arrow head detection
+     - `testCircleHit()` - Ellipse equation with edge tolerance
+     - `testBoxHit()` - Border detection with tolerance
+     - `testFreehandHit()` - Segment-by-segment testing
+     - `testHighlighterHit()` - Enhanced tolerance for semi-transparent shapes
+     - `testTextHit()` - Canvas text measurement for bounding box
+
+2. **Overlay Component Updates** (src/components/Overlay.tsx):
+   - Added state: `isEditMode`, `selectedShape`, `editPanelVisible`
+   - Added keyboard shortcut: `Ctrl+E` / `Cmd+E` to toggle edit mode
+   - Modified `handleMouseDown()` to select shapes in edit mode
+   - Modified `handleKeyDown()` to handle edit mode toggle and deselection
+   - Updated `redrawAllShapes()` to draw selection indicator
+   - Added edit panel UI with:
+     - Color picker (native HTML input type="color")
+     - Line thickness slider (2-50px range)
+     - Font size slider for text shapes (12-72px range)
+     - Done button to deselect
+     - Delete button to remove shape
+
+**Key Behaviors:**
+
+- **Edit Mode Toggle:** `Ctrl+E` / `Cmd+E` enters/exits edit mode
+- **Visual Indicators:**
+  - Blue "Edit Mode" badge appears when in edit mode
+  - Cyan dashed border (#00BFFF) around selected shapes
+  - Edit panel appears at bottom-left when shape is selected
+- **Selection Logic:**
+  - Click on shape to select it (topmost if overlapping)
+  - Click on empty space to deselect
+  - Press Escape to deselect (doesn't dismiss overlay)
+- **Property Editing:**
+  - Color changes apply immediately
+  - Thickness changes apply immediately
+  - Font size changes apply immediately (text shapes only)
+- **Hit Detection Tolerance:**
+  - Default: 10px or half line thickness (whichever is greater)
+  - Highlighter: 2x tolerance (20px or line thickness)
+- **Drawing Disabled:** In edit mode, clicks only select shapes; cannot draw
+
+**Benefits:**
+
+- Users can correct mistakes without redoing entire shapes
+- Real-time visual feedback for all changes
+- Easy to use with intuitive keyboard shortcut
+- All shape types supported
+- Memory-safe (cleanup opacity tracking on deletion)
+
+**Files Created:**
+
+1. **src/lib/shapeEditing.ts** - Core shape editing module with hit detection
+2. **test-feature-125-shape-editing.html** - Comprehensive test documentation
+3. **test-feature-125-verification.html** - Unit tests for hit detection logic
+
+---
+
+## Current Project Stats (After Session 32)
+
+- Total Features: 135
+- Passing: 134 (Features #1-135, only #125 was deferred but now complete)
+- In Progress: 0
+- Completion: **99.3%**
+
+**Progress This Session:** +1 feature completed (Feature #125 - previously deferred)
+
+**Remaining Features:** 1
+
+---
+
+## Git Commit This Session
+
+**`2936b85`** - "feat: Implement Feature #125 - Shape editing after placement"
+- New module: src/lib/shapeEditing.ts with shape hit detection and editing logic
+- Edit mode toggle: Ctrl+E / Cmd+E
+- Shape selection for all 6 tool types
+- Visual selection indicator (cyan dashed border)
+- Edit panel with color picker, thickness slider, font size slider
+- Delete functionality
+- Escape key deselecs shape when in edit mode
+- Drawing disabled in edit mode
+- Comprehensive test documentation created
+- Feature #125 marked as passing
+
+---
+
+## Next Steps
+
+**Remaining Feature (1):**
+- One final feature remaining to reach 100% completion
+
+**Recommendation:**
+Complete the final feature to achieve 100% feature completion for the annotatr project.
+
+---
+
+## Technical Notes - Feature #125
+
+### Hit Detection Algorithms
+
+**Arrow Detection:**
+```typescript
+// Check line distance
+const lineDistance = pointToLineDistance(point, startPoint, endPoint);
+
+// Check arrow head (roughly 20px from end)
+const arrowHeadSize = 20;
+const ratio = arrowHeadSize / arrowLength;
+```
+
+**Circle/Ellipse Detection:**
+```typescript
+// Normalize point to ellipse coordinates
+const dx = (point.x - center.x) / radiusX;
+const dy = (point.y - center.y) / radiusY;
+
+// Ellipse equation: x²/a² + y²/b² = 1
+const distanceFromEdge = Math.abs(Math.sqrt(dx * dx + dy * dy) - 1);
+```
+
+**Text Detection:**
+```typescript
+// Measure text with canvas
+ctx.font = `${fontSize}px sans-serif`;
+const metrics = ctx.measureText(text);
+const textWidth = metrics.width;
+const textHeight = fontSize;
+
+// Check if point is in bounding box
+const nearText = point.x >= minX && point.x <= maxX &&
+                 point.y >= minY && point.y <= maxY;
+```
+
+### State Management
+
+```typescript
+// Edit mode state
+const [isEditMode, setIsEditMode] = useState(false);
+const [selectedShape, setSelectedShape] = useState<Shape | null>(null);
+const [editPanelVisible, setEditPanelVisible] = useState(false);
+
+// Toggle edit mode
+if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "e") {
+  setIsEditMode(prev => !prev);
+}
+```
+
+### Property Updates
+
+```typescript
+// Update shape in array
+const shapeIndex = shapesRef.current.findIndex(s => s.id === selectedShape.id);
+if (shapeIndex !== -1) {
+  shapesRef.current[shapeIndex] = updateShapeProperty(
+    selectedShape,
+    "color",
+    newColor
+  );
+  setSelectedShape(shapesRef.current[shapeIndex]);
+  redrawAllShapes();
+}
+```
+
+---
+
+## Previous Sessions Summary
+
+**Session 1-31** completed 133 features covering:
+- Infrastructure & Project Setup
+- Core Overlay System
+- Mini Panel UI
+- Drawing Tools Implementation (all tools)
+- Text Tool
+- Hotkey System
+- Auto-Fade System
+- Settings and Persistence
+- Cross-Platform (all features)
+- Advanced features (undo, export/import, high-DPI, installers, etc.)
+- Drawing Enhancements (alignment guides)
+
+**Total features completed after Session 32:** 134 features passing (99.3%)
+
+**Categories Completed:**
+- Infrastructure: All features passing ✓
+- Core Overlay System: All features passing ✓
+- Drawing Tools: All features passing ✓
+- Mini Panel UI: All features passing ✓
+- Hotkey System: All features passing ✓
+- Text Input: All features passing ✓
+- Auto-Fade System: All features passing ✓
+- Settings and Persistence: All features passing ✓
+- Cross-Platform: All features passing ✓
+- Drawing Enhancements: All features passing ✓
+- Shape Editing: All features passing ✓ (NEW - Session 32)
+
+**All Core Features Now Complete!**
+
+The application now has:
+- ✓ All 6 drawing tools with tool-specific settings
+- ✓ Real-time preview while drawing
+- ✓ Shape completion on mouse release
+- ✓ Multiple shapes on screen simultaneously
+- ✓ Auto-fade system with smooth animations
+- ✓ Hotkey support for all tools
+- ✓ Settings persistence
+- ✓ Cross-platform support
+- ✓ High DPI/Retina display support
+- ✓ Installer generation for all platforms
+- ✓ Platform-specific performance optimizations
+- ✓ Drawing cancellation
+- ✓ Tool-specific defaults
+- ✓ Undo/redo functionality
+- ✓ Export/import settings
+- ✓ Shape alignment guides
+- ✓ Shape editing after placement (NEW - Session 32)
+- ✓ And 125+ more features!

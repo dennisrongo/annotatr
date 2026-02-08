@@ -26,6 +26,22 @@ function App() {
   const [drawingMode, setDrawingMode] = useState(false);
   const [platformInfo, setPlatformInfo] = useState<any>(null);
 
+  /**
+   * Convert tool name to hotkey config key
+   * Example: "box" -> "boxTool", "freehand" -> "freehandTool"
+   */
+  function toolNameToHotkeyKey(tool: string): string {
+    const keyMap: Record<string, string> = {
+      "arrow": "arrowTool",
+      "circle": "circleTool",
+      "box": "boxTool",
+      "freehand": "freehandTool",
+      "highlighter": "highlighterTool",
+      "text": "textTool",
+    };
+    return keyMap[tool] || tool;
+  }
+
   async function greet() {
     // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
     setGreetMsg(await invoke("greet", { name }));
@@ -226,7 +242,9 @@ function App() {
   // Feature #18: Simulate hotkey activation (for testing)
   async function activateToolViaHotkey(tool: string) {
     try {
-      await invoke("activate_tool_hotkey", { tool });
+      // Convert tool name to hotkey config key before passing to backend
+      const hotkeyKey = toolNameToHotkeyKey(tool);
+      await invoke("activate_tool_hotkey", { tool: hotkeyKey });
       setOverlayVisible(true);
       setDrawingMode(true);
       setStatusMsg(`Activated ${tool} tool via hotkey - overlay shown`);

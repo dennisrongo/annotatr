@@ -46,6 +46,22 @@ interface Monitor {
   scale_factor: number;
 }
 
+/**
+ * Convert ToolType to hotkey config key
+ * Example: "box" -> "boxTool", "freehand" -> "freehandTool"
+ */
+function toolTypeToHotkeyKey(tool: ToolType): string {
+  const keyMap: Record<ToolType, string> = {
+    [ToolType.ARROW]: "arrowTool",
+    [ToolType.CIRCLE]: "circleTool",
+    [ToolType.BOX]: "boxTool",
+    [ToolType.FREEHAND]: "freehandTool",
+    [ToolType.HIGHLIGHTER]: "highlighterTool",
+    [ToolType.TEXT]: "textTool",
+  };
+  return keyMap[tool] || tool;
+}
+
 export default function MiniPanel() {
   const [selectedTool, setSelectedTool] = useState<ToolType | null>(null);
   const [position, setPosition] = useState({ x: 20, y: 20 });
@@ -379,7 +395,9 @@ export default function MiniPanel() {
 
     // Feature #18: Activate tool via hotkey command which handles overlay, drawing mode, and events
     try {
-      await invoke("activate_tool_hotkey", { tool });
+      // Convert ToolType to hotkey config key before passing to backend
+      const hotkeyKey = toolTypeToHotkeyKey(tool);
+      await invoke("activate_tool_hotkey", { tool: hotkeyKey });
     } catch (error) {
       console.error("Failed to activate tool:", error);
     }

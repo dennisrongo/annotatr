@@ -7,6 +7,22 @@ import { ToolType } from "../types/shapes";
 import { invoke } from "@tauri-apps/api/core";
 
 /**
+ * Convert ToolType to hotkey config key
+ * Example: "box" -> "boxTool", "freehand" -> "freehandTool"
+ */
+function toolTypeToHotkeyKey(tool: ToolType): string {
+  const keyMap: Record<ToolType, string> = {
+    [ToolType.ARROW]: "arrowTool",
+    [ToolType.CIRCLE]: "circleTool",
+    [ToolType.BOX]: "boxTool",
+    [ToolType.FREEHAND]: "freehandTool",
+    [ToolType.HIGHLIGHTER]: "highlighterTool",
+    [ToolType.TEXT]: "textTool",
+  };
+  return keyMap[tool] || tool;
+}
+
+/**
  * Drawing state interface
  * Tracks all aspects of the drawing system
  */
@@ -172,7 +188,9 @@ class DrawingStateStore {
    */
   async selectTool(tool: ToolType): Promise<void> {
     // Emit tool-selected event for overlay
-    await invoke("activate_tool_hotkey", { tool });
+    // Convert ToolType to hotkey config key before passing to backend
+    const hotkeyKey = toolTypeToHotkeyKey(tool);
+    await invoke("activate_tool_hotkey", { tool: hotkeyKey });
 
     this.setState({ currentTool: tool });
     console.log(`Tool selected: ${tool}`);
