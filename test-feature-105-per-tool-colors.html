@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feature #105: Per-Tool Color Configuration Test</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #2563eb;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #2563eb;
+            margin-top: 30px;
+        }
+        .test-section {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .color-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .color-card {
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 15px;
+            background: #fafafa;
+        }
+        .color-preview {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .color-swatch {
+            width: 40px;
+            height: 40px;
+            border-radius: 4px;
+            border: 2px solid #ccc;
+        }
+        .checklist {
+            list-style: none;
+            padding: 0;
+        }
+        .checklist li {
+            padding: 10px;
+            margin: 5px 0;
+            background: #f8f9fa;
+            border-radius: 4px;
+            border-left: 4px solid #2563eb;
+        }
+        .checklist li strong {
+            color: #2563eb;
+        }
+        code {
+            background: #f3f4f6;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+        .implementation-note {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .implementation-note h4 {
+            margin-top: 0;
+            color: #856404;
+        }
+        .steps {
+            background: #e7f3ff;
+            border-left: 4px solid #2563eb;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .steps ol {
+            margin: 0;
+            padding-left: 20px;
+        }
+        .steps li {
+            margin: 8px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Feature #105: Per-Tool Color Configuration Test</h1>
+    <p>Test that each drawing tool uses its own configurable color setting.</p>
+
+    <div class="test-section">
+        <h2>Overview</h2>
+        <p>Feature #105 ensures that each tool (Arrow, Circle, Box, Freehand, Highlighter, Text) can have its own color configured independently. Colors are stored in settings and persist across app restarts.</p>
+    </div>
+
+    <div class="test-section">
+        <h2>Default Tool Colors</h2>
+        <div class="color-grid">
+            <div class="color-card">
+                <div class="color-preview">
+                    <div class="color-swatch" style="background: #FF0000;"></div>
+                    <strong>Arrow</strong>
+                </div>
+                <p>Default: <code>#FF0000</code> (Red)</p>
+                <p>Storage key: <code>colors.arrow</code></p>
+            </div>
+            <div class="color-card">
+                <div class="color-preview">
+                    <div class="color-swatch" style="background: #FF0000;"></div>
+                    <strong>Circle</strong>
+                </div>
+                <p>Default: <code>#FF0000</code> (Red)</p>
+                <p>Storage key: <code>colors.circle</code></p>
+            </div>
+            <div class="color-card">
+                <div class="color-preview">
+                    <div class="color-swatch" style="background: #FF0000;"></div>
+                    <strong>Box</strong>
+                </div>
+                <p>Default: <code>#FF0000</code> (Red)</p>
+                <p>Storage key: <code>colors.box</code></p>
+            </div>
+            <div class="color-card">
+                <div class="color-preview">
+                    <div class="color-swatch" style="background: #FF0000;"></div>
+                    <strong>Freehand</strong>
+                </div>
+                <p>Default: <code>#FF0000</code> (Red)</p>
+                <p>Storage key: <code>colors.freehand</code></p>
+            </div>
+            <div class="color-card">
+                <div class="color-preview">
+                    <div class="color-swatch" style="background: #FFFF00;"></div>
+                    <strong>Highlighter</strong>
+                </div>
+                <p>Default: <code>#FFFF00</code> (Yellow)</p>
+                <p>Storage key: <code>colors.highlighter</code></p>
+            </div>
+            <div class="color-card">
+                <div class="color-preview">
+                    <div class="color-swatch" style="background: #FF0000;"></div>
+                    <strong>Text</strong>
+                </div>
+                <p>Default: <code>#FF0000</code> (Red)</p>
+                <p>Storage key: <code>colors.text</code></p>
+            </div>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>Verification Checklist</h2>
+        <ul class="checklist">
+            <li><strong>Per-tool color storage exists:</strong> Settings object has <code>colors.arrow</code>, <code>colors.circle</code>, etc.</li>
+            <li><strong>Color config per tool in settings:</strong> Settings modal allows configuring each tool's color</li>
+            <li><strong>Apply tool-specific color:</strong> Overlay component uses <code>getToolColor()</code> to get color for current tool</li>
+            <li><strong>Color switching works:</strong> When switching tools, the color changes to match that tool's setting</li>
+            <li><strong>Shapes use correct colors:</strong> Arrow shapes use arrow color, circles use circle color, etc.</li>
+            <li><strong>Colors persist across restarts:</strong> Custom tool colors are saved and loaded on app restart</li>
+        </ul>
+    </div>
+
+    <div class="test-section">
+        <h2>Test Steps</h2>
+        <div class="steps">
+            <ol>
+                <li>Launch the Annotatr application</li>
+                <li>Open the Mini Panel (should appear automatically)</li>
+                <li>Click the "Settings" button to open settings modal</li>
+                <li>Scroll to "Default Tool Colors" section</li>
+                <li>Change Arrow color to Blue (<code>#0000FF</code>)</li>
+                <li>Change Circle color to Green (<code>#00FF00</code>)</li>
+                <li>Change Box color to Orange (<code>#FF8C00</code>)</li>
+                <li>Click "Save" to apply changes</li>
+                <li>Close settings modal</li>
+                <li>Select Arrow tool and draw an arrow - verify it appears Blue</li>
+                <li>Select Circle tool and draw a circle - verify it appears Green</li>
+                <li>Select Box tool and draw a box - verify it appears Orange</li>
+                <li>Restart the application</li>
+                <li>Draw shapes with each tool - verify colors persist</li>
+            </ol>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>Implementation Details</h2>
+
+        <div class="implementation-note">
+            <h4>✓ Storage Layer (src/lib/storage.ts)</h4>
+            <p>The <code>Settings</code> interface already includes a <code>colors</code> object with per-tool color keys:</p>
+            <pre style="background: #f3f4f6; padding: 10px; border-radius: 4px; overflow-x: auto;">
+colors: {
+  arrow: string;
+  circle: string;
+  box: string;
+  freehand: string;
+  highlighter: string;
+  text: string;
+}</pre>
+        </div>
+
+        <div class="implementation-note">
+            <h4>✓ Mini Panel UI (src/components/MiniPanel.tsx)</h4>
+            <p>The settings modal already has a "Default Tool Colors" section (lines 1707-1831) with:</p>
+            <ul>
+                <li>Preset color picker for quick selection</li>
+                <li>Custom color picker (rainbow button)</li>
+                <li>Per-tool color configuration</li>
+                <li>Automatic saving to storage</li>
+            </ul>
+        </div>
+
+        <div class="implementation-note">
+            <h4>✓ Overlay Component (src/components/Overlay.tsx)</h4>
+            <p>Added <code>getToolColor()</code> function (lines 68-82) that retrieves the color for a specific tool from settings:</p>
+            <pre style="background: #f3f4f6; padding: 10px; border-radius: 4px; overflow-x: auto;">
+const getToolColor = useCallback((tool: ToolType | null): string => {
+  if (!tool || !settings) return defaultColor;
+
+  const toolColorKey: Record<ToolType, keyof Settings['colors']> = {
+    [ToolType.ARROW]: 'arrow',
+    [ToolType.CIRCLE]: 'circle',
+    [ToolType.BOX]: 'box',
+    [ToolType.FREEHAND]: 'freehand',
+    [ToolType.HIGHLIGHTER]: 'highlighter',
+    [ToolType.TEXT]: 'text',
+  };
+
+  const colorKey = toolColorKey[tool];
+  return settings.colors[colorKey] || defaultColor;
+}, [settings, defaultColor]);</pre>
+            <p>All shape creation functions now use <code>getToolColor()</code> instead of the hardcoded <code>defaultColor</code> variable.</p>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>Architecture Decision</h2>
+        <p><strong>Why this approach is correct:</strong></p>
+        <ul>
+            <li>✅ <strong>Separation of concerns:</strong> Settings/storage handles persistence, MiniPanel handles UI, Overlay handles drawing</li>
+            <li>✅ <strong>Single source of truth:</strong> All tool colors come from the settings object</li>
+            <li>✅ <strong>Reactive updates:</strong> When settings change, the Overlay component reacts via the <code>settings</code> state</li>
+            <li>✅ <strong>Type safety:</strong> TypeScript ensures all tool colors are properly typed</li>
+            <li>✅ <strong>Extensibility:</strong> Easy to add new tools with their own colors</li>
+        </ul>
+    </div>
+
+    <div class="test-section">
+        <h2>Expected Results</h2>
+        <p>When Feature #105 is fully working:</p>
+        <ul>
+            <li>✅ Each tool can have a different color configured in settings</li>
+            <li>✅ Shapes drawn with a tool use that tool's configured color</li>
+            <li>✅ Changing a tool's color in settings immediately affects new shapes</li>
+            <li>✅ Custom colors persist across application restarts</li>
+            <li>✅ Settings export/import includes per-tool colors</li>
+            <li>✅ Reset to defaults restores all tool colors to default values</li>
+        </ul>
+    </div>
+</body>
+</html>

@@ -66,6 +66,24 @@ export default function Overlay() {
   const defaultLineThickness = 12;
   const defaultFontSize = 24;
 
+  // Feature #105: Get tool-specific color from settings
+  const getToolColor = useCallback((tool: ToolType | null): string => {
+    if (!tool || !settings) return defaultColor;
+
+    // Map tool type to color setting key
+    const toolColorKey: Record<ToolType, keyof Settings['colors']> = {
+      [ToolType.ARROW]: 'arrow',
+      [ToolType.CIRCLE]: 'circle',
+      [ToolType.BOX]: 'box',
+      [ToolType.FREEHAND]: 'freehand',
+      [ToolType.HIGHLIGHTER]: 'highlighter',
+      [ToolType.TEXT]: 'text',
+    };
+
+    const colorKey = toolColorKey[tool];
+    return settings.colors[colorKey] || defaultColor;
+  }, [settings, defaultColor]);
+
   // Feature #73: Auto-fade system - track shape opacities for smooth fade-out
   const [shapeOpacities, setShapeOpacities] = useState<Record<string, number>>({});
 
@@ -184,12 +202,12 @@ export default function Overlay() {
       tool: ToolType.ARROW,
       startPoint: { x: startX, y: startY },
       endPoint: { x: endX, y: endY },
-      color: defaultColor,
+      color: getToolColor(ToolType.ARROW), // Feature #105: Use tool-specific color
       lineThickness: defaultLineThickness,
       createdAt: Date.now(),
       monitorId: currentMonitor || "default", // Feature #9: Track monitor ID
     };
-  }, [generateShapeId, currentMonitor]);
+  }, [generateShapeId, currentMonitor, getToolColor]);
 
   /**
    * Create circle shape from drawing state
@@ -213,12 +231,12 @@ export default function Overlay() {
       radius: Math.max(radiusX, radiusY),
       radiusX,
       radiusY,
-      color: defaultColor,
+      color: getToolColor(ToolType.CIRCLE), // Feature #105: Use tool-specific color
       lineThickness: defaultLineThickness,
       createdAt: Date.now(),
       monitorId: currentMonitor || "default", // Feature #9: Track monitor ID
     };
-  }, [generateShapeId, currentMonitor]);
+  }, [generateShapeId, currentMonitor, getToolColor]);
 
   /**
    * Create box shape from drawing state
@@ -240,12 +258,12 @@ export default function Overlay() {
       endPoint: { x: currentX, y: currentY },
       width,
       height,
-      color: defaultColor,
+      color: getToolColor(ToolType.BOX), // Feature #105: Use tool-specific color
       lineThickness: defaultLineThickness,
       createdAt: Date.now(),
       monitorId: currentMonitor || "default", // Feature #9: Track monitor ID
     };
-  }, [generateShapeId, currentMonitor]);
+  }, [generateShapeId, currentMonitor, getToolColor]);
 
   /**
    * Create freehand shape from drawing state
@@ -256,12 +274,12 @@ export default function Overlay() {
       id: generateShapeId(),
       tool: ToolType.FREEHAND,
       points: [...points],
-      color: defaultColor,
+      color: getToolColor(ToolType.FREEHAND), // Feature #105: Use tool-specific color
       lineThickness: defaultLineThickness,
       createdAt: Date.now(),
       monitorId: currentMonitor || "default", // Feature #9: Track monitor ID
     };
-  }, [generateShapeId, currentMonitor]);
+  }, [generateShapeId, currentMonitor, getToolColor]);
 
   /**
    * Create highlighter shape from drawing state
@@ -272,13 +290,13 @@ export default function Overlay() {
       id: generateShapeId(),
       tool: ToolType.HIGHLIGHTER,
       points: [...points],
-      color: defaultColor,
+      color: getToolColor(ToolType.HIGHLIGHTER), // Feature #105: Use tool-specific color
       lineThickness: defaultLineThickness,
       opacity: 0.3, // Semi-transparent
       createdAt: Date.now(),
       monitorId: currentMonitor || "default", // Feature #9: Track monitor ID
     };
-  }, [generateShapeId, currentMonitor]);
+  }, [generateShapeId, currentMonitor, getToolColor]);
 
   /**
    * Create text shape from drawing state
@@ -293,8 +311,8 @@ export default function Overlay() {
     // Feature #30: Get font size from settings (scaled up for visibility - 14pt in settings -> ~24px for rendering)
     const fontSize = settings ? (settings.fontSize * 1.7) : defaultFontSize;
 
-    // Feature #31: Get text color from settings
-    const textColor = settings?.colors.text || defaultColor;
+    // Feature #105: Use tool-specific color for text
+    const textColor = getToolColor(ToolType.TEXT);
 
     return {
       id: generateShapeId(),
@@ -307,7 +325,7 @@ export default function Overlay() {
       createdAt: Date.now(),
       monitorId: currentMonitor || "default", // Feature #9: Track monitor ID
     };
-  }, [generateShapeId, settings, defaultFontSize, defaultColor, currentMonitor]);
+  }, [generateShapeId, settings, defaultFontSize, currentMonitor, getToolColor]);
 
   /**
    * Handle mouse down - start drawing
