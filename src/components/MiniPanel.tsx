@@ -66,6 +66,9 @@ export default function MiniPanel() {
   // Feature #47: Font size control state
   const [fontSize, setFontSize] = useState(DEFAULT_SETTINGS.fontSize);
 
+  // Feature #70: Fade duration control state
+  const [fadeDuration, setFadeDuration] = useState(DEFAULT_SETTINGS.fadeDuration);
+
   // Feature #48: Settings modal state
   const [showSettingsModal, setShowSettingsModal] = useState(false);
 
@@ -180,6 +183,22 @@ export default function MiniPanel() {
       }
     };
     loadFontSize();
+  }, []);
+
+  /**
+   * Feature #70: Load fade duration from settings on mount
+   */
+  useEffect(() => {
+    const loadFadeDuration = async () => {
+      try {
+        const settings = await loadSettings();
+        setFadeDuration(settings.fadeDuration);
+        console.log("Fade duration loaded:", settings.fadeDuration);
+      } catch (error) {
+        console.error("Failed to load fade duration:", error);
+      }
+    };
+    loadFadeDuration();
   }, []);
 
   /**
@@ -454,6 +473,22 @@ export default function MiniPanel() {
       console.log(`Font size updated to: ${value}`);
     } catch (error) {
       console.error("Failed to save font size:", error);
+    }
+  };
+
+  /**
+   * Feature #70: Handle fade duration change
+   * Updates fade duration and saves to settings
+   */
+  const handleFadeDurationChange = async (value: number) => {
+    setFadeDuration(value);
+
+    // Save to persistent storage
+    try {
+      await saveSettings({ fadeDuration: value });
+      console.log(`Fade duration updated to: ${value}`);
+    } catch (error) {
+      console.error("Failed to save fade duration:", error);
     }
   };
 
@@ -991,6 +1026,82 @@ export default function MiniPanel() {
         </div>
       </div>
 
+      {/* Feature #70: Fade duration control section */}
+      <div
+        style={{
+          marginTop: "12px",
+          paddingTop: "12px",
+          borderTop: "1px solid rgba(0, 0, 0, 0.1)",
+        }}
+      >
+        <div
+          style={{
+            fontSize: "11px",
+            fontWeight: "bold",
+            color: "#333",
+            marginBottom: "6px",
+            textAlign: "center",
+          }}
+        >
+          Auto-Fade Duration
+        </div>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            padding: "4px 8px",
+            backgroundColor: "rgba(255, 255, 255, 0.5)",
+            borderRadius: "4px",
+          }}
+        >
+          <span
+            style={{
+              fontSize: "10px",
+              color: "#666",
+              minWidth: "20px",
+            }}
+          >
+            1
+          </span>
+          <input
+            type="range"
+            min="1"
+            max="60"
+            step="1"
+            value={fadeDuration}
+            onChange={(e) => handleFadeDurationChange(parseInt(e.target.value, 10))}
+            style={{
+              flex: 1,
+              height: "6px",
+              cursor: "pointer",
+            }}
+            aria-label="Auto-fade duration"
+            title={`Shapes auto-fade after ${fadeDuration} seconds`}
+          />
+          <span
+            style={{
+              fontSize: "10px",
+              color: "#666",
+              minWidth: "25px",
+            }}
+          >
+            60
+          </span>
+          <span
+            style={{
+              fontSize: "11px",
+              fontWeight: "bold",
+              color: "#2563eb",
+              minWidth: "45px",
+              textAlign: "right",
+            }}
+          >
+            {fadeDuration}s
+          </span>
+        </div>
+      </div>
+
       <div
         style={{
           marginTop: "12px",
@@ -1136,7 +1247,7 @@ export default function MiniPanel() {
                 >
                   <li><strong>Font Size:</strong> {fontSize}pt</li>
                   <li><strong>Line Thickness:</strong> {lineThickness}px</li>
-                  <li><strong>Fade Duration:</strong> 10 seconds</li>
+                  <li><strong>Fade Duration:</strong> {fadeDuration} seconds</li>
                   <li><strong>Colors:</strong> Configured per tool</li>
                 </ul>
               </div>
