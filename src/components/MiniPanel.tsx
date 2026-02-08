@@ -60,6 +60,10 @@ export default function MiniPanel() {
   // Feature #45: Custom color picker state
   const customColorInputRef = useRef<HTMLInputElement>(null);
 
+  // Feature #81: Custom color picker for settings
+  const settingsColorInputRef = useRef<HTMLInputElement>(null);
+  const [editingColorForTool, setEditingColorForTool] = useState<string | null>(null);
+
   // Feature #46: Line thickness control state
   const [lineThickness, setLineThickness] = useState(DEFAULT_SETTINGS.lineThickness);
 
@@ -493,6 +497,59 @@ export default function MiniPanel() {
   };
 
   /**
+   * Feature #81: Handle tool color selection from preset in settings
+   * Updates the default color for a specific tool
+   */
+  const handleSettingsColorSelect = async (tool: string, color: string) => {
+    try {
+      const updatedColors = {
+        ...currentColorForTool,
+        [tool]: color,
+      };
+      setCurrentColorForTool(updatedColors);
+
+      // Save to persistent storage
+      await saveSettings({ colors: updatedColors as any });
+      console.log(`Updated ${tool} default color to: ${color}`);
+
+      // Update selected color if this tool is currently selected
+      if (selectedTool === tool) {
+        setSelectedColor(color);
+      }
+
+      setEditingColorForTool(null);
+    } catch (error) {
+      console.error("Failed to save color:", error);
+    }
+  };
+
+  /**
+   * Feature #81: Open custom color picker for a tool in settings
+   */
+  const openSettingsColorPicker = (tool: string) => {
+    setEditingColorForTool(tool);
+    settingsColorInputRef.current?.click();
+  };
+
+  /**
+   * Feature #81: Handle custom color input change in settings
+   */
+  const handleSettingsCustomColorChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const color = e.target.value;
+
+    // Validate hex color format (#RRGGBB or #RGB)
+    const hexColorRegex = /^#([0-9A-F]{3}){1,2}$/i;
+    if (!hexColorRegex.test(color)) {
+      console.warn("Invalid hex color format:", color);
+      return;
+    }
+
+    if (editingColorForTool) {
+      await handleSettingsColorSelect(editingColorForTool, color);
+    }
+  };
+
+  /**
    * Feature #19: Handle drag start
    * Initiates panel dragging
    */
@@ -848,6 +905,20 @@ export default function MiniPanel() {
               pointerEvents: "none",
             }}
             value={selectedColor}
+          />
+          {/* Feature #81: Hidden color input for settings color selection */}
+          <input
+            ref={settingsColorInputRef}
+            type="color"
+            onChange={handleSettingsCustomColorChange}
+            style={{
+              position: "absolute",
+              width: "0",
+              height: "0",
+              opacity: "0",
+              pointerEvents: "none",
+            }}
+            value={currentColorForTool[editingColorForTool || "arrow"] || "#FF0000"}
           />
         </div>
         {/* Selected color indicator */}
@@ -1467,6 +1538,132 @@ export default function MiniPanel() {
                   }}
                 >
                   💡 Click "Edit" then press your desired key combination to change a hotkey.
+                </p>
+              </div>
+
+              {/* Feature #81: Color picker for default tool colors */}
+              <div
+                style={{
+                  backgroundColor: "#f8f9fa",
+                  padding: "12px",
+                  borderRadius: "4px",
+                  marginTop: "15px",
+                }}
+              >
+                <h3
+                  style={{
+                    fontSize: "14px",
+                    margin: "0 0 10px 0",
+                    color: "#333",
+                  }}
+                >
+                  Default Tool Colors
+                </h3>
+                <div
+                  style={{
+                    fontSize: "12px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "10px",
+                  }}
+                >
+                  {Object.entries(currentColorForTool).map(([tool, color]: [string, string]) => (
+                    <div
+                      key={tool}
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        padding: "8px",
+                        backgroundColor: "white",
+                        borderRadius: "4px",
+                        border: "1px solid #e5e7eb",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <span
+                          style={{
+                            display: "inline-block",
+                            width: "20px",
+                            height: "20px",
+                            backgroundColor: color,
+                            border: "1px solid #ccc",
+                            borderRadius: "3px",
+                          }}
+                        />
+                        <span style={{ fontWeight: 500, color: "#374151", textTransform: "capitalize" }}>
+                          {tool}
+                        </span>
+                      </div>
+
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: "4px",
+                          alignItems: "center",
+                        }}
+                      >
+                        {/* Preset colors */}
+                        {PRESET_COLORS.slice(0, 6).map((presetColor) => (
+                          <button
+                            key={presetColor}
+                            type="button"
+                            onClick={() => handleSettingsColorSelect(tool, presetColor)}
+                            style={{
+                              width: "24px",
+                              height: "24px",
+                              padding: "0",
+                              backgroundColor: presetColor,
+                              border: color === presetColor ? "2px solid #2563eb" : "1px solid #ccc",
+                              borderRadius: "3px",
+                              cursor: "pointer",
+                              transition: "transform 0.1s",
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.transform = "scale(1.1)";
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.transform = "scale(1)";
+                            }}
+                            title={`Set ${tool} color to ${presetColor}`}
+                          />
+                        ))}
+
+                        {/* Custom color picker button */}
+                        <button
+                          type="button"
+                          onClick={() => openSettingsColorPicker(tool)}
+                          style={{
+                            width: "24px",
+                            height: "24px",
+                            padding: "0",
+                            backgroundColor: "linear-gradient(135deg, #ff0000 0%, #00ff00 50%, #0000ff 100%)",
+                            border: "1px solid #999",
+                            borderRadius: "3px",
+                            cursor: "pointer",
+                            transition: "transform 0.1s",
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.transform = "scale(1.1)";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.transform = "scale(1)";
+                          }}
+                          title={`Select custom color for ${tool}`}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <p
+                  style={{
+                    fontSize: "11px",
+                    margin: "10px 0 0 0",
+                    color: "#6b7280",
+                    fontStyle: "italic",
+                  }}
+                >
+                  💡 Click a preset color or the rainbow button to choose custom colors for each tool.
                 </p>
               </div>
 
