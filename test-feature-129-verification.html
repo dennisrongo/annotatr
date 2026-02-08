@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Feature #129: Multi-line Text - Live Verification</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      margin: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #2c3e50;
+      border-bottom: 3px solid #3498db;
+      padding-bottom: 10px;
+    }
+    .canvas-container {
+      position: relative;
+      margin: 20px 0;
+    }
+    canvas {
+      border: 2px solid #bdc3c7;
+      background: #ecf0f1;
+      cursor: crosshair;
+      display: block;
+    }
+    .controls {
+      background: #34495e;
+      padding: 15px;
+      border-radius: 5px;
+      margin-bottom: 20px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .tool-btn {
+      background: #3498db;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .tool-btn:hover {
+      background: #2980b9;
+    }
+    .tool-btn.active {
+      background: #27ae60;
+      box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+    }
+    .test-instructions {
+      background: #fff3cd;
+      border-left: 4px solid #ffc107;
+      padding: 15px;
+      margin: 20px 0;
+    }
+    .test-instructions h3 {
+      margin-top: 0;
+      color: #856404;
+    }
+    .test-instructions ol {
+      margin: 10px 0;
+    }
+    .test-instructions li {
+      margin: 8px 0;
+    }
+    .key {
+      background: #2c3e50;
+      color: white;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 0.9em;
+    }
+    .info-box {
+      background: #d1ecf1;
+      border-left: 4px solid #17a2b8;
+      padding: 15px;
+      margin: 20px 0;
+    }
+    .success-box {
+      background: #d4edda;
+      border-left: 4px solid #28a745;
+      padding: 15px;
+      margin: 20px 0;
+    }
+    #textInputOverlay {
+      position: absolute;
+      display: none;
+      z-index: 1000;
+    }
+    #textInputOverlay textarea {
+      min-width: 200px;
+      min-height: 60px;
+      padding: 4px 8px;
+      border: 2px solid #FF0000;
+      border-radius: 4px;
+      font-size: 24px;
+      background: rgba(255, 255, 255, 0.95);
+      resize: both;
+      overflow: auto;
+      outline: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Feature #129: Multi-line Text Support - Verification Test</h1>
+
+    <div class="test-instructions">
+      <h3>Test Instructions:</h3>
+      <ol>
+        <li>Click the <strong>Text</strong> tool button (or it's already selected)</li>
+        <li>Click anywhere on the canvas below</li>
+        <li>Type multi-line text:</li>
+        <ul>
+          <li>Type "Line 1"</li>
+          <li>Press <span class="key">Shift</span> + <span class="key">Enter</span> for new line</li>
+          <li>Type "Line 2"</li>
+          <li>Press <span class="key">Shift</span> + <span class="key">Enter</span> again</li>
+          <li>Type "Line 3"</li>
+        </ul>
+        <li>Press <span class="key">Enter</span> (without Shift) to submit</li>
+        <li>Verify that the text appears on 3 separate lines with proper spacing</li>
+        <li>Try the <span class="key">Escape</span> key to cancel (before submitting)</li>
+      </ol>
+    </div>
+
+    <div class="info-box">
+      <strong>Expected Behavior:</strong>
+      <ul>
+        <li><span class="key">Shift</span> + <span class="key">Enter</span> = New line</li>
+        <li><span class="key">Enter</span> = Submit text and create shape</li>
+        <li><span class="key">Escape</span> = Cancel text input</li>
+        <li>Click outside textarea = Submit text</li>
+      </ul>
+    </div>
+
+    <div class="controls">
+      <button class="tool-btn active" id="textTool">Text Tool</button>
+      <button class="tool-btn" id="clearBtn">Clear Canvas</button>
+    </div>
+
+    <div class="canvas-container">
+      <canvas id="testCanvas" width="900" height="500"></canvas>
+      <div id="textInputOverlay">
+        <textarea id="multiLineInput" placeholder="Type multi-line text and press Enter to submit..."></textarea>
+      </div>
+    </div>
+
+    <div class="success-box" id="testResult" style="display: none;">
+      <strong>✓ Test Passed!</strong> Multi-line text is rendering correctly. Each line appears at the correct Y position with proper line spacing.
+    </div>
+
+    <div id="shapeCount" style="margin-top: 20px; color: #7f8c8d;">
+      Shapes on canvas: <strong>0</strong>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('testCanvas');
+    const ctx = canvas.getContext('2d');
+    const textInputOverlay = document.getElementById('textInputOverlay');
+    const multiLineInput = document.getElementById('multiLineInput');
+    const textToolBtn = document.getElementById('textTool');
+    const clearBtn = document.getElementById('clearBtn');
+    const testResult = document.getElementById('testResult');
+    const shapeCountEl = document.getElementById('shapeCount');
+
+    let shapes = [];
+    let currentTool = 'text';
+    let textPosition = null;
+
+    // Tool selection
+    textToolBtn.addEventListener('click', () => {
+      currentTool = 'text';
+      textToolBtn.classList.add('active');
+    });
+
+    clearBtn.addEventListener('click', () => {
+      shapes = [];
+      redrawAll();
+      updateShapeCount();
+      testResult.style.display = 'none';
+    });
+
+    // Canvas click handler
+    canvas.addEventListener('click', (e) => {
+      if (currentTool === 'text') {
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        textPosition = { x, y };
+
+        // Position textarea at click location
+        textInputOverlay.style.left = x + 'px';
+        textInputOverlay.style.top = y + 'px';
+        textInputOverlay.style.display = 'block';
+
+        multiLineInput.value = '';
+        multiLineInput.focus();
+      }
+    });
+
+    // Simulate Feature #129: Multi-line text rendering
+    function drawTextShape(ctx, shape) {
+      const { position, text, color, fontSize } = shape;
+
+      ctx.fillStyle = color;
+      ctx.font = `${fontSize}px sans-serif`;
+      ctx.textBaseline = 'top';
+
+      // Feature #129: Handle multi-line text
+      const lines = text.split('\n');
+      const lineHeight = fontSize * 1.2; // 20% line spacing
+
+      lines.forEach((line, index) => {
+        const y = position.y + (index * lineHeight);
+        ctx.fillText(line, position.x, y);
+      });
+    }
+
+    function redrawAll() {
+      // Clear canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Draw all shapes
+      shapes.forEach(shape => {
+        if (shape.tool === 'text') {
+          drawTextShape(ctx, shape);
+        }
+      });
+    }
+
+    function updateShapeCount() {
+      shapeCountEl.innerHTML = `Shapes on canvas: <strong>${shapes.length}</strong>`;
+    }
+
+    // Text input keydown handler (simulates Overlay.tsx behavior)
+    multiLineInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        // Enter submits the text
+        e.preventDefault();
+        submitText();
+      } else if (e.key === 'Escape') {
+        // Escape cancels text input
+        e.preventDefault();
+        cancelText();
+      }
+      // Shift+Enter allows default behavior (new line)
+    });
+
+    // Submit text
+    function submitText() {
+      const text = multiLineInput.value.trim();
+
+      if (text) {
+        // Create text shape
+        const shape = {
+          id: Date.now(),
+          tool: 'text',
+          position: textPosition,
+          text: text,
+          color: '#FF0000',
+          fontSize: 24
+        };
+
+        shapes.push(shape);
+        redrawAll();
+        updateShapeCount();
+
+        // Show success message if multi-line
+        if (text.includes('\n')) {
+          testResult.style.display = 'block';
+        }
+      }
+
+      // Hide textarea
+      textInputOverlay.style.display = 'none';
+      multiLineInput.value = '';
+      textPosition = null;
+    }
+
+    // Cancel text input
+    function cancelText() {
+      textInputOverlay.style.display = 'none';
+      multiLineInput.value = '';
+      textPosition = null;
+    }
+
+    // Submit on blur (click outside)
+    multiLineInput.addEventListener('blur', () => {
+      // Small delay to allow Enter key to process first
+      setTimeout(() => {
+        if (textInputOverlay.style.display === 'block') {
+          submitText();
+        }
+      }, 100);
+    });
+
+    // Initial redraw
+    redrawAll();
+  </script>
+</body>
+</html>

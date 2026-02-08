@@ -193,6 +193,10 @@ export function drawHighlighter(
 /**
  * Draw a text shape on the canvas
  */
+/**
+ * Draw a text shape on the canvas
+ * Feature #129: Multi-line text support with line break handling
+ */
 export function drawText(
   ctx: CanvasRenderingContext2D,
   shape: TextShape
@@ -203,7 +207,14 @@ export function drawText(
   ctx.font = `${fontSize}px sans-serif`;
   ctx.textBaseline = "top";
 
-  ctx.fillText(text, position.x, position.y);
+  // Feature #129: Handle multi-line text
+  const lines = text.split('\n');
+  const lineHeight = fontSize * 1.2; // 20% line spacing
+
+  lines.forEach((line, index) => {
+    const y = position.y + (index * lineHeight);
+    ctx.fillText(line, position.x, y);
+  });
 }
 
 /**

@@ -45,7 +45,7 @@ export default function Overlay() {
   const [textInputVisible, setTextInputVisible] = useState(false);
   const [textInputPosition, setTextInputPosition] = useState<Point>({ x: 0, y: 0 });
   const [textInputValue, setTextInputValue] = useState("");
-  const textInputRef = useRef<HTMLInputElement>(null);
+  const textInputRef = useRef<HTMLTextAreaElement>(null);
 
   // Feature #30 & #31: Settings state for font size and colors
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -314,6 +314,201 @@ export default function Overlay() {
   }, [toolIndicators]);
 
   /**
+   * Feature #132: Alignment guides for shape drawing
+   * Detects when shapes align with center, edges, or other shapes
+   */
+
+  // Threshold distance for snapping (in pixels)
+  const SNAP_THRESHOLD = 10;
+
+  /**
+   * Detect alignment with center of screen
+   */
+  const detectCenterAlignment = useCallback((x: number, y: number): { horizontal: boolean; vertical: boolean } => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { horizontal: false, vertical: false };
+
+    const centerX = canvas.width / (2 * (window.devicePixelRatio || 1));
+    const centerY = canvas.height / (2 * (window.devicePixelRatio || 1));
+
+    return {
+      horizontal: Math.abs(x - centerX) < SNAP_THRESHOLD,
+      vertical: Math.abs(y - centerY) < SNAP_THRESHOLD,
+    };
+  }, []);
+
+  /**
+   * Detect alignment with edges of screen
+   */
+  const detectEdgeAlignment = useCallback((x: number, y: number): { left: boolean; right: boolean; top: boolean; bottom: boolean } => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { left: false, right: false, top: false, bottom: false };
+
+    const width = canvas.width / (window.devicePixelRatio || 1);
+    const height = canvas.height / (window.devicePixelRatio || 1);
+
+    return {
+      left: Math.abs(x) < SNAP_THRESHOLD,
+      right: Math.abs(x - width) < SNAP_THRESHOLD,
+      top: Math.abs(y) < SNAP_THRESHOLD,
+      bottom: Math.abs(y - height) < SNAP_THRESHOLD,
+    };
+  }, []);
+
+  /**
+   * Detect alignment with existing shapes (centers and edges)
+   */
+  const detectShapeAlignment = useCallback((x: number, y: number): Array<{ x: number; y: number; type: string }> => {
+    const alignments: Array<{ x: number; y: number; type: string }> = [];
+
+    shapesRef.current.forEach(shape => {
+      let shapeCenterX = 0;
+      let shapeCenterY = 0;
+
+      // Calculate center of existing shape
+      switch (shape.tool) {
+        case ToolType.ARROW:
+          shapeCenterX = (shape.startPoint.x + shape.endPoint.x) / 2;
+          shapeCenterY = (shape.startPoint.y + shape.endPoint.y) / 2;
+          break;
+        case ToolType.CIRCLE:
+          shapeCenterX = shape.centerPoint.x;
+          shapeCenterY = shape.centerPoint.y;
+          break;
+        case ToolType.BOX:
+          shapeCenterX = (shape.startPoint.x + shape.endPoint.x) / 2;
+          shapeCenterY = (shape.startPoint.y + shape.endPoint.y) / 2;
+          break;
+        case ToolType.FREEHAND:
+        case ToolType.HIGHLIGHTER:
+          if (shape.points.length > 0) {
+            const sumX = shape.points.reduce((sum, p) => sum + p.x, 0);
+            const sumY = shape.points.reduce((sum, p) => sum + p.y, 0);
+            shapeCenterX = sumX / shape.points.length;
+            shapeCenterY = sumY / shape.points.length;
+          }
+          break;
+        case ToolType.TEXT:
+          shapeCenterX = shape.position.x;
+          shapeCenterY = shape.position.y;
+          break;
+      }
+
+      // Check horizontal alignment with shape center
+      if (Math.abs(y - shapeCenterY) < SNAP_THRESHOLD) {
+        alignments.push({ x: 0, y: shapeCenterY, type: 'shape-horizontal' });
+      }
+
+      // Check vertical alignment with shape center
+      if (Math.abs(x - shapeCenterX) < SNAP_THRESHOLD) {
+        alignments.push({ x: shapeCenterX, y: 0, type: 'shape-vertical' });
+      }
+    });
+
+    return alignments;
+  }, []);
+
+  /**
+   * Draw alignment guides on canvas
+   */
+  const drawAlignmentGuides = useCallback((
+    ctx: CanvasRenderingContext2D,
+    guides: {
+      centerH: boolean;
+      centerV: boolean;
+      edges: { left: boolean; right: boolean; top: boolean; bottom: boolean };
+      shapes: Array<{ x: number; y: number; type: string }>;
+      currentX: number;
+      currentY: number;
+    }
+  ) => {
+    const { centerH, centerV, edges, shapes, currentX, currentY } = guides;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const width = canvas.width / (window.devicePixelRatio || 1);
+    const height = canvas.height / (window.devicePixelRatio || 1);
+
+    // Save context state
+    ctx.save();
+
+    // Set guide style
+    ctx.strokeStyle = "#00BFFF"; // Deep sky blue for visibility
+    ctx.lineWidth = 1;
+    ctx.setLineDash([5, 5]); // Dashed line
+    ctx.globalAlpha = 0.7;
+
+    // Draw center horizontal guide
+    if (centerH) {
+      ctx.beginPath();
+      ctx.moveTo(0, currentY);
+      ctx.lineTo(width, currentY);
+      ctx.stroke();
+    }
+
+    // Draw center vertical guide
+    if (centerV) {
+      ctx.beginPath();
+      ctx.moveTo(currentX, 0);
+      ctx.lineTo(currentX, height);
+      ctx.stroke();
+    }
+
+    // Draw edge guides
+    if (edges.left) {
+      ctx.beginPath();
+      ctx.moveTo(0, currentY);
+      ctx.lineTo(currentX, currentY);
+      ctx.stroke();
+    }
+    if (edges.right) {
+      ctx.beginPath();
+      ctx.moveTo(width, currentY);
+      ctx.lineTo(currentX, currentY);
+      ctx.stroke();
+    }
+    if (edges.top) {
+      ctx.beginPath();
+      ctx.moveTo(currentX, 0);
+      ctx.lineTo(currentX, currentY);
+      ctx.stroke();
+    }
+    if (edges.bottom) {
+      ctx.beginPath();
+      ctx.moveTo(currentX, height);
+      ctx.lineTo(currentX, currentY);
+      ctx.stroke();
+    }
+
+    // Draw shape alignment guides
+    shapes.forEach(guide => {
+      if (guide.type === 'shape-horizontal') {
+        ctx.beginPath();
+        ctx.moveTo(0, guide.y);
+        ctx.lineTo(width, guide.y);
+        ctx.stroke();
+      } else if (guide.type === 'shape-vertical') {
+        ctx.beginPath();
+        ctx.moveTo(guide.x, 0);
+        ctx.lineTo(guide.x, height);
+        ctx.stroke();
+      }
+    });
+
+    // Draw snap points (small circles at intersections)
+    ctx.fillStyle = "#00BFFF";
+    const snapRadius = 4;
+    if (centerH || centerV || edges.left || edges.right || edges.top || edges.bottom || shapes.length > 0) {
+      ctx.beginPath();
+      ctx.arc(currentX, currentY, snapRadius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Restore context state
+    ctx.restore();
+  }, []);
+
+  /**
    * Create arrow shape from drawing state
    * Feature #9: Includes monitorId for per-monitor shape confinement
    * Feature #128: Includes customFadeDuration if set
@@ -555,6 +750,7 @@ export default function Overlay() {
 
   /**
    * Handle mouse move - update preview
+   * Feature #132: Show alignment guides during drawing
    */
   const handleMouseMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     if (!drawingState.isDrawing || !currentTool) return;
@@ -562,8 +758,8 @@ export default function Overlay() {
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
 
-    const currentX = event.clientX - rect.left;
-    const currentY = event.clientY - rect.top;
+    let currentX = event.clientX - rect.left;
+    let currentY = event.clientY - rect.top;
 
     // For freehand and highlighter, add points to the path
     if (currentTool === ToolType.FREEHAND || currentTool === ToolType.HIGHLIGHTER) {
@@ -593,11 +789,42 @@ export default function Overlay() {
       return;
     }
 
-    // For arrow, circle, box - update drawing state
+    // Feature #132: Detect alignments for arrow, circle, box
+    const centerAlign = detectCenterAlignment(currentX, currentY);
+    const edgeAlign = detectEdgeAlignment(currentX, currentY);
+    const shapeAligns = detectShapeAlignment(currentX, currentY);
+
+    // Apply snapping to center
+    let snappedX = currentX;
+    let snappedY = currentY;
+
+    if (centerAlign.horizontal) {
+      const canvas = canvasRef.current;
+      if (canvas) {
+        snappedY = canvas.height / (2 * (window.devicePixelRatio || 1));
+      }
+    }
+    if (centerAlign.vertical) {
+      const canvas = canvasRef.current;
+      if (canvas) {
+        snappedX = canvas.width / (2 * (window.devicePixelRatio || 1));
+      }
+    }
+
+    // Snap to shape alignments
+    shapeAligns.forEach(guide => {
+      if (guide.type === 'shape-horizontal') {
+        snappedY = guide.y;
+      } else if (guide.type === 'shape-vertical') {
+        snappedX = guide.x;
+      }
+    });
+
+    // For arrow, circle, box - update drawing state with snapped position
     setDrawingState(prev => ({
       ...prev,
-      currentX,
-      currentY,
+      currentX: snappedX,
+      currentY: snappedY,
     }));
 
     // Redraw existing shapes and preview
@@ -607,27 +834,37 @@ export default function Overlay() {
     const { ctx } = context;
 
     // Clear and redraw all existing shapes
-    redrawShapes(ctx, shapesRef.current);
+    redrawShapes(ctx, shapesRef.current, shapeOpacities);
 
     // Draw preview of current shape
     let previewShape: Shape;
 
     switch (currentTool) {
       case ToolType.ARROW:
-        previewShape = createArrowShape(drawingState.startX, drawingState.startY, currentX, currentY);
+        previewShape = createArrowShape(drawingState.startX, drawingState.startY, snappedX, snappedY);
         break;
       case ToolType.CIRCLE:
-        previewShape = createCircleShape(drawingState.startX, drawingState.startY, currentX, currentY);
+        previewShape = createCircleShape(drawingState.startX, drawingState.startY, snappedX, snappedY);
         break;
       case ToolType.BOX:
-        previewShape = createBoxShape(drawingState.startX, drawingState.startY, currentX, currentY);
+        previewShape = createBoxShape(drawingState.startX, drawingState.startY, snappedX, snappedY);
         break;
       default:
         return;
     }
 
     drawShape(ctx, previewShape);
-  }, [drawingState.isDrawing, drawingState.startX, drawingState.startY, drawingState.freehandPoints, currentTool, getCanvasContext, createArrowShape, createCircleShape, createBoxShape, createFreehandShape, createHighlighterShape]);
+
+    // Feature #132: Draw alignment guides on top
+    drawAlignmentGuides(ctx, {
+      centerH: centerAlign.horizontal,
+      centerV: centerAlign.vertical,
+      edges: edgeAlign,
+      shapes: shapeAligns,
+      currentX: snappedX,
+      currentY: snappedY,
+    });
+  }, [drawingState.isDrawing, drawingState.startX, drawingState.startY, drawingState.freehandPoints, currentTool, getCanvasContext, createArrowShape, createCircleShape, createBoxShape, createFreehandShape, createHighlighterShape, detectCenterAlignment, detectEdgeAlignment, detectShapeAlignment, drawAlignmentGuides, shapeOpacities]);
 
   /**
    * Handle text input submission
@@ -654,17 +891,21 @@ export default function Overlay() {
   }, [textInputValue, textInputPosition, createTextShape, redrawAllShapes, customFadeDuration]);
 
   /**
-   * Handle text input keydown (Enter to submit, Escape to cancel)
+   * Handle text input keydown
+   * Feature #129: Shift+Enter for new line, Enter to submit, Escape to cancel
    */
-  const handleTextInputKeyDown = useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleTextInputKeyDown = useCallback((event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && !event.shiftKey) {
+      // Enter submits the text
       event.preventDefault();
       handleTextInputSubmit();
     } else if (event.key === "Escape") {
+      // Escape cancels text input
       event.preventDefault();
       setTextInputVisible(false);
       setTextInputValue("");
     }
+    // Shift+Enter allows default behavior (new line)
   }, [handleTextInputSubmit]);
 
   /**
@@ -1328,10 +1569,10 @@ export default function Overlay() {
 
       {/* Text input field (shown when text tool is used) */}
       {/* Feature #30 & #31: Uses font size and color from settings */}
+      {/* Feature #129: Multi-line text support with textarea */}
       {textInputVisible && (
-        <input
+        <textarea
           ref={textInputRef}
-          type="text"
           value={textInputValue}
           onChange={(e) => setTextInputValue(e.target.value)}
           onKeyDown={handleTextInputKeyDown}
@@ -1350,9 +1591,12 @@ export default function Overlay() {
             backgroundColor: "rgba(255, 255, 255, 0.9)",
             color: "#000000",
             minWidth: "200px",
+            minHeight: "60px",
             zIndex: 10000,
+            resize: "both",
+            overflow: "auto",
           }}
-          placeholder="Type text and press Enter..."
+          placeholder="Type multi-line text and press Enter to submit..."
         />
       )}
 

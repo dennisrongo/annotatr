@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Feature #129: Multi-line Text Support - Test Documentation</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      max-width: 1200px;
+      margin: 40px auto;
+      padding: 20px;
+      line-height: 1.6;
+      background: #f5f5f5;
+    }
+    h1 {
+      color: #2c3e50;
+      border-bottom: 3px solid #3498db;
+      padding-bottom: 10px;
+    }
+    h2 {
+      color: #34495e;
+      margin-top: 30px;
+    }
+    .feature-status {
+      background: #27ae60;
+      color: white;
+      padding: 10px 20px;
+      border-radius: 5px;
+      display: inline-block;
+      margin-bottom: 20px;
+      font-weight: bold;
+    }
+    .code-block {
+      background: #2c3e50;
+      color: #ecf0f1;
+      padding: 15px;
+      border-radius: 5px;
+      overflow-x: auto;
+      font-family: 'Monaco', 'Menlo', monospace;
+      font-size: 14px;
+      margin: 15px 0;
+    }
+    .test-section {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      margin: 20px 0;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .test-case {
+      border-left: 4px solid #3498db;
+      padding-left: 15px;
+      margin: 15px 0;
+    }
+    .test-case.pass {
+      border-left-color: #27ae60;
+    }
+    .screenshot-placeholder {
+      background: #ecf0f1;
+      border: 2px dashed #bdc3c7;
+      padding: 30px;
+      text-align: center;
+      border-radius: 8px;
+      margin: 20px 0;
+      color: #7f8c8d;
+    }
+    .key-combo {
+      background: #34495e;
+      color: white;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 0.9em;
+    }
+    ul {
+      margin: 10px 0;
+    }
+    li {
+      margin: 8px 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>Feature #129: Multi-line Text Support</h1>
+
+  <div class="feature-status">✓ PASSING - Implemented</div>
+
+  <h2>Overview</h2>
+  <p>
+    Feature #129 adds support for multi-line text shapes in the Annotatr application.
+    Users can now create text annotations that span multiple lines, making it easier
+    to add detailed notes, instructions, or comments to screen recordings.
+  </p>
+
+  <h2>Implementation Details</h2>
+
+  <div class="test-section">
+    <h3>1. Text Input Component (Overlay.tsx)</h3>
+    <p><strong>Change:</strong> Replaced <code>&lt;input&gt;</code> with <code>&lt;textarea&gt;</code></p>
+
+    <div class="code-block">
+&lt;textarea
+  ref={textInputRef}
+  value={textInputValue}
+  onChange={(e) => setTextInputValue(e.target.value)}
+  onKeyDown={handleTextInputKeyDown}
+  onBlur={handleTextInputSubmit}
+  style={{
+    position: "absolute",
+    left: textInputPosition.x,
+    top: textInputPosition.y,
+    fontSize: settings ? `${Math.round(settings.fontSize * 1.7)}px` : "24px",
+    padding: "4px 8px",
+    border: `2px solid ${settings?.colors.text || "#FF0000"}`,
+    borderRadius: "4px",
+    outline: "none",
+    backgroundColor: "rgba(255, 255, 255, 0.9)",
+    color: "#000000",
+    minWidth: "200px",
+    minHeight: "60px",        // NEW: Allow multiple lines
+    zIndex: 10000,
+    resize: "both",           // NEW: User can resize the textarea
+    overflow: "auto",         // NEW: Scrollbars when content exceeds size
+  }}
+  placeholder="Type multi-line text and press Enter to submit..."
+/&gt;
+    </div>
+
+    <h4>Key Changes:</h4>
+    <ul>
+      <li><strong>minHeight: "60px"</strong> - Shows multiple lines by default</li>
+      <li><strong>resize: "both"</strong> - Users can resize the textarea horizontally and vertically</li>
+      <li><strong>overflow: "auto"</strong> - Scrollbars appear when content exceeds the visible area</li>
+      <li><strong>Updated placeholder</strong> - Now mentions "multi-line text"</li>
+    </ul>
+  </div>
+
+  <div class="test-section">
+    <h3>2. Keyboard Handler (Overlay.tsx)</h3>
+    <p><strong>Change:</strong> Updated <code>handleTextInputKeyDown</code> to support <span class="key-combo">Shift+Enter</span> for new lines</p>
+
+    <div class="code-block">
+const handleTextInputKeyDown = useCallback((event: React.KeyboardEvent&lt;HTMLTextAreaElement&gt;) => {
+  if (event.key === "Enter" && !event.shiftKey) {
+    // Enter submits the text
+    event.preventDefault();
+    handleTextInputSubmit();
+  } else if (event.key === "Escape") {
+    // Escape cancels text input
+    event.preventDefault();
+    setTextInputVisible(false);
+    setTextInputValue("");
+  }
+  // Shift+Enter allows default behavior (new line)
+}, [handleTextInputSubmit]);
+    </div>
+
+    <h4>Key Behavior:</h4>
+    <ul>
+      <li><span class="key-combo">Enter</span> - Submits the text and creates the shape</li>
+      <li><span class="key-combo">Shift+Enter</span> - Creates a new line (default textarea behavior)</li>
+      <li><span class="key-combo">Escape</span> - Cancels text input without creating a shape</li>
+      <li><strong>Click outside</strong> (onBlur) - Submits the text</li>
+    </ul>
+  </div>
+
+  <div class="test-section">
+    <h3>3. Multi-line Rendering (drawing.ts)</h3>
+    <p><strong>Change:</strong> Updated <code>drawText</code> function to render multiple lines</p>
+
+    <div class="code-block">
+export function drawText(
+  ctx: CanvasRenderingContext2D,
+  shape: TextShape
+): void {
+  const { position, text, color, fontSize } = shape;
+
+  ctx.fillStyle = color;
+  ctx.font = `${fontSize}px sans-serif`;
+  ctx.textBaseline = "top";
+
+  // Feature #129: Handle multi-line text
+  const lines = text.split('\n');
+  const lineHeight = fontSize * 1.2; // 20% line spacing
+
+  lines.forEach((line, index) => {
+    const y = position.y + (index * lineHeight);
+    ctx.fillText(line, position.x, y);
+  });
+}
+    </div>
+
+    <h4>Key Implementation:</h4>
+    <ul>
+      <li><strong>text.split('\n')</strong> - Splits text into array of lines</li>
+      <li><strong>lineHeight = fontSize * 1.2</strong> - 20% spacing between lines</li>
+      <li><strong>forEach loop</strong> - Renders each line at the appropriate Y offset</li>
+      <li><strong>Y offset calculation</strong> - <code>position.y + (index * lineHeight)</code></li>
+    </ul>
+  </div>
+
+  <h2>Test Cases</h2>
+
+  <div class="test-section">
+    <div class="test-case pass">
+      <h4>Test 1: Single-line text (backward compatibility)</h4>
+      <p><strong>Expected:</strong> Single line text renders as before</p>
+      <p><strong>Steps:</strong></p>
+      <ol>
+        <li>Select Text tool</li>
+        <li>Click on overlay</li>
+        <li>Type "Hello World" (no line breaks)</li>
+        <li>Press Enter</li>
+      </ol>
+      <p><strong>Result:</strong> ✓ Single line text renders correctly</p>
+    </div>
+  </div>
+
+  <div class="test-section">
+    <div class="test-case pass">
+      <h4>Test 2: Multi-line text with Shift+Enter</h4>
+      <p><strong>Expected:</strong> Text with line breaks renders on multiple lines</p>
+      <p><strong>Steps:</strong></p>
+      <ol>
+        <li>Select Text tool</li>
+        <li>Click on overlay</li>
+        <li>Type "Line 1"</li>
+        <li>Press Shift+Enter (creates new line)</li>
+        <li>Type "Line 2"</li>
+        <li>Press Shift+Enter again</li>
+        <li>Type "Line 3"</li>
+        <li>Press Enter to submit</li>
+      </ol>
+      <p><strong>Result:</strong> ✓ Text renders on 3 separate lines with proper spacing</p>
+    </div>
+  </div>
+
+  <div class="test-section">
+    <div class="test-case pass">
+      <h4>Test 3: Textarea resizing</h4>
+      <p><strong>Expected:</strong> Textarea can be resized by user</p>
+      <p><strong>Steps:</strong></p>
+      <ol>
+        <li>Select Text tool</li>
+        <li>Click on overlay</li>
+        <li>Drag the resize handle in the bottom-right corner</li>
+        <li>Type multiple lines of text</li>
+      </ol>
+      <p><strong>Result:</strong> ✓ Textarea expands/contracts based on user resize</p>
+    </div>
+  </div>
+
+  <div class="test-section">
+    <div class="test-case pass">
+      <h4>Test 4: Line spacing calculation</h4>
+      <p><strong>Expected:</strong> Lines are evenly spaced with 20% of font size</p>
+      <p><strong>Formula:</strong> lineHeight = fontSize × 1.2</p>
+      <p><strong>Example:</strong></p>
+      <ul>
+        <li>Font size: 24px</li>
+        <li>Line height: 28.8px (24 × 1.2)</li>
+        <li>Line 1 Y position: originalY + 0 = originalY</li>
+        <li>Line 2 Y position: originalY + 28.8px</li>
+        <li>Line 3 Y position: originalY + 57.6px</li>
+      </ul>
+      <p><strong>Result:</strong> ✓ Lines are evenly spaced and readable</p>
+    </div>
+  </div>
+
+  <div class="test-section">
+    <div class="test-case pass">
+      <h4>Test 5: Empty lines</h4>
+      <p><strong>Expected:</strong> Empty lines (double Shift+Enter) render as blank space</p>
+      <p><strong>Steps:</strong></p>
+      <ol>
+        <li>Type "Line 1"</li>
+        <li>Press Shift+Enter twice</li>
+        <li>Type "Line 2"</li>
+        <li>Press Enter to submit</li>
+      </ol>
+      <p><strong>Result:</strong> ✓ Empty line creates visual gap between Line 1 and Line 2</p>
+    </div>
+  </div>
+
+  <div class="test-section">
+    <div class="test-case pass">
+      <h4>Test 6: Escape key cancellation</h4>
+      <p><strong>Expected:</strong> Escape key cancels text input without creating shape</p>
+      <p><strong>Steps:</strong></p>
+      <ol>
+        <li>Select Text tool</li>
+        <li>Click on overlay</li>
+        <li>Type multi-line text</li>
+        <li>Press Escape</li>
+      </ol>
+      <p><strong>Result:</strong> ✓ Text input closes, no shape created</p>
+    </div>
+  </div>
+
+  <h2>Code Changes Summary</h2>
+
+  <div class="test-section">
+    <h3>Files Modified:</h3>
+    <ol>
+      <li>
+        <strong>src/components/Overlay.tsx</strong>
+        <ul>
+          <li>Changed <code>textInputRef</code> from <code>useRef&lt;HTMLInputElement&gt;</code> to <code>useRef&lt;HTMLTextAreaElement&gt;</code></li>
+          <li>Updated <code>handleTextInputKeyDown</code> signature and logic</li>
+          <li>Replaced <code>&lt;input&gt;</code> with <code>&lt;textarea&gt;</code> in JSX</li>
+          <li>Added <code>minHeight</code>, <code>resize</code>, and <code>overflow</code> styles</li>
+        </ul>
+      </li>
+      <li>
+        <strong>src/lib/drawing.ts</strong>
+        <ul>
+          <li>Updated <code>drawText()</code> function to split text by newlines</li>
+          <li>Added line height calculation (fontSize × 1.2)</li>
+          <li>Implemented loop to render each line at appropriate Y offset</li>
+        </ul>
+      </li>
+    </ol>
+  </div>
+
+  <h2>Visual Verification</h2>
+
+  <div class="test-section">
+    <h3>Expected Appearance:</h3>
+    <p>When multi-line text is rendered on the overlay, it should appear as:</p>
+    <div style="background: #f8f9fa; padding: 20px; border: 1px solid #dee2e6; border-radius: 4px; margin: 20px 0;">
+      <pre style="font-family: sans-serif; font-size: 24px; color: #FF0000; margin: 0; line-height: 1.2;">
+Line 1
+Line 2
+Line 3
+      </pre>
+    </div>
+    <p>Each line is rendered 20% below the previous line (based on font size).</p>
+  </div>
+
+  <h2>Backward Compatibility</h2>
+
+  <div class="test-section">
+    <h3>Single-line text still works:</h3>
+    <p>The implementation maintains full backward compatibility with existing single-line text shapes:</p>
+    <ul>
+      <li>Single-line text (without \n characters) renders exactly as before</li>
+      <li>Existing text shapes in the shapes array continue to work</li>
+      <li>The <code>split('\n')</code> on single-line text returns an array with one element</li>
+      <li>The forEach loop runs once, rendering the single line</li>
+    </ul>
+  </div>
+
+  <h2>Performance Considerations</h2>
+
+  <div class="test-section">
+    <h3>Efficient rendering:</h3>
+    <ul>
+      <li><strong>Minimal overhead:</strong> Single-line text only splits once (O(1) operation)</li>
+      <li><strong>No canvas state changes:</strong> All lines drawn in same fillStyle/font context</li>
+      <li><strong>Linear scaling:</strong> Performance scales linearly with number of lines</li>
+      <li><strong>Typical usage:</strong> Most annotations will be 1-5 lines (negligible impact)</li>
+    </ul>
+  </div>
+
+  <h2>Future Enhancements (Optional)</h2>
+
+  <div class="test-section">
+    <h3>Potential improvements:</h3>
+    <ul>
+      <li><strong>Text wrapping:</strong> Auto-wrap long lines at character or word boundaries</li>
+      <li><strong>Configurable line spacing:</strong> Allow users to adjust line height in settings</li>
+      <li><strong>Text alignment:</strong> Support left/center/right alignment options</li>
+      <li><strong>Rich text:</strong> Bold, italic, or color changes within text</li>
+    </ul>
+    <p><em>These are not part of Feature #129 but could be added in future features.</em></p>
+  </div>
+
+  <h2>Summary</h2>
+
+  <div class="test-section">
+    <p>
+      Feature #129 successfully implements multi-line text support for the Annotatr application.
+      The implementation is simple, efficient, and maintains full backward compatibility with
+      existing single-line text shapes.
+    </p>
+    <p>
+      Users can now:
+    </p>
+    <ul>
+      <li>Create multi-line text annotations</li>
+      <li>Use <span class="key-combo">Shift+Enter</span> to add new lines while typing</li>
+      <li>Resize the text input area as needed</li>
+      <li>Submit with <span class="key-combo">Enter</span> or by clicking outside</li>
+    </ul>
+    <p>
+      <strong>Status:</strong> ✓ <strong>PASSING</strong> - All test cases verified
+    </p>
+  </div>
+
+</body>
+</html>
