@@ -198,3 +198,118 @@ export async function initializeStorage(): Promise<void> {
     throw error;
   }
 }
+
+/**
+ * Export settings to a JSON file
+ * Creates a downloadable JSON file with current settings
+ * Feature #121: Settings export functionality
+ */
+export async function exportSettings(): Promise<void> {
+  try {
+    // Load current settings
+    const settings = await loadSettings();
+
+    // Create JSON string with pretty formatting
+    const json = JSON.stringify(settings, null, 2);
+
+    // Create a blob with the JSON data
+    const blob = new Blob([json], { type: 'application/json' });
+
+    // Create a temporary URL for the blob
+    const url = URL.createObjectURL(blob);
+
+    // Create a temporary anchor element to trigger download
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `annotatr-settings-${new Date().toISOString().split('T')[0]}.json`;
+
+    // Trigger download
+    document.body.appendChild(anchor);
+    anchor.click();
+
+    // Cleanup
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
+
+    console.log('[Storage] Settings exported successfully');
+  } catch (error) {
+    console.error('[Storage] Failed to export settings:', error);
+    throw error;
+  }
+}
+
+/**
+ * Import settings from a JSON file
+ * Reads a JSON file and applies the settings
+ * Feature #121: Settings import functionality
+ */
+export async function importSettings(file: File): Promise<Settings> {
+  try {
+    // Read file as text
+    const text = await file.text();
+
+    // Parse JSON
+    const imported = JSON.parse(text);
+
+    // Validate imported settings structure
+    const validated = validateImportedSettings(imported);
+
+    // Save all imported settings to storage
+    await saveSettings(validated);
+
+    console.log('[Storage] Settings imported successfully:', validated);
+
+    return validated;
+  } catch (error) {
+    console.error('[Storage] Failed to import settings:', error);
+    throw new Error(`Failed to import settings: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
+/**
+ * Validate imported settings structure
+ * Ensures all required keys exist and values are valid
+ * Feature #121: Settings validation for import
+ */
+function validateImportedSettings(imported: unknown): Settings {
+  // Must be an object
+  if (!imported || typeof imported !== 'object' || Array.isArray(imported)) {
+    throw new Error('Invalid settings format: expected an object');
+  }
+
+  const settings = imported as Record<string, unknown>;
+
+  // Validate hotkeys
+  if (!settings.hotkeys || typeof settings.hotkeys !== 'object') {
+    throw new Error('Invalid settings: missing or invalid hotkeys');
+  }
+
+  // Validate colors
+  if (!settings.colors || typeof settings.colors !== 'object') {
+    throw new Error('Invalid settings: missing or invalid colors');
+  }
+
+  // Validate line thickness
+  if (typeof settings.lineThickness !== 'number' ||
+      settings.lineThickness < 1 || settings.lineThickness > 50) {
+    throw new Error('Invalid settings: lineThickness must be between 1 and 50');
+  }
+
+  // Validate font size
+  if (typeof settings.fontSize !== 'number' ||
+      settings.fontSize < 8 || settings.fontSize > 72) {
+    throw new Error('Invalid settings: fontSize must be between 8 and 72');
+  }
+
+  // Validate fade duration
+  if (typeof settings.fadeDuration !== 'number' ||
+      settings.fadeDuration < 1 || settings.fadeDuration > 60) {
+    throw new Error('Invalid settings: fadeDuration must be between 1 and 60');
+  }
+
+  // Merge with defaults to ensure all keys exist
+  return {
+    ...DEFAULT_SETTINGS,
+    ...(settings as unknown as Settings),
+  };
+}

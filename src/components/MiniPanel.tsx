@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { ToolType } from "../types/shapes";
-import { loadSettings, saveSettings, DEFAULT_SETTINGS } from "../lib/storage";
+import { loadSettings, saveSettings, DEFAULT_SETTINGS, exportSettings, importSettings } from "../lib/storage";
 
 /**
  * MiniPanel Component
@@ -638,6 +638,77 @@ export default function MiniPanel() {
     } catch (error) {
       console.error("Failed to reset settings:", error);
       alert("Failed to reset settings. Please try again.");
+    }
+  };
+
+  /**
+   * Feature #121: Export settings to a JSON file
+   * Downloads current settings as a JSON file
+   */
+  const handleExportSettings = async () => {
+    try {
+      await exportSettings();
+      console.log("Settings exported successfully");
+      alert("Settings exported successfully!");
+    } catch (error) {
+      console.error("Failed to export settings:", error);
+      alert("Failed to export settings. Please try again.");
+    }
+  };
+
+  /**
+   * Feature #121: Import settings from a JSON file
+   * Reads a JSON file and applies the settings
+   */
+  const handleImportSettings = async () => {
+    try {
+      // Create a file input element
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = "application/json";
+
+      // Handle file selection
+      input.onchange = async (e) => {
+        const file = (e.target as HTMLInputElement).files?.[0];
+        if (!file) {
+          return;
+        }
+
+        try {
+          // Import and validate settings
+          const imported = await importSettings(file);
+
+          // Update all state variables with imported settings
+          setCurrentColorForTool(imported.colors);
+          setSelectedColor(imported.colors.arrow);
+          setHotkeys(imported.hotkeys);
+          setLineThickness(imported.lineThickness);
+          setFontSize(imported.fontSize);
+          setFadeDuration(imported.fadeDuration);
+
+          // Clear any hotkey conflicts
+          setHotkeyConflicts({});
+
+          // Re-register hotkeys with imported values
+          await invoke("register_hotkeys", { hotkeyConfig: imported });
+          console.log("Hotkeys re-registered with imported settings");
+
+          // Show confirmation
+          alert("Settings imported successfully! All settings have been updated.");
+
+          // Close the modal after import
+          setShowSettingsModal(false);
+        } catch (error) {
+          console.error("Failed to import settings:", error);
+          alert(`Failed to import settings: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      };
+
+      // Trigger file picker
+      input.click();
+    } catch (error) {
+      console.error("Failed to open file picker:", error);
+      alert("Failed to open file picker. Please try again.");
     }
   };
 
@@ -1806,6 +1877,56 @@ export default function MiniPanel() {
               >
                 Reset to Defaults
               </button>
+
+              {/* Feature #121: Export and Import buttons */}
+              <div style={{ display: "flex", gap: "10px" }}>
+                <button
+                  type="button"
+                  onClick={handleExportSettings}
+                  style={{
+                    padding: "8px 16px",
+                    backgroundColor: "#0891b2",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                    fontSize: "14px",
+                    transition: "background 0.2s",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = "#0e7490";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = "#0891b2";
+                  }}
+                  title="Download settings as a JSON file"
+                >
+                  Export
+                </button>
+                <button
+                  type="button"
+                  onClick={handleImportSettings}
+                  style={{
+                    padding: "8px 16px",
+                    backgroundColor: "#7c3aed",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                    fontSize: "14px",
+                    transition: "background 0.2s",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = "#6d28d9";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = "#7c3aed";
+                  }}
+                  title="Import settings from a JSON file"
+                >
+                  Import
+                </button>
+              </div>
 
               {/* Feature #85: Save and Close buttons */}
               <div style={{ display: "flex", gap: "10px" }}>
