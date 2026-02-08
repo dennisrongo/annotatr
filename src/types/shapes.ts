@@ -23,6 +23,7 @@ export interface BaseShape {
   lineThickness: number;
   createdAt: number;
   monitorId?: string; // Feature #9: Track which monitor this shape belongs to (optional for now)
+  customFadeDuration?: number; // Feature #128: Optional custom fade duration in seconds (overrides global setting)
 }
 
 export interface ArrowShape extends BaseShape {

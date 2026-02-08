@@ -1,0 +1,25 @@
+<svg width="512" height="512" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="512" height="512" fill="#3b82f6" rx="64"/>
+
+  <!-- Pencil/Annotation tool icon -->
+  <g transform="translate(128, 128)">
+    <!-- Pencil body -->
+    <rect x="80" y="40" width="64" height="200" fill="#ffffff" rx="8" transform="rotate(45 112 140)"/>
+
+    <!-- Pencil tip -->
+    <polygon points="112,220 95,255 129,255" fill="#fbbf24" transform="rotate(45 112 140)"/>
+
+    <!-- Pencil eraser -->
+    <rect x="96" y="30" width="32" height="20" fill="#ef4444" rx="4" transform="rotate(45 112 140)"/>
+
+    <!-- Annotation marks (small circles and arrows) -->
+    <circle cx="40" cy="40" r="12" fill="#10b981" opacity="0.9"/>
+    <circle cx="200" cy="180" r="12" fill="#10b981" opacity="0.9"/>
+    <circle cx="180" cy="40" r="10" fill="#f59e0b" opacity="0.9"/>
+    <circle cx="60" cy="180" r="10" fill="#f59e0b" opacity="0.9"/>
+
+    <!-- Small arrow -->
+    <path d="M 220 60 L 200 80 L 210 80 L 210 100 L 230 100 L 230 80 L 240 80 Z" fill="#8b5cf6" opacity="0.9"/>
+  </g>
+</svg>

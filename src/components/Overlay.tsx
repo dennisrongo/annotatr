@@ -105,6 +105,9 @@ export default function Overlay() {
   // Feature #73: Auto-fade system - track shape opacities for smooth fade-out
   const [shapeOpacities, setShapeOpacities] = useState<Record<string, number>>({});
 
+  // Feature #128: Custom fade duration for the next shape (null = use global setting)
+  const [customFadeDuration, setCustomFadeDuration] = useState<number | null>(null);
+
   // Feature #17: Tool-specific visual indicators (icons, colors, labels)
   const toolIndicators: Record<ToolType, { icon: string; color: string; label: string }> = {
     [ToolType.ARROW]: { icon: "↗", color: "#3b82f6", label: "Arrow" },
@@ -285,6 +288,7 @@ export default function Overlay() {
   /**
    * Create arrow shape from drawing state
    * Feature #9: Includes monitorId for per-monitor shape confinement
+   * Feature #128: Includes customFadeDuration if set
    */
   const createArrowShape = useCallback((
     startX: number,
@@ -292,7 +296,7 @@ export default function Overlay() {
     endX: number,
     endY: number
   ): ArrowShape => {
-    return {
+    const shape: ArrowShape = {
       id: generateShapeId(),
       tool: ToolType.ARROW,
       startPoint: { x: startX, y: startY },
@@ -302,11 +306,20 @@ export default function Overlay() {
       createdAt: Date.now(),
       monitorId: currentMonitor || "default", // Feature #9: Track monitor ID
     };
-  }, [generateShapeId, currentMonitor, getToolColor, getToolLineThickness]);
+
+    // Feature #128: Add custom fade duration if set
+    if (customFadeDuration !== null) {
+      shape.customFadeDuration = customFadeDuration;
+      console.log(`[Feature #128] Applied custom fade duration: ${customFadeDuration}s to arrow shape`);
+    }
+
+    return shape;
+  }, [generateShapeId, currentMonitor, getToolColor, getToolLineThickness, customFadeDuration]);
 
   /**
    * Create circle shape from drawing state
    * Feature #9: Includes monitorId for per-monitor shape confinement
+   * Feature #128: Includes customFadeDuration if set
    */
   const createCircleShape = useCallback((
     startX: number,
@@ -319,7 +332,7 @@ export default function Overlay() {
     const radiusX = Math.abs(currentX - startX);
     const radiusY = Math.abs(currentY - startY);
 
-    return {
+    const shape: CircleShape = {
       id: generateShapeId(),
       tool: ToolType.CIRCLE,
       center: { x: centerX, y: centerY },
@@ -331,11 +344,20 @@ export default function Overlay() {
       createdAt: Date.now(),
       monitorId: currentMonitor || "default", // Feature #9: Track monitor ID
     };
-  }, [generateShapeId, currentMonitor, getToolColor, getToolLineThickness]);
+
+    // Feature #128: Add custom fade duration if set
+    if (customFadeDuration !== null) {
+      shape.customFadeDuration = customFadeDuration;
+      console.log(`[Feature #128] Applied custom fade duration: ${customFadeDuration}s to circle shape`);
+    }
+
+    return shape;
+  }, [generateShapeId, currentMonitor, getToolColor, getToolLineThickness, customFadeDuration]);
 
   /**
    * Create box shape from drawing state
    * Feature #9: Includes monitorId for per-monitor shape confinement
+   * Feature #128: Includes customFadeDuration if set
    */
   const createBoxShape = useCallback((
     startX: number,
@@ -346,7 +368,7 @@ export default function Overlay() {
     const width = currentX - startX;
     const height = currentY - startY;
 
-    return {
+    const shape: BoxShape = {
       id: generateShapeId(),
       tool: ToolType.BOX,
       startPoint: { x: startX, y: startY },
@@ -358,14 +380,23 @@ export default function Overlay() {
       createdAt: Date.now(),
       monitorId: currentMonitor || "default", // Feature #9: Track monitor ID
     };
-  }, [generateShapeId, currentMonitor, getToolColor, getToolLineThickness]);
+
+    // Feature #128: Add custom fade duration if set
+    if (customFadeDuration !== null) {
+      shape.customFadeDuration = customFadeDuration;
+      console.log(`[Feature #128] Applied custom fade duration: ${customFadeDuration}s to box shape`);
+    }
+
+    return shape;
+  }, [generateShapeId, currentMonitor, getToolColor, getToolLineThickness, customFadeDuration]);
 
   /**
    * Create freehand shape from drawing state
    * Feature #9: Includes monitorId for per-monitor shape confinement
+   * Feature #128: Includes customFadeDuration if set
    */
   const createFreehandShape = useCallback((points: Point[]): FreehandShape => {
-    return {
+    const shape: FreehandShape = {
       id: generateShapeId(),
       tool: ToolType.FREEHAND,
       points: [...points],
@@ -374,14 +405,23 @@ export default function Overlay() {
       createdAt: Date.now(),
       monitorId: currentMonitor || "default", // Feature #9: Track monitor ID
     };
-  }, [generateShapeId, currentMonitor, getToolColor, getToolLineThickness]);
+
+    // Feature #128: Add custom fade duration if set
+    if (customFadeDuration !== null) {
+      shape.customFadeDuration = customFadeDuration;
+      console.log(`[Feature #128] Applied custom fade duration: ${customFadeDuration}s to freehand shape`);
+    }
+
+    return shape;
+  }, [generateShapeId, currentMonitor, getToolColor, getToolLineThickness, customFadeDuration]);
 
   /**
    * Create highlighter shape from drawing state
    * Feature #9: Includes monitorId for per-monitor shape confinement
+   * Feature #128: Includes customFadeDuration if set
    */
   const createHighlighterShape = useCallback((points: Point[]): HighlighterShape => {
-    return {
+    const shape: HighlighterShape = {
       id: generateShapeId(),
       tool: ToolType.HIGHLIGHTER,
       points: [...points],
@@ -391,13 +431,22 @@ export default function Overlay() {
       createdAt: Date.now(),
       monitorId: currentMonitor || "default", // Feature #9: Track monitor ID
     };
-  }, [generateShapeId, currentMonitor, getToolColor, getToolLineThickness]);
+
+    // Feature #128: Add custom fade duration if set
+    if (customFadeDuration !== null) {
+      shape.customFadeDuration = customFadeDuration;
+      console.log(`[Feature #128] Applied custom fade duration: ${customFadeDuration}s to highlighter shape`);
+    }
+
+    return shape;
+  }, [generateShapeId, currentMonitor, getToolColor, getToolLineThickness, customFadeDuration]);
 
   /**
    * Create text shape from drawing state
    * Feature #30: Uses fontSize from settings
    * Feature #31: Uses current text color from settings
    * Feature #9: Includes monitorId for per-monitor shape confinement
+   * Feature #128: Includes customFadeDuration if set
    */
   const createTextShape = useCallback((
     position: Point,
@@ -409,7 +458,7 @@ export default function Overlay() {
     // Feature #105: Use tool-specific color for text
     const textColor = getToolColor(ToolType.TEXT);
 
-    return {
+    const shape: TextShape = {
       id: generateShapeId(),
       tool: ToolType.TEXT,
       position,
@@ -420,7 +469,15 @@ export default function Overlay() {
       createdAt: Date.now(),
       monitorId: currentMonitor || "default", // Feature #9: Track monitor ID
     };
-  }, [generateShapeId, settings, defaultFontSize, currentMonitor, getToolColor]);
+
+    // Feature #128: Add custom fade duration if set
+    if (customFadeDuration !== null) {
+      shape.customFadeDuration = customFadeDuration;
+      console.log(`[Feature #128] Applied custom fade duration: ${customFadeDuration}s to text shape`);
+    }
+
+    return shape;
+  }, [generateShapeId, settings, defaultFontSize, currentMonitor, getToolColor, customFadeDuration]);
 
   /**
    * Handle mouse down - start drawing
@@ -555,10 +612,16 @@ export default function Overlay() {
     shapesRef.current.push(newTextShape);
     console.log("Created text shape:", newTextShape);
 
+    // Feature #128: Reset custom fade duration after shape is created
+    if (customFadeDuration !== null) {
+      console.log(`[Feature #128] Resetting custom fade duration after text shape creation`);
+      setCustomFadeDuration(null);
+    }
+
     setTextInputVisible(false);
     setTextInputValue("");
     redrawAllShapes();
-  }, [textInputValue, textInputPosition, createTextShape, redrawAllShapes]);
+  }, [textInputValue, textInputPosition, createTextShape, redrawAllShapes, customFadeDuration]);
 
   /**
    * Handle text input keydown (Enter to submit, Escape to cancel)
@@ -640,6 +703,13 @@ export default function Overlay() {
 
     console.log(`Created ${currentTool} shape:`, newShape);
 
+    // Feature #128: Reset custom fade duration after shape is created
+    // (It applies only to the next shape drawn)
+    if (customFadeDuration !== null) {
+      console.log(`[Feature #128] Resetting custom fade duration after shape creation`);
+      setCustomFadeDuration(null);
+    }
+
     // Reset drawing state
     setDrawingState({
       isDrawing: false,
@@ -655,7 +725,7 @@ export default function Overlay() {
 
     // Redraw all shapes
     redrawAllShapes();
-  }, [drawingState, currentTool, createArrowShape, createCircleShape, createBoxShape, createFreehandShape, createHighlighterShape, redrawAllShapes]);
+  }, [drawingState, currentTool, createArrowShape, createCircleShape, createBoxShape, createFreehandShape, createHighlighterShape, redrawAllShapes, customFadeDuration]);
 
   useEffect(() => {
     // Feature #10 & #114: Handle Escape key to dismiss overlay or cancel drawing
@@ -865,6 +935,13 @@ export default function Overlay() {
       console.log("All shapes cleared");
     });
 
+    // Feature #128: Listen for custom fade duration updates from mini panel
+    const unlistenCustomFadeDuration = listen<number | null>("custom-fade-duration", (event) => {
+      const duration = event.payload;
+      console.log(`[Feature #128] Custom fade duration updated: ${duration === null ? "null (use global)" : duration + "s"}`);
+      setCustomFadeDuration(duration);
+    });
+
     // Feature #15: Handle window focus changes to ensure z-index stays on top
     const handleFocus = async () => {
       console.log("Overlay window focused - ensuring z-index");
@@ -935,6 +1012,7 @@ export default function Overlay() {
       unlistenToolSelected.then((fn) => fn()).catch(console.error);
       unlistenOverlayDismissed.then((fn) => fn()).catch(console.error);
       unlistenClearShapes.then((fn) => fn()).catch(console.error);
+      unlistenCustomFadeDuration.then((fn) => fn()).catch(console.error);
 
       // Feature #67: Cleanup hotkey feedback timer
       if (hotkeyFeedbackTimerRef.current) {
@@ -950,7 +1028,7 @@ export default function Overlay() {
     };
   }, [isVisible, drawingState, redrawAllShapes, undoLastShape, cleanupOpacityTracking]);
 
-  // Initialize canvas
+  // Feature #122: Initialize canvas with DPI/Retina display support
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -958,10 +1036,23 @@ export default function Overlay() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // Set canvas size to match window
+    // Feature #122: Detect display DPI and scale canvas appropriately
     const resizeCanvas = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
+      const dpr = window.devicePixelRatio || 1;
+
+      // Set display size (css pixels)
+      canvas.style.width = window.innerWidth + "px";
+      canvas.style.height = window.innerHeight + "px";
+
+      // Set actual size in memory (scaled to account for extra pixel density)
+      canvas.width = window.innerWidth * dpr;
+      canvas.height = window.innerHeight * dpr;
+
+      // Feature #122: Normalize coordinate system to use css pixels
+      ctx.scale(dpr, dpr);
+
+      console.log(`[Feature #122] Canvas resized for DPI: ${dpr}x (${window.innerWidth}x${window.innerHeight} -> ${canvas.width}x${canvas.height})`);
+
       // Redraw shapes after resize
       redrawShapes(ctx, shapesRef.current);
     };
@@ -1043,10 +1134,11 @@ export default function Overlay() {
   }, [cleanupOpacityTracking, redrawAllShapes]);
 
   // Feature #35 & #73: Auto-fade system with smooth opacity transitions
+  // Feature #128: Support per-shape custom fade durations
   useEffect(() => {
     const fadeCheckInterval = setInterval(() => {
       const now = Date.now();
-      const fadeDurationMs = (settings?.fadeDuration || 10) * 1000;
+      const defaultFadeDurationMs = (settings?.fadeDuration || 10) * 1000;
 
       // Calculate new opacities for all shapes
       const newOpacities: Record<string, number> = {};
@@ -1055,8 +1147,13 @@ export default function Overlay() {
       shapesRef.current.forEach(shape => {
         const age = now - shape.createdAt;
 
+        // Feature #128: Use custom fade duration if present, otherwise use global setting
+        const shapeFadeDurationMs = shape.customFadeDuration
+          ? shape.customFadeDuration * 1000
+          : defaultFadeDurationMs;
+
         // Calculate opacity using smooth easing
-        const opacity = getFadeOpacity(age, fadeDurationMs);
+        const opacity = getFadeOpacity(age, shapeFadeDurationMs);
         newOpacities[shape.id] = opacity;
 
         // Mark for removal if completely faded

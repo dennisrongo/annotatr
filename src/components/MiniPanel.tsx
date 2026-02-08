@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { emit } from "@tauri-apps/api/event";
 import { ToolType } from "../types/shapes";
 import { loadSettings, saveSettings, DEFAULT_SETTINGS, exportSettings, importSettings } from "../lib/storage";
 
@@ -90,6 +91,10 @@ export default function MiniPanel() {
 
   // Feature #70: Fade duration control state
   const [fadeDuration, setFadeDuration] = useState(DEFAULT_SETTINGS.fadeDuration);
+
+  // Feature #128: Custom fade duration for next shape state
+  const [useCustomFadeDuration, setUseCustomFadeDuration] = useState(false);
+  const [customFadeDuration, setCustomFadeDuration] = useState(10);
 
   // Feature #126: Panel transparency control state
   const [panelTransparency, setPanelTransparency] = useState(DEFAULT_SETTINGS.panelTransparency);
@@ -400,6 +405,19 @@ export default function MiniPanel() {
    */
   const openCustomColorPicker = () => {
     customColorInputRef.current?.click();
+  };
+
+  /**
+   * Feature #128: Emit custom fade duration event to overlay
+   * Notifies the overlay component to use the specified duration for the next shape
+   */
+  const emitCustomFadeDuration = async (duration: number | null) => {
+    try {
+      await emit("custom-fade-duration", duration);
+      console.log(`[Feature #128] Emitted custom-fade-duration event:`, duration);
+    } catch (error) {
+      console.error("Failed to emit custom-fade-duration event:", error);
+    }
   };
 
   /**
@@ -1472,6 +1490,169 @@ export default function MiniPanel() {
           >
             {fadeDuration}s
           </span>
+        </div>
+      </div>
+
+      {/* Feature #128: Custom fade duration for next shape */}
+      <div
+        style={{
+          marginTop: "12px",
+          paddingTop: "12px",
+          borderTop: "1px solid rgba(0, 0, 0, 0.1)",
+        }}
+      >
+        <div
+          style={{
+            fontSize: "11px",
+            fontWeight: "bold",
+            color: "#333",
+            marginBottom: "6px",
+            textAlign: "center",
+          }}
+        >
+          Next Shape Duration
+        </div>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "8px",
+            padding: "4px 8px",
+            backgroundColor: "rgba(255, 255, 255, 0.5)",
+            borderRadius: "4px",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "8px",
+            }}
+          >
+            <label
+              htmlFor="custom-fade-checkbox"
+              style={{
+                fontSize: "11px",
+                color: "#333",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                cursor: "pointer",
+                flex: 1,
+              }}
+            >
+              <input
+                id="custom-fade-checkbox"
+                type="checkbox"
+                checked={useCustomFadeDuration}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  setUseCustomFadeDuration(checked);
+
+                  // Emit event to overlay with new value (null or current duration)
+                  if (checked) {
+                    emitCustomFadeDuration(customFadeDuration);
+                    console.log(`[Feature #128] Custom fade duration enabled: ${customFadeDuration}s`);
+                  } else {
+                    emitCustomFadeDuration(null);
+                    console.log(`[Feature #128] Custom fade duration disabled (using global setting)`);
+                  }
+                }}
+                style={{
+                  cursor: "pointer",
+                }}
+              />
+              <span>Use custom duration</span>
+            </label>
+            {useCustomFadeDuration && (
+              <span
+                style={{
+                  fontSize: "10px",
+                  padding: "2px 6px",
+                  backgroundColor: "#10b981",
+                  color: "white",
+                  borderRadius: "4px",
+                  fontWeight: "bold",
+                }}
+              >
+                ACTIVE
+              </span>
+            )}
+          </div>
+
+          {useCustomFadeDuration && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+              }}
+            >
+              <span
+                style={{
+                  fontSize: "10px",
+                  color: "#666",
+                  minWidth: "20px",
+                }}
+              >
+                1
+              </span>
+              <input
+                type="range"
+                min="1"
+                max="60"
+                step="1"
+                value={customFadeDuration}
+                onChange={(e) => {
+                  const newDuration = parseInt(e.target.value, 10);
+                  setCustomFadeDuration(newDuration);
+                  emitCustomFadeDuration(newDuration);
+                  console.log(`[Feature #128] Custom fade duration updated: ${newDuration}s`);
+                }}
+                style={{
+                  flex: 1,
+                  height: "6px",
+                  cursor: "pointer",
+                }}
+                aria-label="Custom fade duration for next shape"
+                title={`Next shape will fade after ${customFadeDuration} seconds`}
+              />
+              <span
+                style={{
+                  fontSize: "10px",
+                  color: "#666",
+                  minWidth: "25px",
+                }}
+              >
+                60
+              </span>
+              <span
+                style={{
+                  fontSize: "11px",
+                  fontWeight: "bold",
+                  color: "#10b981",
+                  minWidth: "45px",
+                  textAlign: "right",
+                }}
+              >
+                {customFadeDuration}s
+              </span>
+            </div>
+          )}
+
+          <div
+            style={{
+              fontSize: "9px",
+              color: "#666",
+              textAlign: "center",
+              fontStyle: "italic",
+            }}
+          >
+            {useCustomFadeDuration
+              ? `Next shape fades after ${customFadeDuration}s, then resets`
+              : "Using global fade duration setting"}
+          </div>
         </div>
       </div>
 
