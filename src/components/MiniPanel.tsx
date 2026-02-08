@@ -550,6 +550,80 @@ export default function MiniPanel() {
   };
 
   /**
+   * Feature #85: Handle settings save button click
+   * Provides explicit save with confirmation message
+   */
+  const handleSaveSettings = async () => {
+    try {
+      // Save all current settings to storage
+      const settingsToSave = {
+        colors: currentColorForTool,
+        hotkeys: hotkeys,
+        lineThickness: lineThickness,
+        fontSize: fontSize,
+        fadeDuration: fadeDuration,
+      };
+
+      await saveSettings(settingsToSave as any);
+      console.log("Settings saved successfully:", settingsToSave);
+
+      // Show confirmation
+      alert("Settings saved successfully!");
+
+      // Close the modal after saving
+      setShowSettingsModal(false);
+    } catch (error) {
+      console.error("Failed to save settings:", error);
+      alert("Failed to save settings. Please try again.");
+    }
+  };
+
+  /**
+   * Feature #86: Handle settings reset button click
+   * Resets all settings to default values
+   */
+  const handleResetSettings = async () => {
+    try {
+      // Confirm with user before resetting
+      const confirmed = window.confirm(
+        "Are you sure you want to reset all settings to their default values? This action cannot be undone."
+      );
+
+      if (!confirmed) {
+        return;
+      }
+
+      // Reset to defaults using the reset function
+      await invoke("reset_settings");
+      console.log("Settings reset to defaults");
+
+      // Reload settings from storage
+      const reloadedSettings = await loadSettings();
+
+      // Update all state variables with defaults
+      setCurrentColorForTool(reloadedSettings.colors);
+      setSelectedColor(reloadedSettings.colors.arrow);
+      setHotkeys(reloadedSettings.hotkeys);
+      setLineThickness(reloadedSettings.lineThickness);
+      setFontSize(reloadedSettings.fontSize);
+      setFadeDuration(reloadedSettings.fadeDuration);
+
+      // Clear any hotkey conflicts
+      setHotkeyConflicts({});
+
+      // Re-register hotkeys with default values
+      await invoke("register_hotkeys", { hotkeyConfig: reloadedSettings });
+      console.log("Hotkeys re-registered with defaults");
+
+      // Show confirmation
+      alert("Settings have been reset to defaults!");
+    } catch (error) {
+      console.error("Failed to reset settings:", error);
+      alert("Failed to reset settings. Please try again.");
+    }
+  };
+
+  /**
    * Feature #19: Handle drag start
    * Initiates panel dragging
    */
@@ -1680,22 +1754,24 @@ export default function MiniPanel() {
               </div>
             </div>
 
+            {/* Feature #85, #86: Settings modal footer with Save, Reset, and Close buttons */}
             <div
               style={{
                 marginTop: "20px",
                 paddingTop: "15px",
                 borderTop: "1px solid #eee",
                 display: "flex",
-                justifyContent: "flex-end",
+                justifyContent: "space-between",
                 gap: "10px",
               }}
             >
+              {/* Feature #86: Reset to defaults button */}
               <button
                 type="button"
-                onClick={() => setShowSettingsModal(false)}
+                onClick={handleResetSettings}
                 style={{
                   padding: "8px 16px",
-                  backgroundColor: "#2563eb",
+                  backgroundColor: "#dc2626",
                   color: "white",
                   border: "none",
                   borderRadius: "4px",
@@ -1704,14 +1780,63 @@ export default function MiniPanel() {
                   transition: "background 0.2s",
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = "#1d4ed8";
+                  e.currentTarget.style.backgroundColor = "#b91c1c";
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = "#2563eb";
+                  e.currentTarget.style.backgroundColor = "#dc2626";
                 }}
               >
-                Close
+                Reset to Defaults
               </button>
+
+              {/* Feature #85: Save and Close buttons */}
+              <div style={{ display: "flex", gap: "10px" }}>
+                <button
+                  type="button"
+                  onClick={handleSaveSettings}
+                  style={{
+                    padding: "8px 16px",
+                    backgroundColor: "#16a34a",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                    fontSize: "14px",
+                    transition: "background 0.2s",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = "#15803d";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = "#16a34a";
+                  }}
+                >
+                  Save
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowSettingsModal(false)}
+                  style={{
+                    padding: "8px 16px",
+                    backgroundColor: "#6b7280",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                    fontSize: "14px",
+                    transition: "background 0.2s",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = "#4b5563";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = "#6b7280";
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
         </div>

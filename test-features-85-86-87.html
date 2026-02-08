@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test Features #85, #86, #87 - Settings Save/Reset/Storage</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    h1 {
+      color: #2563eb;
+      border-bottom: 2px solid #2563eb;
+      padding-bottom: 10px;
+    }
+    h2 {
+      color: #1e40af;
+      margin-top: 30px;
+    }
+    .feature {
+      background: #f8fafc;
+      border-left: 4px solid #2563eb;
+      padding: 15px;
+      margin: 20px 0;
+    }
+    .test-case {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 15px;
+      margin: 10px 0;
+    }
+    .test-case h3 {
+      margin-top: 0;
+      color: #0891b2;
+    }
+    .steps {
+      background: #fef3c7;
+      padding: 10px;
+      border-radius: 4px;
+      margin: 10px 0;
+    }
+    .expected {
+      background: #d1fae5;
+      padding: 10px;
+      border-radius: 4px;
+      margin: 10px 0;
+    }
+    code {
+      background: #1e293b;
+      color: #e2e8f0;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: 'Monaco', 'Courier New', monospace;
+      font-size: 0.9em;
+    }
+    .verification {
+      background: #dbeafe;
+      padding: 15px;
+      border-radius: 4px;
+      margin: 15px 0;
+    }
+    .screenshot-placeholder {
+      background: #e2e8f0;
+      border: 2px dashed #94a3b8;
+      padding: 20px;
+      text-align: center;
+      border-radius: 8px;
+      margin: 10px 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>Test Documentation: Features #85, #86, #87</h1>
+  <p>Settings Save, Reset, and Storage Integration</p>
+
+  <div class="feature">
+    <h2>Feature #85: Save settings button</h2>
+    <p><strong>Description:</strong> Add save button in settings panel to persist changes to settings</p>
+    <p><strong>Implementation:</strong></p>
+    <ul>
+      <li>Added <code>handleSaveSettings()</code> handler function in MiniPanel.tsx (lines 553-580)</li>
+      <li>Handler saves all current settings (colors, hotkeys, line thickness, font size, fade duration)</li>
+      <li>Shows confirmation alert on successful save</li>
+      <li>Closes the settings modal after saving</li>
+      <li>Added "Save" button (green) in settings modal footer (lines 1695-1720)</li>
+    </ul>
+
+    <div class="test-case">
+      <h3>Test Case 1: Save button visible</h3>
+      <div class="steps">
+        <strong>Steps:</strong>
+        <ol>
+          <li>Launch the Annotatr application</li>
+          <li>Click the Settings (⚙️) button in the mini panel</li>
+          <li>Scroll to the bottom of the settings modal</li>
+        </ol>
+      </div>
+      <div class="expected">
+        <strong>Expected Results:</strong>
+        <ul>
+          <li>✓ Settings modal opens with all sections visible</li>
+          <li>✓ Footer contains three buttons: "Reset to Defaults" (red, left), "Save" (green, right), and "Cancel" (gray, right)</li>
+          <li>✓ Save button has green background (#16a34a) with white text</li>
+          <li>✓ Hovering over Save button changes background to darker green (#15803d)</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="test-case">
+      <h3>Test Case 2: Save functionality</h3>
+      <div class="steps">
+        <strong>Steps:</strong>
+        <ol>
+          <li>Open settings modal</li>
+          <li>Change some settings (e.g., modify line thickness slider, change a tool color, edit a hotkey)</li>
+          <li>Click the "Save" button</li>
+        </ol>
+      </div>
+      <div class="expected">
+        <strong>Expected Results:</strong>
+        <ul>
+          <li>✓ Alert dialog appears: "Settings saved successfully!"</li>
+          <li>✓ Settings modal closes automatically</li>
+          <li>✓ Console log shows: "Settings saved successfully:" with settings object</li>
+          <li>✓ Changes persist even after closing and reopening the settings modal</li>
+        </ul>
+      </div>
+      <div class="verification">
+        <strong>Verification:</strong>
+        <ul>
+          <li>Check browser console for success message</li>
+          <li>Reopen settings modal and verify changes persist</li>
+          <li>Check Tauri storage file (settings.json) for updated values</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="test-case">
+      <h3>Test Case 3: Save with invalid data</h3>
+      <div class="steps">
+        <strong>Steps:</strong>
+        <ol>
+          <li>Simulate a save operation error (e.g., disconnect storage)</li>
+          <li>Click the "Save" button</li>
+        </ol>
+      </div>
+      <div class="expected">
+        <strong>Expected Results:</strong>
+        <ul>
+          <li>✓ Alert dialog appears: "Failed to save settings. Please try again."</li>
+          <li>✓ Console shows error message: "Failed to save settings:"</li>
+          <li>✓ Settings modal remains open (does not close on error)</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="feature">
+    <h2>Feature #86: Reset to defaults button</h2>
+    <p><strong>Description:</strong> Add reset button in settings panel to restore all settings to default values</p>
+    <p><strong>Implementation:</strong></p>
+    <ul>
+      <li>Added <code>handleResetSettings()</code> handler function in MiniPanel.tsx (lines 582-627)</li>
+      <li>Handler calls Rust backend's <code>reset_settings</code> command (defined in lib.rs lines 113-137)</li>
+      <li>Shows confirmation dialog before resetting</li>
+      <li>Reloads settings from storage after reset</li>
+      <li>Updates all state variables with default values</li>
+      <li>Clears hotkey conflicts</li>
+      <li>Re-registers hotkeys with default values</li>
+      <li>Added "Reset to Defaults" button (red) in settings modal footer (lines 1683-1698)</li>
+    </ul>
+
+    <div class="test-case">
+      <h3>Test Case 1: Reset button visible</h3>
+      <div class="steps">
+        <strong>Steps:</strong>
+        <ol>
+          <li>Launch the Annotatr application</li>
+          <li>Click the Settings (⚙️) button in the mini panel</li>
+          <li>Scroll to the bottom of the settings modal</li>
+        </ol>
+      </div>
+      <div class="expected">
+        <strong>Expected Results:</strong>
+        <ul>
+          <li>✓ Settings modal footer shows "Reset to Defaults" button on the left</li>
+          <li>✓ Button has red background (#dc2626) with white text</li>
+          <li>✓ Hovering over button changes background to darker red (#b91c1c)</li>
+          <li>✓ Button is positioned to the left of Save/Cancel buttons</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="test-case">
+      <h3>Test Case 2: Reset with confirmation</h3>
+      <div class="steps">
+        <strong>Steps:</strong>
+        <ol>
+          <li>Open settings modal</li>
+          <li>Change some settings (e.g., set line thickness to 20, change colors)</li>
+          <li>Click the "Reset to Defaults" button</li>
+        </ol>
+      </div>
+      <div class="expected">
+        <strong>Expected Results:</strong>
+        <ul>
+          <li>✓ Confirmation dialog appears: "Are you sure you want to reset all settings to their default values? This action cannot be undone."</li>
+          <li>✓ Dialog has "OK" and "Cancel" options</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="test-case">
+      <h3>Test Case 3: Reset confirmed</h3>
+      <div class="steps">
+        <strong>Steps:</strong>
+        <ol>
+          <li>Open settings modal and modify some settings</li>
+          <li>Click "Reset to Defaults" button</li>
+          <li>Click "OK" in the confirmation dialog</li>
+        </ol>
+      </div>
+      <div class="expected">
+        <strong>Expected Results:</strong>
+        <ul>
+          <li>✓ Alert dialog appears: "Settings have been reset to defaults!"</li>
+          <li>✓ All settings revert to default values:
+            <ul>
+              <li>Line thickness: 12</li>
+              <li>Font size: 14</li>
+              <li>Fade duration: 10 seconds</li>
+              <li>All tool colors: #FF0000 (except highlighter: #FFFF00)</li>
+              <li>All hotkeys: Ctrl+Shift+[Letter] (defaults)</li>
+            </ul>
+          </li>
+          <li>✓ Hotkey conflicts cleared (if any were shown)</li>
+          <li>✓ Console shows: "Settings reset to defaults" and "Hotkeys re-registered with defaults"</li>
+          <li>✓ Settings remain open after reset (user can verify changes)</li>
+        </ul>
+      </div>
+      <div class="verification">
+        <strong>Verification:</strong>
+        <ul>
+          <li>Check browser console for reset messages</li>
+          <li>Verify all UI controls show default values</li>
+          <li>Test hotkeys to ensure they work with default combinations</li>
+          <li>Close and reopen app - verify defaults persist</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="test-case">
+      <h3>Test Case 4: Reset cancelled</h3>
+      <div class="steps">
+        <strong>Steps:</strong>
+        <ol>
+          <li>Open settings modal and modify some settings</li>
+          <li>Click "Reset to Defaults" button</li>
+          <li>Click "Cancel" in the confirmation dialog</li>
+        </ol>
+      </div>
+      <div class="expected">
+        <strong>Expected Results:</strong>
+        <ul>
+          <li>✓ No reset occurs</li>
+          <li>✓ Modified settings remain unchanged</li>
+          <li>✓ Settings modal stays open</li>
+          <li>✓ No console messages about reset</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="test-case">
+      <h3>Test Case 5: Reset error handling</h3>
+      <div class="steps">
+        <strong>Steps:</strong>
+        <ol>
+          <li>Simulate a reset operation error (e.g., backend not responding)</li>
+          <li>Click "Reset to Defaults" button and confirm</li>
+        </ol>
+      </div>
+      <div class="expected">
+        <strong>Expected Results:</strong>
+        <ul>
+          <li>✓ Alert dialog appears: "Failed to reset settings. Please try again."</li>
+          <li>✓ Console shows error message: "Failed to reset settings:"</li>
+          <li>✓ Settings remain unchanged</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="feature">
+    <h2>Feature #87: Settings saved to local storage</h2>
+    <p><strong>Description:</strong> Implement saving settings to Tauri's local storage when save button is clicked</p>
+    <p><strong>Implementation:</strong></p>
+    <ul>
+      <li>Backend: Rust <code>save_settings</code> command in lib.rs (lines 53-75)</li>
+      <li>Uses Tauri's store plugin for cross-platform persistent storage</li>
+      <li>Stores data in settings.json file</li>
+      <li>Frontend: <code>saveSettings()</code> function in storage.ts (lines 73-84)</li>
+      <li>Serializes settings data as JSON</li>
+      <li>Emits "settings_updated" event after save</li>
+      <li>Integration: Save button handler calls <code>saveSettings()</code> with all current settings</li>
+    </ul>
+
+    <div class="test-case">
+      <h3>Test Case 1: Settings save to storage</h3>
+      <div class="steps">
+        <strong>Steps:</strong>
+        <ol>
+          <li>Open settings modal</li>
+          <li>Modify multiple settings:
+            <ul>
+              <li>Change line thickness to 15</li>
+              <li>Change font size to 18</li>
+              <li>Change fade duration to 15 seconds</li>
+              <li>Change arrow tool color to #00FF00</li>
+              <li>Modify a hotkey (e.g., toggle drawing mode to Ctrl+Alt+D)</li>
+            </ul>
+          </li>
+          <li>Click the "Save" button</li>
+        </ol>
+      </div>
+      <div class="expected">
+        <strong>Expected Results:</strong>
+        <ul>
+          <li>✓ Alert: "Settings saved successfully!"</li>
+          <li>✓ Console shows: "Settings saved successfully:" with all settings</li>
+          <li>✓ Backend console (Rust) shows: "Setting saved: [key] = [value]" for each setting</li>
+          <li>✓ "settings_updated" event emitted</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="test-case">
+      <h3>Test Case 2: Verify settings.json file</h3>
+      <div class="steps">
+        <strong>Steps:</strong>
+        <ol>
+          <li>Save settings with custom values</li>
+          <li>Navigate to app data directory (platform-specific):
+            <ul>
+              <li>macOS: ~/Library/Application Support/annotatr/</li>
+              <li>Windows: %APPDATA%\annotatr\</li>
+              <li>Linux: ~/.config/annotatr/</li>
+            </ul>
+          </li>
+          <li>Open settings.json file</li>
+        </ol>
+      </div>
+      <div class="expected">
+        <strong>Expected Results:</strong>
+        <ul>
+          <li>✓ settings.json file exists</li>
+          <li>✓ File contains JSON object with all saved settings</li>
+          <li>✓ Values match what was saved:</li>
+        </ul>
+        <pre><code>{
+  "colors": {
+    "arrow": "#00FF00",
+    "circle": "#FF0000",
+    "box": "#FF0000",
+    "freehand": "#FF0000",
+    "highlighter": "#FFFF00",
+    "text": "#FF0000"
+  },
+  "hotkeys": {
+    "toggleDrawingMode": "Ctrl+Alt+D",
+    "arrowTool": "Ctrl+Shift+A",
+    ...
+  },
+  "lineThickness": 15,
+  "fontSize": 18,
+  "fadeDuration": 15
+}</code></pre>
+      </div>
+    </div>
+
+    <div class="test-case">
+      <h3>Test Case 3: Persistence across app restarts</h3>
+      <div class="steps">
+        <strong>Steps:</strong>
+        <ol>
+          <li>Modify settings and save</li>
+          <li>Close the Annotatr application completely</li>
+          <li>Restart the application</li>
+          <li>Open settings modal</li>
+        </ol>
+      </div>
+      <div class="expected">
+        <strong>Expected Results:</strong>
+        <ul>
+          <li>✓ All settings retain saved values</li>
+          <li>✓ Line thickness slider shows saved value (e.g., 15)</li>
+          <li>✓ Font size slider shows saved value (e.g., 18)</li>
+          <li>✓ Fade duration shows saved value (e.g., 15)</li>
+          <li>✓ Color swatches show saved colors</li>
+          <li>✓ Hotkey table shows saved combinations</li>
+          <li>✓ Console shows settings loaded on startup</li>
+        </ul>
+      </div>
+      <div class="verification">
+        <strong>Verification:</strong>
+        <ul>
+          <li>Check browser console on startup for "Loaded settings:" message</li>
+          <li>Compare UI values to what was saved before restart</li>
+          <li>Test hotkeys to verify they work with saved combinations</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="test-case">
+      <h3>Test Case 4: Storage error handling</h3>
+      <div class="steps">
+        <strong>Steps:</strong>
+        <ol>
+          <li>Simulate storage error (e.g., read-only file system, disk full)</li>
+          <li>Attempt to save settings</li>
+        </ol>
+      </div>
+      <div class="expected">
+        <strong>Expected Results:</strong>
+        <ul>
+          <li>✓ Alert: "Failed to save settings. Please try again."</li>
+          <li>✓ Console shows error: "Failed to save settings:"</li>
+          <li>✓ Backend shows error: "Failed to save settings: [error details]"</li>
+          <li>✓ Application continues to function (no crash)</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="test-case">
+      <h3>Test Case 5: Reset clears storage</h3>
+      <div class="steps">
+        <strong>Steps:</strong>
+        <ol>
+          <li>Modify settings and save</li>
+          <li>Click "Reset to Defaults" and confirm</li>
+          <li>Check settings.json file</li>
+          <li>Restart application</li>
+        </ol>
+      </div>
+      <div class="expected">
+        <strong>Expected Results:</strong>
+        <ul>
+          <li>✓ settings.json contains default values</li>
+          <li>✓ On restart, app loads default values</li>
+          <li>✓ All UI controls show defaults</li>
+          <li>✓ Backend console shows: "Settings reset to defaults"</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="feature">
+    <h2>Integration Test: Complete Settings Workflow</h2>
+
+    <div class="test-case">
+      <h3>End-to-End Test</h3>
+      <div class="steps">
+        <strong>Steps:</strong>
+        <ol>
+          <li>Launch Annotatr</li>
+          <li>Open settings (⚙️ button)</li>
+          <li>Verify all settings show current values</li>
+          <li>Modify line thickness → 20</li>
+          <li>Modify font size → 16</li>
+          <li>Change arrow color to #0000FF (blue)</li>
+          <li>Click "Save" button</li>
+          <li>Verify "Settings saved successfully!" alert</li>
+          <li>Close settings modal</li>
+          <li>Reopen settings modal</li>
+          <li>Verify changes persisted</li>
+          <li>Click "Reset to Defaults"</li>
+          <li>Confirm reset</li>
+          <li>Verify "Settings have been reset to defaults!" alert</li>
+          <li>Verify all settings back to defaults</li>
+          <li>Close app completely</li>
+          <li>Restart app</li>
+          <li>Open settings</li>
+          <li>Verify defaults loaded</li>
+        </ol>
+      </div>
+      <div class="expected">
+        <strong>Expected Results:</strong>
+        <ul>
+          <li>✓ All operations complete without errors</li>
+          <li>✓ Settings persist across modal closes</li>
+          <li>✓ Reset correctly restores defaults</li>
+          <li>✓ Defaults persist across app restarts</li>
+          <li>✓ No console errors at any step</li>
+          <li>✓ All confirmations and alerts appear as expected</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="feature">
+    <h2>Screenshots</h2>
+
+    <div class="screenshot-placeholder">
+      <h3>Screenshot 1: Settings Modal Footer</h3>
+      <p>Expected: Three buttons visible - "Reset to Defaults" (red, left), "Save" (green), and "Cancel" (gray)</p>
+      <p><em>File: settings-modal-footer.png</em></p>
+    </div>
+
+    <div class="screenshot-placeholder">
+      <h3>Screenshot 2: Save Confirmation</h3>
+      <p>Expected: Alert dialog showing "Settings saved successfully!"</p>
+      <p><em>File: save-confirmation-alert.png</em></p>
+    </div>
+
+    <div class="screenshot-placeholder">
+      <h3>Screenshot 3: Reset Confirmation Dialog</h3>
+      <p>Expected: Confirmation dialog asking "Are you sure you want to reset all settings to their default values?"</p>
+      <p><em>File: reset-confirmation-dialog.png</em></p>
+    </div>
+
+    <div class="screenshot-placeholder">
+      <h3>Screenshot 4: Reset Success Alert</h3>
+      <p>Expected: Alert dialog showing "Settings have been reset to defaults!"</p>
+      <p><em>File: reset-success-alert.png</em></p>
+    </div>
+
+    <div class="screenshot-placeholder">
+      <h3>Screenshot 5: settings.json File</h3>
+      <p>Expected: JSON file showing saved settings with custom values</p>
+      <p><em>File: settings-json-file.png</em></p>
+    </div>
+
+    <div class="screenshot-placeholder">
+      <h3>Screenshot 6: Console Messages</h3>
+      <p>Expected: Console showing save/reset success messages</p>
+      <p><em>File: console-save-reset-messages.png</em></p>
+    </div>
+  </div>
+
+  <div class="feature">
+    <h2>Summary</h2>
+    <p><strong>Features Implemented:</strong></p>
+    <ul>
+      <li>✓ Feature #85: Save settings button - Explicit save with confirmation</li>
+      <li>✓ Feature #86: Reset to defaults button - Restore defaults with confirmation</li>
+      <li>✓ Feature #87: Settings saved to local storage - Tauri store plugin integration</li>
+    </ul>
+
+    <p><strong>Key Implementation Details:</strong></p>
+    <ul>
+      <li>Save button saves all current settings (colors, hotkeys, line thickness, font size, fade duration)</li>
+      <li>Reset button calls backend reset_settings command, then reloads settings</li>
+      <li>Storage uses Tauri's store plugin (settings.json)</li>
+      <li>Settings persist across app restarts</li>
+      <li>Error handling for both save and reset operations</li>
+      <li>Confirmation dialogs for reset (to prevent accidental data loss)</li>
+    </ul>
+
+    <p><strong>Browser Verification Required:</strong></p>
+    <ul>
+      <li>Open Annotatr in development mode</li>
+      <li>Test Save button functionality</li>
+      <li>Test Reset button functionality</li>
+      <li>Verify settings.json file is created/updated</li>
+      <li>Test persistence across app restarts</li>
+      <li>Take screenshots of all key interactions</li>
+    </ul>
+  </div>
+</body>
+</html>
