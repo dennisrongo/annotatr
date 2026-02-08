@@ -1,5 +1,189 @@
 # Annotatr Development Progress
 
+## Session Summary: 2025-02-07 (Session 17)
+
+### Assigned Features Completed This Session
+- Feature #62: Global hotkey to toggle drawing mode (Ctrl+Shift+D) ✓ PASSING
+- Feature #63: Hotkey conflict detection with system apps ✓ PASSING
+- Feature #64: Hotkey customization in settings ✓ PASSING
+
+---
+
+## Session 17 Accomplishments
+
+### Feature #62: Global Hotkey to Toggle Drawing Mode (Ctrl+Shift+D) ✓
+
+**Implementation Summary:**
+
+Added a global hotkey (Ctrl+Shift+D) that toggles drawing mode on/off. When pressed, it shows the overlay and enables drawing mode if currently disabled, or dismisses the overlay if currently enabled.
+
+**Backend Changes (src-tauri/src/lib.rs):**
+- Added `toggle_drawing_mode` command (lines 746-778)
+- Shows overlay and enables drawing mode when hidden
+- Dismisses overlay when visible
+- Updates SharedState to track drawing mode
+- Emits `drawing-mode-changed` event for UI sync
+- Modified `register_hotkeys` to detect `toggleDrawingMode` and register separately (lines 531-541)
+- Added to invoke_handler
+
+**Default Hotkey:** `Ctrl+Shift+D` (defined in DEFAULT_SETTINGS)
+
+### Feature #63: Hotkey Conflict Detection with System Apps ✓
+
+**Implementation Summary:**
+
+Added comprehensive system to detect when configured hotkeys conflict with operating system-level shortcuts. Conflicts are displayed as warnings in the Settings modal.
+
+**Backend Changes (src-tauri/src/lib.rs):**
+- Added `get_system_hotkeys()` function with platform-specific system shortcuts
+  - macOS: Cmd+Space (Spotlight), Cmd+Tab (App Switcher), Cmd+Q (Quit), Cmd+Shift+3/4/5 (Screenshots), etc.
+  - Windows: Ctrl+Esc (Start Menu), Alt+Tab (App Switcher), Win+D (Show Desktop), PrtScn (Screenshot), etc.
+  - Linux: Alt+Tab, Ctrl+Alt+T (Terminal), Super (App Menu), etc.
+- Added `check_hotkey_conflict()` function to check individual hotkeys against system list
+- Added `normalize_hotkey_string()` helper for case-insensitive comparison
+- Added `check_hotkey_conflicts` Tauri command to check all configured hotkeys at once
+- Returns JSON object with conflict information (hotkey name, key combination, system function)
+
+**Frontend Changes (src/components/MiniPanel.tsx):**
+- Added `hotkeyConflicts` state variable
+- Added useEffect to check conflicts on mount
+- Logs warnings to console for each conflict detected
+- Added conflict warning UI in Settings modal
+  - Yellow warning box with ⚠️ icon
+  - Lists each conflict with hotkey name, combination, and system function
+  - Suggests changing conflicting hotkeys
+
+### Feature #64: Hotkey Customization in Settings ✓
+
+**Implementation Summary:**
+
+Added full UI for customizing hotkeys through the Settings panel. Users can now change any hotkey combination to suit their preferences, with automatic conflict detection and hotkey re-registration.
+
+**Frontend Changes (src/components/MiniPanel.tsx):**
+
+**State Variables:**
+- `hotkeys`: Record of all hotkey configurations
+- `editingHotkey`: Which hotkey is currently being edited
+- `capturedHotkey`: The captured key combination during editing
+
+**Key Functions:**
+- `startEditingHotkey(hotkeyName)`: Enters edit mode for a hotkey
+- `cancelEditingHotkey()`: Exits edit mode without saving
+- `handleHotkeyCapture(e)`: Captures keyboard input and formats as hotkey string
+  - Detects Ctrl, Shift, Alt, Meta/Cmd modifiers
+  - Captures main key (letter, number, or special key like F1, Escape)
+  - Formats as "Ctrl+Shift+A" style string
+- `saveHotkey()`: Saves the edited hotkey
+  - Updates local state
+  - Saves to persistent storage via `saveSettings()`
+  - Re-registers hotkeys via `register_hotkeys` command
+  - Checks for conflicts with new configuration
+  - Updates conflict warnings
+
+**UI Components:**
+- Added "Keyboard Shortcuts" section in Settings modal
+- Each hotkey displayed with:
+  - Formatted name (e.g., "Toggle Drawing Mode" from "toggleDrawingMode")
+  - Current hotkey value in a code element
+  - "Edit" button to enter capture mode
+- Edit mode:
+  - Yellow highlight with "Press keys..." text
+  - Auto-focus on capture element
+  - Captures keyboard input
+  - Shows captured combination in green
+  - ✓ button to save (enabled only when valid)
+  - ✕ button to cancel
+
+**Platform Handling:**
+- `isMac()` helper detects macOS
+- Meta key displayed as "Cmd" on macOS, "Win" on Windows/Linux
+- All hotkeys stored in consistent format
+
+---
+
+## Current Project Stats (After Session 17)
+
+- Total Features: 135
+- Passing: 67 (Features #1-64)
+- In Progress: 3
+- Completion: 49.6%
+
+## Files Modified This Session
+
+1. **src-tauri/src/lib.rs** (+215 lines)
+   - Feature #62: Added `toggle_drawing_mode` command
+   - Feature #62: Modified `register_hotkeys` to register toggle hotkey
+   - Feature #63: Added `get_system_hotkeys()` with platform-specific shortcuts
+   - Feature #63: Added `check_hotkey_conflict()` function
+   - Feature #63: Added `check_hotkey_conflicts` Tauri command
+   - Feature #63: Added `normalize_hotkey_string()` helper
+   - Feature #63: Added to invoke_handler
+
+2. **src/components/MiniPanel.tsx** (+380 lines)
+   - Feature #63: Added `hotkeyConflicts` state
+   - Feature #63: Added conflict checking useEffect on mount
+   - Feature #63: Added conflict warning UI in Settings modal
+   - Feature #64: Added `hotkeys`, `editingHotkey`, `capturedHotkey` state
+   - Feature #64: Added hotkey loading useEffect on mount
+   - Feature #64: Added `startEditingHotkey()` function
+   - Feature #64: Added `cancelEditingHotkey()` function
+   - Feature #64: Added `handleHotkeyCapture()` function
+   - Feature #64: Added `saveHotkey()` function
+   - Feature #64: Added `isMac()` helper
+   - Feature #64: Added "Keyboard Shortcuts" UI section in Settings modal
+
+## Technical Notes
+
+**Toggle Drawing Mode System:**
+- Single hotkey for on/off functionality
+- Checks overlay visibility to determine action
+- State management via SharedState
+- Event emission for UI synchronization
+- Reuses existing `dismiss_overlay` and `show_overlay` commands
+
+**Conflict Detection System:**
+- Platform-specific system hotkey lists (macOS: ~25 shortcuts, Windows: ~20, Linux: ~15)
+- Case-insensitive comparison with normalization
+- Handles platform differences (Cmd vs Win, etc.)
+- Returns structured conflict data for UI display
+- Console logging for debugging
+
+**Hotkey Customization System:**
+- Edit mode with visual feedback (yellow=capturing, green=ready)
+- Keyboard event capture with modifier detection
+- Validates format before saving (requires at least 2 keys)
+- Automatic re-registration after changes
+- Conflict checking after customization
+- Persistent storage via saveSettings
+
+**UI/UX:**
+- Consistent styling with rest of mini panel
+- Visual indicators for edit state
+- Disabled save button until valid hotkey captured
+- Clear button labeling (✓ for save, ✕ for cancel)
+- Tooltip hints ("Edit", "Change hotkey")
+- Helpful tip text for users
+
+## Next Steps
+
+**Hotkey System: ALL COMPLETE ✓** (Features #56-64)
+
+**Remaining Features:**
+- Auto-fade system enhancements
+- Additional tool features
+- Export/import functionality
+- And more...
+
+## Git Commits This Session
+
+1. `72bea0b` - "feat: Implement Features #62, #63, #64 - Hotkey system enhancements"
+   - Feature #62: Global hotkey to toggle drawing mode (Ctrl+Shift+D)
+   - Feature #63: Hotkey conflict detection with system apps
+   - Feature #64: Hotkey customization in settings
+   - All features verified and marked as passing
+
+---
+
 ## Session Summary: 2025-02-07 (Session 16)
 
 ### Assigned Features Completed This Session
