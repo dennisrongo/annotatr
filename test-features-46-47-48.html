@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Features 46, 47, 48</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-container {
+            max-width: 500px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #333;
+            font-size: 20px;
+            margin-bottom: 10px;
+        }
+        .test-info {
+            margin-top: 20px;
+            padding: 15px;
+            background: #e3f2fd;
+            border-radius: 4px;
+            border-left: 4px solid #2196f3;
+            font-size: 14px;
+        }
+        .status {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+        .status.pass {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+            color: #155724;
+        }
+        .status.fail {
+            background: #f8d7da;
+            border-left: 4px solid #dc3545;
+            color: #721c24;
+        }
+        .mini-panel-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>Testing Features #46, #47, #48</h1>
+        <p style="color: #666; font-size: 14px;">
+            Testing Line Thickness, Font Size, and Settings Button
+        </p>
+
+        <div class="test-info">
+            <strong>Testing Instructions:</strong>
+            <ul style="margin: 10px 0 0 20px;">
+                <li><strong>Feature #46:</strong> Verify line thickness slider exists (range 1-50)</li>
+                <li><strong>Feature #47:</strong> Verify font size slider exists (range 8-72)</li>
+                <li><strong>Feature #48:</strong> Verify settings button exists and opens modal</li>
+            </ul>
+        </div>
+
+        <div id="status46" class="status">Feature #46: Line Thickness - Testing...</div>
+        <div id="status47" class="status">Feature #47: Font Size - Testing...</div>
+        <div id="status48" class="status">Feature #48: Settings Button - Testing...</div>
+
+        <div id="panel-root" class="mini-panel-container"></div>
+    </div>
+
+    <script>
+        // Mock Tauri API
+        window.__TAURI__ = {
+            invoke: async (cmd, args) => {
+                console.log(`[Mock] Tauri invoke: ${cmd}`, args);
+
+                // Handle different commands
+                if (cmd === 'get_monitor_info') {
+                    return [{
+                        id: 'monitor_0',
+                        name: 'Display 1',
+                        x: 0,
+                        y: 0,
+                        width: 1920,
+                        height: 1080,
+                        scale_factor: 1
+                    }];
+                }
+
+                if (cmd === 'restore_mini_panel_position') {
+                    return { x: 20, y: 20, monitor_id: 'monitor_0' };
+                }
+
+                if (cmd === 'activate_tool_hotkey') {
+                    return Promise.resolve();
+                }
+
+                if (cmd === 'set_mini_panel_position') {
+                    return Promise.resolve();
+                }
+
+                if (cmd === 'save_mini_panel_position') {
+                    return Promise.resolve();
+                }
+
+                if (cmd === 'toggle_mini_panel') {
+                    return true;
+                }
+
+                return Promise.resolve();
+            },
+            core: {
+                invoke: async (cmd, args) => {
+                    return window.__TAURI__.invoke(cmd, args);
+                }
+            }
+        };
+
+        // Mock Tauri storage API
+        const mockSettings = {
+            lineThickness: 3,
+            fontSize: 14,
+            colors: {
+                arrow: '#3b82f6',
+                circle: '#10b981',
+                box: '#f59e0b',
+                freehand: '#ef4444',
+                highlighter: '#eab308',
+                text: '#8b5cf6'
+            }
+        };
+
+        // Create a mock loadSettings function that will be available globally
+        window.mockLoadSettings = async () => {
+            return mockSettings;
+        };
+
+        window.mockSaveSettings = async (newSettings) => {
+            Object.assign(mockSettings, newSettings);
+            console.log('[Mock] Settings saved:', mockSettings);
+            return Promise.resolve();
+        };
+    </script>
+
+    <!-- Need to inject mock into the module context before loading React -->
+    <script type="module">
+        // Inject mock storage module
+        import * as reactModule from '/node_modules/react/index.js';
+        import * as reactDOMModule from '/node_modules/react-dom/index.js';
+        import * as tauriApiModule from '@tauri-apps/api/core';
+
+        // We'll need to load the panel through the build system
+        // For now, let's use a simpler approach - directly inject test logic
+        setTimeout(() => {
+            runTests();
+        }, 100);
+    </script>
+
+    <script>
+        function runTests() {
+            console.log('Running tests for features 46, 47, 48...');
+
+            // Feature #46: Check for line thickness slider
+            setTimeout(() => {
+                const lineThicknessLabel = Array.from(document.querySelectorAll('*')).find(el =>
+                    el.textContent && el.textContent.trim() === 'Line Thickness'
+                );
+
+                const lineThicknessSlider = document.querySelector('input[type="range"][min="1"][max="50"]');
+
+                if (lineThicknessLabel && lineThicknessSlider) {
+                    const valueDisplay = document.body.innerText.includes(/Line Thickness.*\d+px/);
+                    document.getElementById('status46').innerHTML =
+                        '<strong>✓ PASS</strong> - Line thickness slider found with range 1-50';
+                    document.getElementById('status46').className = 'status pass';
+                } else {
+                    document.getElementById('status46').innerHTML =
+                        '<strong>✗ FAIL</strong> - Line thickness slider not found';
+                    document.getElementById('status46').className = 'status fail';
+                    console.log('Looking for line thickness slider...');
+                    console.log('Found line thickness label:', !!lineThicknessLabel);
+                    console.log('Found slider:', !!lineThicknessSlider);
+                }
+            }, 2000);
+
+            // Feature #47: Check for font size slider
+            setTimeout(() => {
+                const fontSizeLabel = Array.from(document.querySelectorAll('*')).find(el =>
+                    el.textContent && el.textContent.trim() === 'Font Size'
+                );
+
+                const fontSizeSlider = document.querySelector('input[type="range"][min="8"][max="72"]');
+
+                if (fontSizeLabel && fontSizeSlider) {
+                    document.getElementById('status47').innerHTML =
+                        '<strong>✓ PASS</strong> - Font size slider found with range 8-72';
+                    document.getElementById('status47').className = 'status pass';
+                } else {
+                    document.getElementById('status47').innerHTML =
+                        '<strong>✗ FAIL</strong> - Font size slider not found';
+                    document.getElementById('status47').className = 'status.fail';
+                    console.log('Looking for font size slider...');
+                    console.log('Found font size label:', !!fontSizeLabel);
+                    console.log('Found slider:', !!fontSizeSlider);
+                }
+            }, 2000);
+
+            // Feature #48: Check for settings button
+            setTimeout(() => {
+                const settingsButtons = Array.from(document.querySelectorAll('button')).filter(btn =>
+                    btn.textContent && btn.textContent.includes('Settings')
+                );
+
+                if (settingsButtons.length > 0) {
+                    document.getElementById('status48').innerHTML =
+                        '<strong>✓ PASS</strong> - Settings button found';
+                    document.getElementById('status48').className = 'status pass';
+
+                    // Test clicking the settings button
+                    const settingsBtn = settingsButtons[0];
+                    console.log('Found settings button, clicking to test modal...');
+                    settingsBtn.click();
+
+                    setTimeout(() => {
+                        const modal = document.querySelector('[style*="position: fixed"]');
+                        const modalHeading = Array.from(document.querySelectorAll('*')).find(el =>
+                            el.textContent && el.textContent.trim() === 'Settings'
+                        );
+
+                        if (modal || modalHeading) {
+                            document.getElementById('status48').innerHTML =
+                                '<strong>✓ PASS</strong> - Settings button found and modal opens on click';
+                        } else {
+                            document.getElementById('status48').innerHTML =
+                                '<strong>~ PARTIAL</strong> - Settings button found but modal may not work';
+                        }
+                    }, 500);
+                } else {
+                    document.getElementById('status48').innerHTML =
+                        '<strong>✗ FAIL</strong> - Settings button not found';
+                    document.getElementById('status48').className = 'status fail';
+                    console.log('Looking for settings button...');
+                }
+            }, 2000);
+        }
+
+        // Alternative: Load the panel directly
+        const panelScript = document.createElement('script');
+        panelScript.type = 'module';
+        panelScript.src = '/src/panel-main.tsx';
+        panelScript.onerror = () => {
+            console.error('Failed to load panel-main.tsx');
+            document.getElementById('panel-root').innerHTML =
+                '<p style="color: red;">Failed to load MiniPanel component. Make sure dev server is running.</p>';
+        };
+        document.head.appendChild(panelScript);
+    </script>
+</body>
+</html>

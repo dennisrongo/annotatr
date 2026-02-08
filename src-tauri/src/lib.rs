@@ -511,33 +511,46 @@ fn clear_all_shapes(app: AppHandle) -> Result<(), String> {
 }
 
 // Hotkey commands
-/// Feature #56, #57, #58: Register global hotkeys for tools
-/// Registers shortcuts like Ctrl+Shift+A for Arrow tool, etc.
+/// Feature #56, #57, #58, #62: Register global hotkeys for tools and toggle
+/// Registers shortcuts like Ctrl+Shift+A for Arrow tool, Ctrl+Shift+D for toggle
 #[tauri::command]
 fn register_hotkeys(app: AppHandle, hotkey_config: serde_json::Value) -> Result<(), String> {
     // Get the hotkeys object from config
     let hotkeys_obj = hotkey_config["hotkeys"].as_object()
         .ok_or("Invalid hotkeys config: missing 'hotkeys' object")?;
 
-    // Register each tool hotkey
-    for (tool_name, hotkey_str) in hotkeys_obj.iter() {
+    // Register each hotkey
+    for (hotkey_name, hotkey_str) in hotkeys_obj.iter() {
         if let Some(hotkey_value) = hotkey_str.as_str() {
             // Parse the hotkey string (e.g., "Ctrl+Shift+A")
             let shortcut = parse_hotkey_string(hotkey_value)
                 .map_err(|e| format!("Failed to parse hotkey '{}': {}", hotkey_value, e))?;
 
-            // Register the global shortcut
             let app_handle = app.clone();
-            let tool = tool_name.clone();
 
-            app.global_shortcut().register(shortcut, move || {
-                // When hotkey is pressed, call activate_tool_hotkey
-                if let Err(e) = activate_tool_hotkey(app_handle.clone(), tool.clone()) {
-                    eprintln!("Failed to activate tool '{}': {}", tool, e);
-                }
-            }).map_err(|e| format!("Failed to register hotkey '{}' for tool '{}': {}", hotkey_value, tool_name, e))?;
+            // Feature #62: Check if this is the toggle drawing mode hotkey
+            if hotkey_name == "toggleDrawingMode" {
+                // Register toggle drawing mode hotkey
+                app.global_shortcut().register(shortcut, move || {
+                    // When toggle hotkey is pressed, call toggle_drawing_mode
+                    if let Err(e) = toggle_drawing_mode(app_handle.clone()) {
+                        eprintln!("Failed to toggle drawing mode: {}", e);
+                    }
+                }).map_err(|e| format!("Failed to register toggle hotkey '{}': {}", hotkey_value, e))?;
 
-            println!("Registered hotkey '{}' for tool '{}'", hotkey_value, tool_name);
+                println!("Registered toggle hotkey '{}' for drawing mode", hotkey_value);
+            } else {
+                // Register tool hotkey
+                let tool = hotkey_name.clone();
+                app.global_shortcut().register(shortcut, move || {
+                    // When hotkey is pressed, call activate_tool_hotkey
+                    if let Err(e) = activate_tool_hotkey(app_handle.clone(), tool.clone()) {
+                        eprintln!("Failed to activate tool '{}': {}", tool, e);
+                    }
+                }).map_err(|e| format!("Failed to register hotkey '{}' for tool '{}': {}", hotkey_value, hotkey_name, e))?;
+
+                println!("Registered hotkey '{}' for tool '{}'", hotkey_value, hotkey_name);
+            }
         }
     }
 
@@ -618,10 +631,28 @@ fn parse_key_string(s: &str) -> Result<tauri_plugin_global_shortcut::Key, String
     }
 }
 
+/// Convert hotkey config key to ToolType value
+/// Example: "freehandTool" -> "freehand", "textTool" -> "text"
+fn convert_hotkey_tool_name(hotkey_key: &str) -> String {
+    match hotkey_key {
+        "arrowTool" => "arrow".to_string(),
+        "circleTool" => "circle".to_string(),
+        "boxTool" => "box".to_string(),
+        "freehandTool" => "freehand".to_string(),
+        "highlighterTool" => "highlighter".to_string(),
+        "textTool" => "text".to_string(),
+        _ => hotkey_key.to_string(), // Return as-is if no match
+    }
+}
+
 /// Feature #18: Activate overlay and select a tool via hotkey
 /// This command is called when a hotkey for a specific tool is pressed
 #[tauri::command]
 fn activate_tool_hotkey(app: AppHandle, tool: String) -> Result<(), String> {
+    // Convert hotkey config key to ToolType value
+    // Example: "freehandTool" -> "freehand"
+    let tool_type = convert_hotkey_tool_name(&tool);
+
     // Show the overlay if not already visible
     let overlay_window = app.get_webview_window("overlay")
         .ok_or("Overlay window not found")?;
@@ -640,14 +671,14 @@ fn activate_tool_hotkey(app: AppHandle, tool: String) -> Result<(), String> {
     }
 
     // Emit tool-selected event to notify overlay
-    app.emit("tool-selected", tool)
+    app.emit("tool-selected", tool_type)
         .map_err(|e| format!("Failed to emit event: {}", e))?;
 
     // Emit drawing-mode-changed event
     app.emit("drawing-mode-changed", true)
         .map_err(|e| format!("Failed to emit event: {}", e))?;
 
-    println!("Activated tool '{}' via hotkey, overlay shown", tool);
+    println!("Activated tool '{}' via hotkey (from config key '{}'), overlay shown", tool_type, tool);
 
     Ok(())
 }
@@ -708,6 +739,40 @@ fn toggle_overlay(app: AppHandle) -> Result<bool, String> {
     } else {
         // Show the overlay
         show_overlay(app)?;
+        Ok(true)
+    }
+}
+
+/// Feature #62: Toggle drawing mode on/off
+/// Shows overlay and enables drawing mode if disabled, or dismisses overlay if enabled
+#[tauri::command]
+fn toggle_drawing_mode(app: AppHandle) -> Result<bool, String> {
+    let overlay_window = app.get_webview_window("overlay")
+        .ok_or("Overlay window not found")?;
+
+    let is_visible = overlay_window.is_visible()?;
+
+    if is_visible {
+        // Overlay is visible - dismiss it (turn off drawing mode)
+        dismiss_overlay(app)?;
+        println!("Drawing mode toggled OFF (overlay dismissed)");
+        Ok(false)
+    } else {
+        // Overlay is hidden - show it and enable drawing mode (turn on drawing mode)
+        show_overlay(app)?;
+
+        // Update state to enable drawing mode
+        if let Some(state) = app.state::<SharedState>().try_get() {
+            let mut state_guard = state.lock().map_err(|e| format!("State lock error: {}", e))?;
+            state_guard.is_visible = true;
+            state_guard.drawing_mode = true;
+        }
+
+        // Emit drawing mode enabled event
+        app.emit("drawing-mode-changed", true)
+            .map_err(|e| format!("Failed to emit event: {}", e))?;
+
+        println!("Drawing mode toggled ON (overlay shown, drawing mode enabled)");
         Ok(true)
     }
 }
@@ -978,6 +1043,7 @@ pub fn run() {
             activate_tool_hotkey,
             dismiss_overlay,
             toggle_overlay,
+            toggle_drawing_mode,
             ensure_on_top,
             get_platform_info,
             set_mini_panel_position,

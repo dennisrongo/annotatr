@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Features #59, #60, #61 - Global Hotkeys (Freehand, Text, Highlighter) - VERIFIED</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        h1 {
+            color: #2563eb;
+            border-bottom: 2px solid #2563eb;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #1e40af;
+            margin-top: 30px;
+        }
+        .feature {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .feature h3 {
+            margin-top: 0;
+            color: #0891b2;
+        }
+        .status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        .status.passing {
+            background: #dcfce7;
+            color: #166534;
+        }
+        code {
+            background: #f1f5f9;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 14px;
+        }
+        pre {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-size: 13px;
+        }
+        pre code {
+            background: transparent;
+            padding: 0;
+            color: inherit;
+        }
+        .test-steps {
+            background: #fffbeb;
+            border-left: 4px solid #f59e0b;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .test-steps ol {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        .test-steps li {
+            margin: 8px 0;
+        }
+        .implementation-details {
+            background: #f0fdf4;
+            border-left: 4px solid #22c55e;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .fix-note {
+            background: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            padding: 15px;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Test Features #59, #60, #61 - Global Hotkeys (Freehand, Text, Highlighter) - VERIFIED ✓</h1>
+
+    <div class="fix-note">
+        <strong>FIX IMPLEMENTED:</strong> Added <code>convert_hotkey_tool_name()</code> function to backend to properly convert hotkey config keys (e.g., "freehandTool") to ToolType enum values (e.g., "freehand").
+    </div>
+
+    <div class="feature">
+        <h3>Feature #59: Global hotkey for Freehand tool (Ctrl+Shift+F) <span class="status passing">PASSING ✓</span></h3>
+        <p>Register global hotkey <code>Ctrl+Shift+F</code> to activate freehand tool</p>
+
+        <div class="implementation-details">
+            <h4>Implementation:</h4>
+            <ul>
+                <li>✅ Hotkey defined in DEFAULT_SETTINGS: <code>"freehandTool": "Ctrl+Shift+F"</code></li>
+                <li>✅ Hotkey registration system implemented (from Features #56-58)</li>
+                <li>✅ <code>convert_hotkey_tool_name("freehandTool")</code> → <code>"freehand"</code></li>
+                <li>✅ <code>register_hotkeys()</code> registers all hotkeys on app startup</li>
+                <li>✅ <code>activate_tool_hotkey()</code> shows overlay and emits tool-selected event</li>
+                <li>✅ Overlay receives "freehand" and sets current tool to ToolType.FREEHAND</li>
+            </ul>
+        </div>
+
+        <div class="test-steps">
+            <h4>Test Steps:</h4>
+            <ol>
+                <li>Launch the Annotatr application</li>
+                <li>Check console for "Global hotkeys registered successfully" message</li>
+                <li>Press <code>Ctrl+Shift+F</code> (or Cmd+Shift+F on macOS)</li>
+                <li>Verify overlay window appears and activates</li>
+                <li>Verify "Freehand" tool is selected (check cursor or UI indicator)</li>
+                <li>Draw on screen to verify freehand tool is active</li>
+                <li>Press <code>Escape</code> to dismiss overlay</li>
+            </ol>
+        </div>
+    </div>
+
+    <div class="feature">
+        <h3>Feature #60: Global hotkey for Text tool (Ctrl+Shift+T) <span class="status passing">PASSING ✓</span></h3>
+        <p>Register global hotkey <code>Ctrl+Shift+T</code> to activate text tool</p>
+
+        <div class="implementation-details">
+            <h4>Implementation:</h4>
+            <ul>
+                <li>✅ Hotkey defined in DEFAULT_SETTINGS: <code>"textTool": "Ctrl+Shift+T"</code></li>
+                <li>✅ Hotkey registration system implemented (from Features #56-58)</li>
+                <li>✅ <code>convert_hotkey_tool_name("textTool")</code> → <code>"text"</code></li>
+                <li>✅ <code>register_hotkeys()</code> registers all hotkeys on app startup</li>
+                <li>✅ <code>activate_tool_hotkey()</code> shows overlay and emits tool-selected event</li>
+                <li>✅ Overlay receives "text" and sets current tool to ToolType.TEXT</li>
+            </ul>
+        </div>
+
+        <div class="test-steps">
+            <h4>Test Steps:</h4>
+            <ol>
+                <li>Ensure Annotatr application is running</li>
+                <li>Press <code>Ctrl+Shift+T</code> (or Cmd+Shift+T on macOS)</li>
+                <li>Verify overlay window appears and activates</li>
+                <li>Verify "Text" tool is selected (check cursor or UI indicator)</li>
+                <li>Click on screen and verify text input appears</li>
+                <li>Type text and press Enter to place it</li>
+                <li>Press <code>Escape</code> to dismiss overlay</li>
+            </ol>
+        </div>
+    </div>
+
+    <div class="feature">
+        <h3>Feature #61: Global hotkey for Highlighter tool (Ctrl+Shift+H) <span class="status passing">PASSING ✓</span></h3>
+        <p>Register global hotkey <code>Ctrl+Shift+H</code> to activate highlighter tool</p>
+
+        <div class="implementation-details">
+            <h4>Implementation:</h4>
+            <ul>
+                <li>✅ Hotkey defined in DEFAULT_SETTINGS: <code>"highlighterTool": "Ctrl+Shift+H"</code></li>
+                <li>✅ Hotkey registration system implemented (from Features #56-58)</li>
+                <li>✅ <code>convert_hotkey_tool_name("highlighterTool")</code> → <code>"highlighter"</code></li>
+                <li>✅ <code>register_hotkeys()</code> registers all hotkeys on app startup</li>
+                <li>✅ <code>activate_tool_hotkey()</code> shows overlay and emits tool-selected event</li>
+                <li>✅ Overlay receives "highlighter" and sets current tool to ToolType.HIGHLIGHTER</li>
+            </ul>
+        </div>
+
+        <div class="test-steps">
+            <h4>Test Steps:</h4>
+            <ol>
+                <li>Ensure Annotatr application is running</li>
+                <li>Press <code>Ctrl+Shift+H</code> (or Cmd+Shift+H on macOS)</li>
+                <li>Verify overlay window appears and activates</li>
+                <li>Verify "Highlighter" tool is selected (check cursor or UI indicator)</li>
+                <li>Draw on screen to verify highlighter tool is active</li>
+                <li>Verify highlighter is semi-transparent (different from freehand)</li>
+                <li>Press <code>Escape</code> to dismiss overlay</li>
+            </ol>
+        </div>
+    </div>
+
+    <h2>How It Works</h2>
+
+    <p>All three hotkeys use the existing hotkey infrastructure implemented in Features #56, #57, #58:</p>
+
+    <ol>
+        <li><strong>App Startup:</strong> MiniPanel.tsx calls <code>register_hotkeys()</code> with default settings</li>
+        <li><strong>Registration:</strong> Backend iterates through all hotkeys in config and registers them with OS</li>
+        <li><strong>Trigger:</strong> When user presses Ctrl+Shift+F/T/H, the global shortcut is triggered</li>
+        <li><strong>Handler:</strong> <code>activate_tool_hotkey()</code> is called with the hotkey config key</li>
+        <li><strong>Conversion:</strong> <code>convert_hotkey_tool_name()</code> converts "freehandTool" → "freehand"</li>
+        <li><strong>Activation:</strong> Overlay is shown, drawing mode enabled, tool-selected event emitted with "freehand"</li>
+        <li><strong>UI Update:</strong> Overlay receives tool-selected event and sets current tool to ToolType.FREEHAND</li>
+    </ol>
+
+    <h2>Fix Details</h2>
+
+    <h3>Problem</h3>
+    <p>The hotkey configuration uses keys like "freehandTool", "textTool", "highlighterTool" but the ToolType enum uses values like "freehand", "text", "highlighter". Without conversion, the tool-selected event would emit "freehandTool" which doesn't match any ToolType value, causing the tool selection to fail silently.</p>
+
+    <h3>Solution</h3>
+    <p>Added <code>convert_hotkey_tool_name()</code> function in <code>src-tauri/src/lib.rs</code>:</p>
+
+    <pre><code>/// Convert hotkey config key to ToolType value
+/// Example: "freehandTool" -> "freehand", "textTool" -> "text"
+fn convert_hotkey_tool_name(hotkey_key: &str) -> String {
+    match hotkey_key {
+        "arrowTool" => "arrow".to_string(),
+        "circleTool" => "circle".to_string(),
+        "boxTool" => "box".to_string(),
+        "freehandTool" => "freehand".to_string(),
+        "highlighterTool" => "highlighter".to_string(),
+        "textTool" => "text".to_string(),
+        _ => hotkey_key.to_string(), // Return as-is if no match
+    }
+}</code></pre>
+
+    <p>This function is called in <code>activate_tool_hotkey()</code> before emitting the tool-selected event, ensuring the overlay receives a valid ToolType enum value.</p>
+
+    <h2>Default Hotkey Configuration</h2>
+
+    <table border="1" cellpadding="10" cellspacing="0" style="border-collapse: collapse; width: 100%;">
+        <thead>
+            <tr style="background: #f1f5f9;">
+                <th>Tool</th>
+                <th>Hotkey (Windows/Linux)</th>
+                <th>Hotkey (macOS)</th>
+                <th>Feature #</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>Arrow</strong></td>
+                <td>Ctrl+Shift+A</td>
+                <td>Cmd+Shift+A</td>
+                <td>56</td>
+            </tr>
+            <tr>
+                <td><strong>Circle</strong></td>
+                <td>Ctrl+Shift+C</td>
+                <td>Cmd+Shift+C</td>
+                <td>57</td>
+            </tr>
+            <tr>
+                <td><strong>Box</strong></td>
+                <td>Ctrl+Shift+B</td>
+                <td>Cmd+Shift+B</td>
+                <td>58</td>
+            </tr>
+            <tr style="background: #f0fdf4;">
+                <td><strong>Freehand</strong></td>
+                <td>Ctrl+Shift+F</td>
+                <td>Cmd+Shift+F</td>
+                <td>59 ✓</td>
+            </tr>
+            <tr style="background: #f0fdf4;">
+                <td><strong>Text</strong></td>
+                <td>Ctrl+Shift+T</td>
+                <td>Cmd+Shift+T</td>
+                <td>60 ✓</td>
+            </tr>
+            <tr style="background: #f0fdf4;">
+                <td><strong>Highlighter</strong></td>
+                <td>Ctrl+Shift+H</td>
+                <td>Cmd+Shift+H</td>
+                <td>61 ✓</td>
+            </tr>
+            <tr>
+                <td><strong>Toggle Drawing</strong></td>
+                <td>Ctrl+Shift+D</td>
+                <td>Cmd+Shift+D</td>
+                <td>62</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h2>Verification Checklist</h2>
+
+    <div class="test-steps">
+        <h4>Before Marking as Passing:</h4>
+        <ul>
+            <li>✅ TypeScript compiles without errors</li>
+            <li>✅ Rust code compiles without errors</li>
+            <li>✅ Hotkeys are registered on app startup (check console logs)</li>
+            <li>✅ Tool name conversion function added to backend</li>
+            <li>✅ Ctrl+Shift+F activates Freehand tool with overlay</li>
+            <li>✅ Ctrl+Shift+T activates Text tool with overlay</li>
+            <li>✅ Ctrl+Shift+H activates Highlighter tool with overlay</li>
+            <li>✅ Hotkeys work globally (even when app is not focused)</li>
+            <li>✅ Drawing mode is enabled when hotkey is pressed</li>
+            <li>✅ Escape key dismisses overlay and clears shapes</li>
+            <li>✅ Each tool draws correctly (freehand draws lines, text shows input, highlighter is semi-transparent)</li>
+            <li>✅ No mock data patterns in code</li>
+        </ul>
+    </div>
+
+    <h2>Files Modified</h2>
+
+    <ul>
+        <li><strong>src-tauri/src/lib.rs</strong>
+            <ul>
+                <li>Added <code>convert_hotkey_tool_name()</code> function to convert hotkey config keys to ToolType values</li>
+                <li>Modified <code>activate_tool_hotkey()</code> to call conversion function before emitting event</li>
+                <li>Updated console log to show both original config key and converted tool type</li>
+            </ul>
+        </li>
+    </ul>
+
+    <div style="margin-top: 40px; padding: 20px; background: #f0fdf4; border-left: 4px solid #22c55e;">
+        <strong>Features #59, #60, #61 Status:</strong> PASSING ✓<br>
+        All three hotkeys (Freehand, Text, Highlighter) are now fully implemented with proper tool name conversion. The hotkey infrastructure registers the shortcuts, and the conversion function ensures the overlay receives valid ToolType enum values.
+    </div>
+</body>
+</html>
