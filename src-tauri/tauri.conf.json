@@ -61,7 +61,34 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "identifier": "com.annotatr.app",
+    "publisher": "Annotatr",
+    "copyright": "Copyright © 2025 Annotatr",
+    "category": "Graphics",
+    "shortDescription": "Screen annotation tool for recordings",
+    "longDescription": "A cross-platform screen annotation overlay tool that lets users draw arrows, circles, boxes, freehand drawings, highlights, and text on their screen in real-time while recording with any screen capture software.",
+    "macOS": {
+      "frameworks": [],
+      "minimumSystemVersion": "10.13",
+      "exceptionDomain": "",
+      "signingIdentity": null,
+      "providerShortName": null,
+      "entitlements": null
+    },
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": ""
+    },
+    "linux": {
+      "deb": {
+        "depends": []
+      },
+      "appimage": {
+        "bundleMediaFramework": false
+      }
+    }
   },
   "plugins": {
     "store": {

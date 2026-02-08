@@ -257,6 +257,34 @@ export default function Overlay() {
   }, [cleanupOpacityTracking, redrawAllShapes]);
 
   /**
+   * Feature #124: Clear all shapes from the overlay at once
+   * Removes all shapes from the shapes array and redraws the canvas
+   * Keyboard shortcut: Ctrl+Shift+X (Windows/Linux) or Cmd+Shift+X (macOS)
+   */
+  const clearAllShapes = useCallback(() => {
+    if (shapesRef.current.length === 0) {
+      console.log("[Feature #124] No shapes to clear");
+      return;
+    }
+
+    // Get all shape IDs before clearing
+    const shapeIds = shapesRef.current.map(shape => shape.id);
+    const shapeCount = shapesRef.current.length;
+
+    // Clear all shapes
+    shapesRef.current = [];
+
+    // Feature #120: Clean up opacity tracking for all cleared shapes
+    cleanupOpacityTracking(shapeIds);
+
+    console.log(`[Feature #124] Cleared ${shapeCount} shape(s)`);
+    console.log(`[Feature #124] Shape IDs: ${shapeIds.join(", ")}`);
+
+    // Redraw the canvas (should now be empty)
+    redrawAllShapes();
+  }, [cleanupOpacityTracking, redrawAllShapes]);
+
+  /**
    * Feature #67: Show visual feedback when a hotkey is triggered
    * Displays a brief flash notification with the tool name and icon
    */
@@ -735,6 +763,14 @@ export default function Overlay() {
         event.preventDefault();
         console.log("Undo hotkey pressed (Ctrl+Z / Cmd+Z)");
         undoLastShape();
+        return;
+      }
+
+      // Feature #124: Handle Ctrl+Shift+X / Cmd+Shift+X to clear all shapes
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === "x") {
+        event.preventDefault();
+        console.log("Clear all shapes hotkey pressed (Ctrl+Shift+X / Cmd+Shift+X)");
+        clearAllShapes();
         return;
       }
 

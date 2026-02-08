@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod utils;
+mod platform_optimizations;
 
 use tauri::{AppHandle, Emitter, Manager, Window, State};
 use tauri_plugin_store::{StoreBuilder, StoreExt};

@@ -1517,3 +1517,5 @@ The application now has all essential functionality including:
 - ✓ Drawing cancellation (NEW)
 - ✓ Tool-specific defaults (VERIFIED)
 - ✓ Undo functionality (NEW)
+Session 29 completed: Features #120 (Fade Timer Cleanup) and #128 (Per-Shape Fade Duration) - 125/135 passing (92.6%)
+Session 29: Features #120 and #128 completed - 127/135 passing (94.1%) - Auto-Fade System category complete\!
