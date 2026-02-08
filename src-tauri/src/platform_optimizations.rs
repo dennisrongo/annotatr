@@ -125,8 +125,6 @@ pub fn get_platform_optimizations() -> serde_json::Value {
 /// This should be called during window initialization
 #[cfg(target_os = "windows")]
 pub fn apply_windows_optimizations(window: &tauri::WebviewWindow) -> Result<(), String> {
-    use tauri::Manager;
-
     // Enable Windows-specific optimizations
     // These are handled by Tauri's window decorators, but we can
     // add additional optimizations here
@@ -142,8 +140,6 @@ pub fn apply_windows_optimizations(window: &tauri::WebviewWindow) -> Result<(), 
 /// Apply macOS-specific optimizations
 #[cfg(target_os = "macos")]
 pub fn apply_macos_optimizations(window: &tauri::WebviewWindow) -> Result<(), String> {
-    use tauri::Manager;
-
     // Enable macOS-specific optimizations
     window.set_decorations(true).map_err(|e| e.to_string())?;
 
@@ -155,8 +151,6 @@ pub fn apply_macos_optimizations(window: &tauri::WebviewWindow) -> Result<(), St
 /// Apply Linux-specific optimizations
 #[cfg(target_os = "linux")]
 pub fn apply_linux_optimizations(window: &tauri::WebviewWindow) -> Result<(), String> {
-    use tauri::Manager;
-
     // Enable Linux-specific optimizations
     window.set_decorations(true).map_err(|e| e.to_string())?;
 
@@ -189,8 +183,7 @@ pub fn get_canvas_optimizations() -> serde_json::Value {
             "imageSmoothingQuality": "high",
             "alpha": true,
             "desynchronized": true,
-            "colorSpace": "srgb",
-            "pixelRatio": window.devicePixelRatio // Use native pixel ratio
+            "colorSpace": "srgb"
         })
     }
 

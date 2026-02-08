@@ -15,7 +15,7 @@
     "core:window:allow-set-always-on-top",
     "core:window:allow-set-ignore-cursor-events",
     "core:window:allow-is-visible",
-    "core:window:allow-position",
+    "core:window:allow-outer-position",
     "core:event:allow-emit",
     "core:event:allow-listen"
   ]

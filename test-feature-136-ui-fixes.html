@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Feature #136: UI Fixes - Test Documentation</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 40px 20px;
+      background: #f5f5f5;
+      line-height: 1.6;
+    }
+    h1 {
+      color: #2563eb;
+      border-bottom: 3px solid #2563eb;
+      padding-bottom: 10px;
+    }
+    h2 {
+      color: #1e40af;
+      margin-top: 40px;
+    }
+    .info-box {
+      background: #dbeafe;
+      border-left: 4px solid #2563eb;
+      padding: 20px;
+      margin: 20px 0;
+      border-radius: 4px;
+    }
+    .fix-box {
+      background: #dcfce7;
+      border-left: 4px solid #22c55e;
+      padding: 20px;
+      margin: 20px 0;
+      border-radius: 4px;
+    }
+    .issue-box {
+      background: #fee2e2;
+      border-left: 4px solid #ef4444;
+      padding: 20px;
+      margin: 20px 0;
+      border-radius: 4px;
+    }
+    code {
+      background: #1f2937;
+      color: #f3f4f6;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-family: 'Monaco', 'Courier New', monospace;
+      font-size: 0.9em;
+    }
+    pre {
+      background: #1f2937;
+      color: #f3f4f6;
+      padding: 20px;
+      border-radius: 8px;
+      overflow-x: auto;
+      font-size: 0.85em;
+    }
+    pre code {
+      background: none;
+      padding: 0;
+    }
+    .step {
+      background: white;
+      padding: 15px;
+      margin: 10px 0;
+      border-radius: 8px;
+      border-left: 3px solid #6366f1;
+    }
+    .step-title {
+      font-weight: bold;
+      color: #4f46e5;
+      margin-bottom: 8px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+      background: white;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    th {
+      background: #2563eb;
+      color: white;
+      padding: 12px;
+      text-align: left;
+    }
+    td {
+      padding: 12px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    tr:last-child td {
+      border-bottom: none;
+    }
+    .status-pass {
+      color: #22c55e;
+      font-weight: bold;
+    }
+    .status-fail {
+      color: #ef4444;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h1>Feature #136: UI Fixes - Test Documentation</h1>
+
+  <div class="info-box">
+    <strong>Overview:</strong> This feature fixes UI issues and ensures all tools are functional with proper overlay transparency.
+  </div>
+
+  <h2>Issues Fixed</h2>
+
+  <div class="issue-box">
+    <h3>Issue #1: Overlay Using Old Vanilla JS Implementation</h3>
+    <p><strong>Problem:</strong> The overlay.html was using the old vanilla JS implementation (<code>overlay-main.ts</code>) instead of the modern React component (<code>Overlay.tsx</code>).</p>
+    <p><strong>Impact:</strong> Limited functionality, missing features like shape editing, alignment guides, multi-line text, etc.</p>
+    <p><strong>Fix:</strong> Updated overlay.html to use React Overlay component via new entry point.</p>
+  </div>
+
+  <div class="issue-box">
+    <h3>Issue #2: Missing CSS Transparency in HTML Files</h3>
+    <p><strong>Problem:</strong> The HTML files didn't have proper CSS to ensure transparency.</p>
+    <p><strong>Impact:</strong> Overlay might have had opaque backgrounds on some platforms.</p>
+    <p><strong>Fix:</strong> Added explicit transparent CSS to overlay.html and mini-panel.html.</p>
+  </div>
+
+  <h2>Changes Made</h2>
+
+  <h3>1. Created overlay-entry.tsx</h3>
+  <p>New React entry point for the overlay window:</p>
+  <pre><code>// src/overlay-entry.tsx
+import React from "react";
+import ReactDOM from "react-dom/client";
+import Overlay from "./components/Overlay";
+
+ReactDOM.createRoot(document.getElementById("overlay-root") as HTMLElement).render(
+  &lt;React.StrictMode&gt;
+    &lt;Overlay /&gt;
+  &lt;/React.StrictMode&gt;
+);</code></pre>
+
+  <h3>2. Updated overlay.html</h3>
+  <p>Changed from using vanilla JS to React component:</p>
+  <table>
+    <tr>
+      <th>Before</th>
+      <th>After</th>
+    </tr>
+    <tr>
+      <td><code>src="/src/overlay-main.ts"</code></td>
+      <td><code>src="/src/overlay-entry.tsx"</code></td>
+    </tr>
+    <tr>
+      <td><code>&lt;canvas id="canvas"&gt;&lt;/canvas&gt;</code></td>
+      <td><code>&lt;div id="overlay-root"&gt;&lt;/div&gt;</code></td>
+    </tr>
+    <tr>
+      <td>Basic CSS</td>
+      <td>Full transparency CSS with proper styling</td>
+    </tr>
+  </table>
+
+  <h3>3. Enhanced mini-panel.html</h3>
+  <p>Added proper CSS for transparency and font consistency:</p>
+  <pre><code>&lt;style&gt;
+  html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: transparent;
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+    font-family: Inter, system-ui, -apple-system, sans-serif;
+  }
+
+  #panel-root {
+    width: 100%;
+    height: 100%;
+    background: transparent;
+  }
+&lt;/style&gt;</code></pre>
+
+  <h2>Verification Steps</h2>
+
+  <div class="step">
+    <div class="step-title">Step 1: Build Verification</div>
+    <p>Run the build command to ensure no compilation errors:</p>
+    <pre><code>npm run build</code></pre>
+    <p><strong>Expected:</strong> Build succeeds with no errors</p>
+    <p><strong>Status:</strong> <span class="status-pass">PASS</span> - Build completed successfully</p>
+  </div>
+
+  <div class="step">
+    <div class="step-title">Step 2: Overlay Transparency Check</div>
+    <p>Start the application and verify the overlay window is transparent:</p>
+    <pre><code>npm run tauri:dev</code></pre>
+    <p><strong>Expected:</strong></p>
+    <ul>
+      <li>Overlay window has transparent background</li>
+      <li>Only drawn shapes and UI indicators are visible</li>
+      <li>Desktop/windows behind overlay are visible through it</li>
+      <li>No white or opaque background is visible</li>
+    </ul>
+  </div>
+
+  <div class="step">
+    <div class="step-title">Step 3: Mini Panel Transparency Check</div>
+    <p>Verify the mini panel has proper transparency:</p>
+    <p><strong>Expected:</strong></p>
+    <ul>
+      <li>Mini panel background is semi-transparent (configurable via settings)</li>
+      <li>Panel can be seen through to content behind it</li>
+      <li>Panel remains readable with good contrast</li>
+    </ul>
+  </div>
+
+  <div class="step">
+    <div class="step-title">Step 4: Tool Functionality Test</div>
+    <p>Test all drawing tools work correctly through the UI:</p>
+    <p><strong>Expected:</strong></p>
+    <ul>
+      <li>Arrow tool: Click and drag creates arrows</li>
+      <li>Circle tool: Click and drag creates circles/ellipses</li>
+      <li>Box tool: Click and drag creates rectangles</li>
+      <li>Freehand tool: Draw creates freehand lines</li>
+      <li>Highlighter tool: Draw creates semi-transparent highlights</li>
+      <li>Text tool: Click creates text input field</li>
+    </ul>
+  </div>
+
+  <div class="step">
+    <div class="step-title">Step 5: Advanced Features Test</div>
+    <p>Verify advanced features work (now that React component is used):</p>
+    <p><strong>Expected:</strong></p>
+    <ul>
+      <li>Alignment guides appear when drawing (Feature #132)</li>
+      <li>Edit mode works (Ctrl+E) (Feature #125)</li>
+      <li>Multi-line text support (Feature #129)</li>
+      <li>Custom fade durations (Feature #128)</li>
+      <li>Arrow head style customization (Feature #131)</li>
+      <li>Shape undo/redo (Feature #123)</li>
+      <li>Clear all shapes (Feature #124)</li>
+    </ul>
+  </div>
+
+  <h2>File Changes Summary</h2>
+
+  <table>
+    <tr>
+      <th>File</th>
+      <th>Action</th>
+      <th>Description</th>
+    </tr>
+    <tr>
+      <td><code>src/overlay-entry.tsx</code></td>
+      <td>Created</td>
+      <td>New React entry point for overlay window</td>
+    </tr>
+    <tr>
+      <td><code>overlay.html</code></td>
+      <td>Modified</td>
+      <td>Updated to use React component with proper transparency CSS</td>
+    </tr>
+    <tr>
+      <td><code>mini-panel.html</code></td>
+      <td>Modified</td>
+      <td>Added transparency CSS and font styling</td>
+    </tr>
+  </table>
+
+  <h2>Files to Clean Up (Future)</h2>
+
+  <p>The following old files can be removed as they are no longer used:</p>
+  <ul>
+    <li><code>src/overlay.tsx</code> - Old React overlay component (returns null)</li>
+    <li><code>src/overlay-main.ts</code> - Old vanilla JS implementation</li>
+    <li><code>src/mini-panel.tsx</code> - Old mini panel component</li>
+  </ul>
+
+  <div class="fix-box">
+    <h3>Result</h3>
+    <p>The overlay now uses the full-featured React Overlay component with all 135+ features implemented, including:</p>
+    <ul>
+      <li>Transparent overlay window</li>
+      <li>All 6 drawing tools with tool-specific settings</li>
+      <li>Real-time preview while drawing</li>
+      <li>Shape alignment guides</li>
+      <li>Shape editing after placement</li>
+      <li>Multi-line text support</li>
+      <li>Auto-fade system with smooth animations</li>
+      <li>Hotkey support for all tools</li>
+      <li>Settings persistence</li>
+      <li>And 120+ more features!</li>
+    </ul>
+  </div>
+
+  <h2>Technical Notes</h2>
+
+  <h3>Why the React Component?</h3>
+  <p>The React <code>Overlay.tsx</code> component contains 1800+ lines of production-ready code implementing all features, while the vanilla JS <code>overlay-main.ts</code> only had basic drawing functionality (149 lines).</p>
+
+  <h3>Transparency Implementation</h3>
+  <p>The overlay transparency is achieved through multiple layers:</p>
+  <ol>
+    <li>Tauri config: <code>"transparent": true</code> in tauri.conf.json</li>
+    <li>CSS: <code>background: transparent</code> in overlay.html</li>
+    <li>React: <code>backgroundColor: "transparent"</code> in Overlay.tsx render</li>
+    <li>Canvas: Canvas element has no background fill</li>
+  </ol>
+
+  <h3>Entry Point Architecture</h3>
+  <pre><code>overlay.html (Tauri window)
+    ↓
+overlay-entry.tsx (React mount)
+    ↓
+Overlay component (src/components/Overlay.tsx)
+    ↓
+Canvas rendering + Event handling + UI</code></pre>
+
+</body>
+</html>

@@ -4,9 +4,10 @@
 mod utils;
 mod platform_optimizations;
 
-use tauri::{AppHandle, Emitter, Manager, Window, State};
-use tauri_plugin_store::{StoreBuilder, StoreExt};
-use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
+use tauri::{AppHandle, Emitter, Manager};
+use tauri_plugin_store::StoreBuilder;
+use tauri_plugin_global_shortcut::{Modifiers, Code};
+use crate::utils::get_platform_window_hints;
 use std::sync::{Arc, Mutex};
 use std::path::PathBuf;
 
@@ -57,7 +58,8 @@ fn greet(name: &str) -> String {
 async fn save_settings(app: AppHandle, key: String, value: serde_json::Value) -> Result<(), String> {
     // Get or create the settings store
     let store_path = PathBuf::from("settings.json");
-    let store = StoreBuilder::new(app.clone(), store_path).build();
+    let store = StoreBuilder::new(&app, store_path).build()
+        .map_err(|e| format!("Failed to create store: {}", e))?;
 
     // Save the key-value pair
     store.set(key.clone(), value.clone());
@@ -81,16 +83,20 @@ async fn save_settings(app: AppHandle, key: String, value: serde_json::Value) ->
 async fn load_settings(app: AppHandle) -> Result<serde_json::Value, String> {
     // Get or create the settings store
     let store_path = PathBuf::from("settings.json");
-    let store = StoreBuilder::new(app.clone(), store_path).build();
+    let store = StoreBuilder::new(&app, store_path).build()
+        .map_err(|e| format!("Failed to create store: {}", e))?;
 
-    // Load all settings as a JSON object
-    let settings = store
-        .as_json()
-        .map_err(|e| format!("Failed to load settings: {}", e))?;
+    // Load all settings as a JSON object - get all keys and build JSON object
+    let mut settings = serde_json::Map::new();
+    for key in store.keys().into_iter() {
+        if let Some(value) = store.get(&key) {
+            settings.insert(key, value.clone());
+        }
+    }
 
     println!("Settings loaded: {:?}", settings);
 
-    Ok(settings)
+    Ok(serde_json::Value::Object(settings))
 }
 
 /// Load a specific setting by key
@@ -98,7 +104,8 @@ async fn load_settings(app: AppHandle) -> Result<serde_json::Value, String> {
 async fn load_setting(app: AppHandle, key: String) -> Result<serde_json::Value, String> {
     // Get or create the settings store
     let store_path = PathBuf::from("settings.json");
-    let store = StoreBuilder::new(app.clone(), store_path).build();
+    let store = StoreBuilder::new(&app, store_path).build()
+        .map_err(|e| format!("Failed to create store: {}", e))?;
 
     // Get the specific key
     if let Some(value) = store.get(&key) {
@@ -115,7 +122,8 @@ async fn load_setting(app: AppHandle, key: String) -> Result<serde_json::Value, 
 async fn reset_settings(app: AppHandle) -> Result<(), String> {
     // Get or create the settings store
     let store_path = PathBuf::from("settings.json");
-    let store = StoreBuilder::new(app.clone(), store_path).build();
+    let store = StoreBuilder::new(&app, store_path).build()
+        .map_err(|e| format!("Failed to create store: {}", e))?;
 
     // Clear all settings
     store.clear();
@@ -191,8 +199,8 @@ fn show_overlay(app: AppHandle) -> Result<(), String> {
             let height = monitor["height"].as_u64().unwrap_or(1080) as u32;
 
             // Update state with current monitor
-            if let Some(state) = app.state::<SharedState>().try_get() {
-                let mut state_guard = state.lock().map_err(|e| format!("State lock error: {}", e))?;
+            let state = app.state::<SharedState>();
+            if let Ok(mut state_guard) = state.try_lock() {
                 state_guard.is_visible = true;
                 state_guard.current_monitor = Some(monitor_id.to_string());
             }
@@ -202,35 +210,34 @@ fn show_overlay(app: AppHandle) -> Result<(), String> {
                 .map_err(|e| format!("Failed to emit monitor-changed event: {}", e))?;
 
             // Feature #8: Position overlay on the correct monitor
-            overlay_window.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y }))?;
+            overlay_window.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y })).map_err(|e| e.to_string())?;
 
             // Feature #8: Set overlay size to match monitor size
-            overlay_window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width, height }))?;
+            overlay_window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width, height })).map_err(|e| e.to_string())?;
 
             println!("Overlay positioned on monitor {} at ({}, {}), size: {}x{}",
                 monitor_id, x, y, width, height);
         }
     } else {
         // Fallback: just update visibility state
-        if let Some(state) = app.state::<SharedState>().try_get() {
-            let mut state_guard = state.lock().map_err(|e| format!("State lock error: {}", e))?;
+        if let Ok(mut state_guard) = app.state::<SharedState>().try_lock() {
             state_guard.is_visible = true;
         }
     }
 
     // Show the window if it's hidden
-    overlay_window.show()?;
+    overlay_window.show().map_err(|e| e.to_string())?;
 
     // Feature #15: Ensure always-on-top is set BEFORE focusing
     // This ensures the overlay maintains proper z-index
-    overlay_window.set_always_on_top(true)?;
+    overlay_window.set_always_on_top(true).map_err(|e| e.to_string())?;
 
     // Bring window to foreground and focus it
-    overlay_window.set_focus()?;
+    overlay_window.set_focus().map_err(|e| e.to_string())?;
 
     // Feature #15: Set window to topmost again after focus to handle window manager changes
     // This ensures the overlay stays above all other applications even after focus changes
-    overlay_window.set_always_on_top(true)?;
+    overlay_window.set_always_on_top(true).map_err(|e| e.to_string())?;
 
     println!("Overlay window shown and focused, z-index set to topmost");
 
@@ -246,13 +253,13 @@ fn hide_overlay(app: AppHandle) -> Result<(), String> {
         .ok_or("Overlay window not found")?;
 
     // Update state
-    if let Some(state) = app.state::<SharedState>().try_get() {
-        let mut state_guard = state.lock().map_err(|e| format!("State lock error: {}", e))?;
+    let state = app.state::<SharedState>();
+    if let Ok(mut state_guard) = state.try_lock() {
         state_guard.is_visible = false;
     }
 
     // Hide the window
-    overlay_window.hide()?;
+    overlay_window.hide().map_err(|e| e.to_string())?;
 
     println!("Overlay window hidden");
 
@@ -268,12 +275,12 @@ fn focus_overlay(app: AppHandle) -> Result<(), String> {
         .ok_or("Overlay window not found")?;
 
     // Check if window is visible first
-    if !overlay_window.is_visible()? {
+    if !overlay_window.is_visible().map_err(|e| e.to_string())? {
         return Err("Overlay window is not visible".to_string());
     }
 
     // Bring window to foreground and focus it
-    overlay_window.set_focus()?;
+    overlay_window.set_focus().map_err(|e| e.to_string())?;
 
     println!("Overlay window focused");
 
@@ -283,14 +290,13 @@ fn focus_overlay(app: AppHandle) -> Result<(), String> {
 /// Get the current visibility state of the overlay
 #[tauri::command]
 fn get_overlay_state(app: AppHandle) -> Result<bool, String> {
-    if let Some(state) = app.state::<SharedState>().try_get() {
-        let state_guard = state.lock().map_err(|e| format!("State lock error: {}", e))?;
+    if let Ok(state_guard) = app.state::<SharedState>().try_lock() {
         Ok(state_guard.is_visible)
     } else {
         // Fallback: check window directly
         let overlay_window = app.get_webview_window("overlay")
             .ok_or("Overlay window not found")?;
-        Ok(overlay_window.is_visible()?)
+        Ok(overlay_window.is_visible().map_err(|e| e.to_string())?)
     }
 }
 
@@ -298,8 +304,7 @@ fn get_overlay_state(app: AppHandle) -> Result<bool, String> {
 /// Feature #9: Returns the monitor where the overlay is currently positioned
 #[tauri::command]
 fn get_current_monitor(app: AppHandle) -> Result<Option<String>, String> {
-    if let Some(state) = app.state::<SharedState>().try_get() {
-        let state_guard = state.lock().map_err(|e| format!("State lock error: {}", e))?;
+    if let Ok(state_guard) = app.state::<SharedState>().try_lock() {
         Ok(state_guard.current_monitor.clone())
     } else {
         Ok(None)
@@ -323,7 +328,8 @@ fn get_monitor_info(app: AppHandle) -> Result<Vec<serde_json::Value>, String> {
         let size = monitor.size();
         let position = monitor.position();
         let scale_factor = monitor.scale_factor();
-        let name = monitor.name().unwrap_or(format!("Monitor {}", i + 1));
+        let default_name = format!("Monitor {}", i + 1);
+        let name = monitor.name().unwrap_or(&default_name);
 
         serde_json::json!({
             "id": format!("monitor_{}", i),
@@ -348,13 +354,13 @@ fn set_overlay_position(app: AppHandle, monitor_id: String, x: i32, y: i32) -> R
         .ok_or("Overlay window not found")?;
 
     // Update state with current monitor
-    if let Some(state) = app.state::<SharedState>().try_get() {
-        let mut state_guard = state.lock().map_err(|e| format!("State lock error: {}", e))?;
-        state_guard.current_monitor = Some(monitor_id);
+    let state = app.state::<SharedState>();
+    if let Ok(mut state_guard) = state.try_lock() {
+        state_guard.current_monitor = Some(monitor_id.clone());
     }
 
     // Set window position
-    overlay_window.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y }))?;
+    overlay_window.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y })).map_err(|e| e.to_string())?;
 
     println!("Overlay positioned at ({}, {}) on monitor {}", x, y, monitor_id);
 
@@ -365,7 +371,7 @@ fn set_overlay_position(app: AppHandle, monitor_id: String, x: i32, y: i32) -> R
 /// This is used to position the overlay on the correct monitor when drawing mode is activated
 #[tauri::command]
 fn get_cursor_monitor(app: AppHandle) -> Result<serde_json::Value, String> {
-    use tauri::{Manager, PhysicalPosition};
+    use tauri::Manager;
 
     // Get the primary window to access monitor APIs
     let primary_window = app.get_webview_window("main")
@@ -374,8 +380,7 @@ fn get_cursor_monitor(app: AppHandle) -> Result<serde_json::Value, String> {
 
     // Get cursor position using Tauri's cursor position API
     let cursor_pos = primary_window.cursor_position()
-        .map_err(|e| format!("Failed to get cursor position: {}", e))?
-        .ok_or("Cursor position not available")?;
+        .map_err(|e| format!("Failed to get cursor position: {}", e))?;
 
     // Get all monitors
     let monitors = primary_window.available_monitors()
@@ -389,13 +394,15 @@ fn get_cursor_monitor(app: AppHandle) -> Result<serde_json::Value, String> {
         let size = monitor.size();
         let position = monitor.position();
         let scale_factor = monitor.scale_factor();
-        let name = monitor.name().unwrap_or(format!("Monitor {}", i + 1));
+        let default_name = format!("Monitor {}", i + 1);
+        let name = monitor.name().unwrap_or(&default_name);
 
         // Check if cursor is within this monitor's bounds
-        let is_cursor_in_monitor = cursor_pos.x >= position.x
-            && cursor_pos.x < position.x + size.width as i32
-            && cursor_pos.y >= position.y
-            && cursor_pos.y < position.y + size.height as i32;
+        // Note: cursor_pos is now PhysicalPosition<f64> (not i32)
+        let is_cursor_in_monitor = cursor_pos.x >= position.x as f64
+            && cursor_pos.x < (position.x + size.width as i32) as f64
+            && cursor_pos.y >= position.y as f64
+            && cursor_pos.y < (position.y + size.height as i32) as f64;
 
         if is_cursor_in_monitor {
             current_monitor = Some(format!("monitor_{}", i));
@@ -414,12 +421,14 @@ fn get_cursor_monitor(app: AppHandle) -> Result<serde_json::Value, String> {
 
     // If no monitor found (shouldn't happen), use primary monitor
     if current_monitor.is_none() {
-        if let Some(primary) = primary_window.primary_monitor()
-            .map_err(|e| format!("Failed to get primary monitor: {}", e))? {
+        let primary = primary_window.primary_monitor()
+            .map_err(|e| format!("Failed to get primary monitor: {}", e))?;
+        if let Some(primary) = primary {
             let size = primary.size();
             let position = primary.position();
             let scale_factor = primary.scale_factor();
-            let name = primary.name().unwrap_or("Primary Monitor".to_string());
+            let default_name = "Primary Monitor".to_string();
+            let name = primary.name().unwrap_or(&default_name);
 
             current_monitor = Some("monitor_0".to_string());
             monitor_info = Some(serde_json::json!({
@@ -452,7 +461,7 @@ fn enable_mouse_capture(app: AppHandle) -> Result<(), String> {
         .ok_or("Overlay window not found")?;
 
     // Disable ignore_cursor_events to capture mouse input
-    overlay_window.set_ignore_cursor_events(false)?;
+    overlay_window.set_ignore_cursor_events(false).map_err(|e| e.to_string())?;
 
     println!("Mouse capture enabled - overlay will capture mouse events");
 
@@ -467,7 +476,7 @@ fn disable_mouse_capture(app: AppHandle) -> Result<(), String> {
         .ok_or("Overlay window not found")?;
 
     // Enable ignore_cursor_events to allow click-through
-    overlay_window.set_ignore_cursor_events(true)?;
+    overlay_window.set_ignore_cursor_events(true).map_err(|e| e.to_string())?;
 
     println!("Mouse capture disabled - overlay allows pass-through");
 
@@ -531,14 +540,15 @@ fn clear_all_shapes(app: AppHandle) -> Result<(), String> {
 /// This is called before re-registering hotkeys with new settings
 #[tauri::command]
 fn unregister_all_hotkeys(app: AppHandle) -> Result<(), String> {
-    // Get the registry of registered hotkeys
-    if let Some(registry) = app.state::<SharedHotkeyRegistry>().try_get() {
-        let mut registry_guard = registry.lock()
-            .map_err(|e| format!("Registry lock error: {}", e))?;
+    use tauri_plugin_global_shortcut::GlobalShortcutExt;
 
+    // Get the registry of registered hotkeys
+    if let Ok(mut registry_guard) = app.state::<SharedHotkeyRegistry>().try_lock() {
         // Unregister each hotkey
         for hotkey_str in registry_guard.registered_hotkeys.iter() {
-            if let Ok(shortcut) = parse_hotkey_string(hotkey_str) {
+            if let Ok((modifiers, code)) = parse_hotkey_string(hotkey_str) {
+                use tauri_plugin_global_shortcut::Shortcut;
+                let shortcut = Shortcut::new(Some(modifiers), code);
                 app.global_shortcut().unregister(shortcut)
                     .map_err(|e| format!("Failed to unregister hotkey '{}': {}", hotkey_str, e))?;
                 println!("Unregistered hotkey: {}", hotkey_str);
@@ -559,6 +569,8 @@ fn unregister_all_hotkeys(app: AppHandle) -> Result<(), String> {
 /// Feature #65: Now tracks registered hotkeys and deregisters old ones before registering new
 #[tauri::command]
 fn register_hotkeys(app: AppHandle, hotkey_config: serde_json::Value) -> Result<(), String> {
+    use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
+
     // Feature #65: First, unregister all existing hotkeys
     unregister_all_hotkeys(app.clone())?;
 
@@ -571,120 +583,140 @@ fn register_hotkeys(app: AppHandle, hotkey_config: serde_json::Value) -> Result<
     let mut registry_guard = registry.lock()
         .map_err(|e| format!("Registry lock error: {}", e))?;
 
+    // Build a mapping of hotkey strings to their action types
+    let mut hotkey_actions: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+
     // Register each hotkey
     for (hotkey_name, hotkey_str) in hotkeys_obj.iter() {
         if let Some(hotkey_value) = hotkey_str.as_str() {
             // Parse the hotkey string (e.g., "Ctrl+Shift+A")
-            let shortcut = parse_hotkey_string(hotkey_value)
+            let (modifiers, code) = parse_hotkey_string(hotkey_value)
                 .map_err(|e| format!("Failed to parse hotkey '{}': {}", hotkey_value, e))?;
 
-            let app_handle = app.clone();
+            let shortcut = Shortcut::new(Some(modifiers), code);
 
-            // Feature #62: Check if this is the toggle drawing mode hotkey
-            if hotkey_name == "toggleDrawingMode" {
-                // Register toggle drawing mode hotkey
-                app.global_shortcut().register(shortcut, move || {
-                    // When toggle hotkey is pressed, call toggle_drawing_mode
-                    if let Err(e) = toggle_drawing_mode(app_handle.clone()) {
-                        eprintln!("Failed to toggle drawing mode: {}", e);
-                    }
-                }).map_err(|e| format!("Failed to register toggle hotkey '{}': {}", hotkey_value, e))?;
+            // Register the shortcut - actions are now handled via event listener
+            app.global_shortcut().register(shortcut)
+                .map_err(|e| format!("Failed to register hotkey '{}': {}", hotkey_value, e))?;
 
-                // Feature #65: Track the registered hotkey
-                registry_guard.registered_hotkeys.push(hotkey_value.to_string());
-                println!("Registered toggle hotkey '{}' for drawing mode", hotkey_value);
-            } else {
-                // Register tool hotkey
-                let tool = hotkey_name.clone();
-                app.global_shortcut().register(shortcut, move || {
-                    // When hotkey is pressed, call activate_tool_hotkey
-                    if let Err(e) = activate_tool_hotkey(app_handle.clone(), tool.clone()) {
-                        eprintln!("Failed to activate tool '{}': {}", tool, e);
-                    }
-                }).map_err(|e| format!("Failed to register hotkey '{}' for tool '{}': {}", hotkey_value, hotkey_name, e))?;
+            // Track the action type for this hotkey
+            hotkey_actions.insert(hotkey_value.to_string(), hotkey_name.clone());
 
-                // Feature #65: Track the registered hotkey
-                registry_guard.registered_hotkeys.push(hotkey_value.to_string());
-                println!("Registered hotkey '{}' for tool '{}'", hotkey_value, hotkey_name);
-            }
+            // Feature #65: Track the registered hotkey
+            registry_guard.registered_hotkeys.push(hotkey_value.to_string());
+            println!("Registered hotkey '{}' for tool '{}'", hotkey_value, hotkey_name);
         }
     }
 
     println!("Total hotkeys registered: {}", registry_guard.registered_hotkeys.len());
 
+    // Save the hotkey actions mapping to state so the event handler can use it
+    // For now, we'll use the frontend to emit the appropriate event based on which hotkey was pressed
+    app.emit("hotkeys-registered", hotkey_actions)
+        .map_err(|e| format!("Failed to emit hotkeys-registered event: {}", e))?;
+
     Ok(())
 }
 
-/// Parse a hotkey string like "Ctrl+Shift+A" into a Shortcut
-fn parse_hotkey_string(s: &str) -> Result<Shortcut, String> {
-    let mut modifiers = Vec::new();
+/// Parse a hotkey string like "Ctrl+Shift+A" into (Modifiers, Code)
+fn parse_hotkey_string(s: &str) -> Result<(Modifiers, Code), String> {
+
+    let mut modifiers = Modifiers::empty();
     let mut key = None;
 
     for part in s.split('+') {
         let part = part.trim();
         match part.to_uppercase().as_str() {
-            "CTRL" | "CONTROL" => modifiers.push(tauri_plugin_global_shortcut::Modifier::Control),
-            "SHIFT" => modifiers.push(tauri_plugin_global_shortcut::Modifier::Shift),
-            "ALT" => modifiers.push(tauri_plugin_global_shortcut::Modifier::Alt),
-            "META" | "CMD" | "SUPER" | "WIN" => modifiers.push(tauri_plugin_global_shortcut::Modifier::Super),
+            "CTRL" | "CONTROL" => modifiers |= Modifiers::CONTROL,
+            "SHIFT" => modifiers |= Modifiers::SHIFT,
+            "ALT" => modifiers |= Modifiers::ALT,
+            "META" | "CMD" | "SUPER" | "WIN" => modifiers |= Modifiers::SUPER,
             _ => {
                 // This is the key
                 if key.is_some() {
                     return Err(format!("Multiple keys found in hotkey: '{}'", s));
                 }
-                key = Some(parse_key_string(part)?);
+                key = Some(parse_key_code(part)?);
             }
         }
     }
 
-    let key = key.ok_or(format!("No key found in hotkey: '{}'", s))?;
+    let code = key.ok_or(format!("No key found in hotkey: '{}'", s))?;
 
-    Ok(Shortcut::new(modifiers, key))
+    Ok((modifiers, code))
 }
 
-/// Parse a key string (e.g., "A", "F1", "Space") into a Key
-fn parse_key_string(s: &str) -> Result<tauri_plugin_global_shortcut::Key, String> {
-    use tauri_plugin_global_shortcut::Key;
+/// Parse a key string (e.g., "A", "F1", "Space") into a Code
+fn parse_key_code(s: &str) -> Result<tauri_plugin_global_shortcut::Code, String> {
+    use tauri_plugin_global_shortcut::Code;
 
     let s_upper = s.to_uppercase();
 
-    // Single character keys
+    // Single character keys (A-Z)
     if s_upper.len() == 1 {
         let c = s_upper.chars().next().unwrap();
-        if c.is_alphabetic() || c.is_ascii_digit() {
-            return Ok(Key::Character(c.to_string()));
+        if c.is_alphabetic() {
+            return match c {
+                'A' => Ok(Code::KeyA),
+                'B' => Ok(Code::KeyB),
+                'C' => Ok(Code::KeyC),
+                'D' => Ok(Code::KeyD),
+                'E' => Ok(Code::KeyE),
+                'F' => Ok(Code::KeyF),
+                'G' => Ok(Code::KeyG),
+                'H' => Ok(Code::KeyH),
+                'I' => Ok(Code::KeyI),
+                'J' => Ok(Code::KeyJ),
+                'K' => Ok(Code::KeyK),
+                'L' => Ok(Code::KeyL),
+                'M' => Ok(Code::KeyM),
+                'N' => Ok(Code::KeyN),
+                'O' => Ok(Code::KeyO),
+                'P' => Ok(Code::KeyP),
+                'Q' => Ok(Code::KeyQ),
+                'R' => Ok(Code::KeyR),
+                'S' => Ok(Code::KeyS),
+                'T' => Ok(Code::KeyT),
+                'U' => Ok(Code::KeyU),
+                'V' => Ok(Code::KeyV),
+                'W' => Ok(Code::KeyW),
+                'X' => Ok(Code::KeyX),
+                'Y' => Ok(Code::KeyY),
+                'Z' => Ok(Code::KeyZ),
+                _ => Err(format!("Unknown key: '{}'", s))
+            };
         }
     }
 
     // Special keys
     match s_upper.as_str() {
-        "SPACE" => Ok(Key::Space),
-        "ENTER" | "RETURN" => Ok(Key::Enter),
-        "TAB" => Ok(Key::Tab),
-        "ESCAPE" | "ESC" => Ok(Key::Escape),
-        "BACKSPACE" => Ok(Key::Backspace),
-        "DELETE" | "DEL" => Ok(Key::Delete),
-        "INSERT" => Ok(Key::Insert),
-        "HOME" => Ok(Key::Home),
-        "END" => Ok(Key::End),
-        "PAGEUP" => Ok(Key::PageUp),
-        "PAGEDOWN" => Ok(Key::PageDown),
-        "LEFT" | "ARROWLEFT" => Ok(Key::ArrowLeft),
-        "RIGHT" | "ARROWRIGHT" => Ok(Key::ArrowRight),
-        "UP" | "ARROWUP" => Ok(Key::ArrowUp),
-        "DOWN" | "ARROWDOWN" => Ok(Key::ArrowDown),
-        "F1" => Ok(Key::F1),
-        "F2" => Ok(Key::F2),
-        "F3" => Ok(Key::F3),
-        "F4" => Ok(Key::F4),
-        "F5" => Ok(Key::F5),
-        "F6" => Ok(Key::F6),
-        "F7" => Ok(Key::F7),
-        "F8" => Ok(Key::F8),
-        "F9" => Ok(Key::F9),
-        "F10" => Ok(Key::F10),
-        "F11" => Ok(Key::F11),
-        "F12" => Ok(Key::F12),
+        "SPACE" => Ok(Code::Space),
+        "ENTER" | "RETURN" => Ok(Code::Enter),
+        "TAB" => Ok(Code::Tab),
+        "ESCAPE" | "ESC" => Ok(Code::Escape),
+        "BACKSPACE" => Ok(Code::Backspace),
+        "DELETE" | "DEL" => Ok(Code::Delete),
+        "INSERT" => Ok(Code::Insert),
+        "HOME" => Ok(Code::Home),
+        "END" => Ok(Code::End),
+        "PAGEUP" => Ok(Code::PageUp),
+        "PAGEDOWN" => Ok(Code::PageDown),
+        "LEFT" | "ARROWLEFT" => Ok(Code::ArrowLeft),
+        "RIGHT" | "ARROWRIGHT" => Ok(Code::ArrowRight),
+        "UP" | "ARROWUP" => Ok(Code::ArrowUp),
+        "DOWN" | "ARROWDOWN" => Ok(Code::ArrowDown),
+        "F1" => Ok(Code::F1),
+        "F2" => Ok(Code::F2),
+        "F3" => Ok(Code::F3),
+        "F4" => Ok(Code::F4),
+        "F5" => Ok(Code::F5),
+        "F6" => Ok(Code::F6),
+        "F7" => Ok(Code::F7),
+        "F8" => Ok(Code::F8),
+        "F9" => Ok(Code::F9),
+        "F10" => Ok(Code::F10),
+        "F11" => Ok(Code::F11),
+        "F12" => Ok(Code::F12),
         _ => Err(format!("Unknown key: '{}'", s))
     }
 }
@@ -868,21 +900,20 @@ fn activate_tool_hotkey(app: AppHandle, tool: String) -> Result<(), String> {
     let overlay_window = app.get_webview_window("overlay")
         .ok_or("Overlay window not found")?;
 
-    if !overlay_window.is_visible()? {
-        overlay_window.show()?;
-        overlay_window.set_focus()?;
-        overlay_window.set_always_on_top(true)?;
+    if !overlay_window.is_visible().map_err(|e| e.to_string())? {
+        overlay_window.show().map_err(|e| e.to_string())?;
+        overlay_window.set_focus().map_err(|e| e.to_string())?;
+        overlay_window.set_always_on_top(true).map_err(|e| e.to_string())?;
 
         // Update state
-        if let Some(state) = app.state::<SharedState>().try_get() {
-            let mut state_guard = state.lock().map_err(|e| format!("State lock error: {}", e))?;
+        if let Ok(mut state_guard) = app.state::<SharedState>().try_lock() {
             state_guard.is_visible = true;
             state_guard.drawing_mode = true;
         }
     }
 
     // Emit tool-selected event to notify overlay
-    app.emit("tool-selected", tool_type)
+    app.emit("tool-selected", tool_type.clone())
         .map_err(|e| format!("Failed to emit event: {}", e))?;
 
     // Emit drawing-mode-changed event
@@ -904,18 +935,18 @@ fn dismiss_overlay(app: AppHandle) -> Result<(), String> {
         .ok_or("Overlay window not found")?;
 
     // Update state to mark overlay as not visible
-    if let Some(state) = app.state::<SharedState>().try_get() {
-        let mut state_guard = state.lock().map_err(|e| format!("State lock error: {}", e))?;
+    let state = app.state::<SharedState>();
+    if let Ok(mut state_guard) = state.try_lock() {
         state_guard.is_visible = false;
         // Feature #20: Also disable drawing mode when dismissing
         state_guard.drawing_mode = false;
     }
 
     // Hide the overlay window
-    overlay_window.hide()?;
+    overlay_window.hide().map_err(|e| e.to_string())?;
 
     // Disable mouse capture (return to pass-through mode)
-    overlay_window.set_ignore_cursor_events(true)?;
+    overlay_window.set_ignore_cursor_events(true).map_err(|e| e.to_string())?;
 
     // Feature #20: Emit event to clear drawing state and shapes
     app.emit("overlay-dismissed", ())
@@ -941,7 +972,7 @@ fn toggle_overlay(app: AppHandle) -> Result<bool, String> {
     let overlay_window = app.get_webview_window("overlay")
         .ok_or("Overlay window not found")?;
 
-    let is_visible = overlay_window.is_visible()?;
+    let is_visible = overlay_window.is_visible().map_err(|e| e.to_string())?;
 
     if is_visible {
         // Hide the overlay
@@ -961,7 +992,7 @@ fn toggle_drawing_mode(app: AppHandle) -> Result<bool, String> {
     let overlay_window = app.get_webview_window("overlay")
         .ok_or("Overlay window not found")?;
 
-    let is_visible = overlay_window.is_visible()?;
+    let is_visible = overlay_window.is_visible().map_err(|e| e.to_string())?;
 
     if is_visible {
         // Overlay is visible - dismiss it (turn off drawing mode)
@@ -970,11 +1001,10 @@ fn toggle_drawing_mode(app: AppHandle) -> Result<bool, String> {
         Ok(false)
     } else {
         // Overlay is hidden - show it and enable drawing mode (turn on drawing mode)
-        show_overlay(app)?;
+        show_overlay(app.clone())?;
 
         // Update state to enable drawing mode
-        if let Some(state) = app.state::<SharedState>().try_get() {
-            let mut state_guard = state.lock().map_err(|e| format!("State lock error: {}", e))?;
+        if let Ok(mut state_guard) = app.state::<SharedState>().try_lock() {
             state_guard.is_visible = true;
             state_guard.drawing_mode = true;
         }
@@ -996,15 +1026,15 @@ fn ensure_on_top(app: AppHandle) -> Result<(), String> {
         .ok_or("Overlay window not found")?;
 
     // Only proceed if overlay is visible
-    if !overlay_window.is_visible()? {
+    if !overlay_window.is_visible().map_err(|e| e.to_string())? {
         return Ok(());
     }
 
     // Re-assert always-on-top property to maintain z-index
-    overlay_window.set_always_on_top(true)?;
+    overlay_window.set_always_on_top(true).map_err(|e| e.to_string())?;
 
     // Bring to front without stealing focus from other apps unnecessarily
-    overlay_window.set_always_on_top(true)?;
+    overlay_window.set_always_on_top(true).map_err(|e| e.to_string())?;
 
     println!("Overlay z-index re-asserted to stay on top");
 
@@ -1020,7 +1050,7 @@ fn set_mini_panel_position(app: AppHandle, x: i32, y: i32) -> Result<(), String>
 
     // Feature #19: Allow off-screen positioning by not validating bounds
     // The window can be positioned anywhere, including off-screen
-    panel_window.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y }))?;
+    panel_window.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y })).map_err(|e| e.to_string())?;
 
     println!("Mini panel positioned at off-screen coordinates ({}, {})", x, y);
 
@@ -1034,7 +1064,7 @@ fn get_mini_panel_position(app: AppHandle) -> Result<serde_json::Value, String> 
     let panel_window = app.get_webview_window("mini-panel")
         .ok_or("Mini panel window not found")?;
 
-    let position = panel_window.position()?;
+    let position = panel_window.outer_position().map_err(|e| e.to_string())?;
 
     Ok(serde_json::json!({
         "x": position.x,
@@ -1047,11 +1077,9 @@ fn get_mini_panel_position(app: AppHandle) -> Result<serde_json::Value, String> 
 /// Stores the off-screen position so it persists across app restarts
 #[tauri::command]
 fn save_mini_panel_position(app: AppHandle, x: i32, y: i32, monitor_id: Option<String>) -> Result<(), String> {
-    use tauri_plugin_store::{StoreBuilder, StoreExt};
-    use std::path::PathBuf;
-
     let store_path = PathBuf::from("settings.json");
-    let store = StoreBuilder::new(app.clone(), store_path).build();
+    let store = StoreBuilder::new(&app, store_path).build()
+        .map_err(|e| format!("Failed to create store: {}", e))?;
 
     // If no monitor_id provided, detect which monitor contains this position
     let monitor_id_final = if let Some(mid) = monitor_id {
@@ -1104,11 +1132,9 @@ fn save_mini_panel_position(app: AppHandle, x: i32, y: i32, monitor_id: Option<S
 /// Restores the panel to its last saved position (including off-screen)
 #[tauri::command]
 fn restore_mini_panel_position(app: AppHandle) -> Result<serde_json::Value, String> {
-    use tauri_plugin_store::{StoreBuilder, StoreExt};
-    use std::path::PathBuf;
-
     let store_path = PathBuf::from("settings.json");
-    let store = StoreBuilder::new(app.clone(), store_path).build();
+    let store = StoreBuilder::new(&app, store_path).build()
+        .map_err(|e| format!("Failed to create store: {}", e))?;
 
     // Get panel position from storage
     if let Some(position) = store.get("mini_panel_position") {
@@ -1120,7 +1146,7 @@ fn restore_mini_panel_position(app: AppHandle) -> Result<serde_json::Value, Stri
         let panel_window = app.get_webview_window("mini-panel")
             .ok_or("Mini panel window not found")?;
 
-        panel_window.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y }))?;
+        panel_window.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y })).map_err(|e| e.to_string())?;
 
         println!("Mini panel position restored to: ({}, {}) on monitor {}", x, y, monitor_id);
 
@@ -1135,7 +1161,7 @@ fn restore_mini_panel_position(app: AppHandle) -> Result<serde_json::Value, Stri
         let panel_window = app.get_webview_window("mini-panel")
             .ok_or("Mini panel window not found")?;
 
-        let position = panel_window.position()?;
+        let position = panel_window.outer_position().map_err(|e| e.to_string())?;
 
         Ok(serde_json::json!({
             "x": position.x,
@@ -1152,17 +1178,17 @@ fn toggle_mini_panel(app: AppHandle) -> Result<bool, String> {
     let panel_window = app.get_webview_window("mini-panel")
         .ok_or("Mini panel window not found")?;
 
-    let is_visible = panel_window.is_visible()?;
+    let is_visible = panel_window.is_visible().map_err(|e| e.to_string())?;
 
     if is_visible {
         // Hide the panel
-        panel_window.hide()?;
+        panel_window.hide().map_err(|e| e.to_string())?;
         println!("Mini panel hidden (minimized)");
         Ok(false)
     } else {
         // Show the panel
-        panel_window.show()?;
-        panel_window.set_focus()?;
+        panel_window.show().map_err(|e| e.to_string())?;
+        panel_window.set_focus().map_err(|e| e.to_string())?;
         println!("Mini panel shown (restored)");
         Ok(true)
     }
@@ -1174,7 +1200,7 @@ fn hide_mini_panel(app: AppHandle) -> Result<(), String> {
     let panel_window = app.get_webview_window("mini-panel")
         .ok_or("Mini panel window not found")?;
 
-    panel_window.hide()?;
+    panel_window.hide().map_err(|e| e.to_string())?;
     println!("Mini panel hidden (minimized)");
 
     Ok(())
@@ -1186,8 +1212,8 @@ fn show_mini_panel(app: AppHandle) -> Result<(), String> {
     let panel_window = app.get_webview_window("mini-panel")
         .ok_or("Mini panel window not found")?;
 
-    panel_window.show()?;
-    panel_window.set_focus()?;
+    panel_window.show().map_err(|e| e.to_string())?;
+    panel_window.set_focus().map_err(|e| e.to_string())?;
     println!("Mini panel shown (restored)");
 
     Ok(())

@@ -89,30 +89,5 @@
       }
     }
   },
-  "plugins": {
-    "store": {
-      "schema": {
-        "settings": {
-          "type": "object",
-          "properties": {
-            "hotkeys": {
-              "type": "object"
-            },
-            "colors": {
-              "type": "object"
-            },
-            "lineThickness": {
-              "type": "number"
-            },
-            "fontSize": {
-              "type": "number"
-            },
-            "fadeDuration": {
-              "type": "number"
-            }
-          }
-        }
-      }
-    }
-  }
+  "plugins": {}
 }
