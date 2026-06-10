@@ -1,5 +1,7 @@
 # Annotatr
 
+**[Website](https://dennisrongo.github.io/annotatr/)** · [Releases](https://github.com/dennisrongo/annotatr/releases)
+
 A cross-platform screen annotation overlay tool that lets you draw arrows, circles, boxes, freehand strokes, highlights, and text on your screen in real-time — perfect for tutorials, presentations, and screen recordings with any capture software (OBS, Loom, Zoom, etc.).
 
 ## Features

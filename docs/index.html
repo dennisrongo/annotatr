@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Annotatr — Draw on your screen. Live.</title>
+<meta name="description" content="Annotatr is a free, open-source screen annotation overlay. Draw arrows, boxes, circles, highlights and text over any app while you record — shapes fade away on their own.">
+<link rel="canonical" href="https://dennisrongo.github.io/annotatr/">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Annotatr — Draw on your screen. Live.">
+<meta property="og:description" content="A lightweight annotation overlay for screen recordings, demos and tutorials. Arrows, boxes, highlights and text that fade away on their own. Free and open source.">
+<meta property="og:url" content="https://dennisrongo.github.io/annotatr/">
+<meta property="og:image" content="https://dennisrongo.github.io/annotatr/assets/overlay-sketchy.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='%23ff453a'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Caveat:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a10;
+    --bg-soft: #101019;
+    --card: rgba(255, 255, 255, 0.04);
+    --card-strong: rgba(255, 255, 255, 0.06);
+    --hairline: rgba(255, 255, 255, 0.09);
+    --hairline-faint: rgba(255, 255, 255, 0.06);
+    --text: #f4f4f6;
+    --text-dim: rgba(235, 235, 245, 0.6);
+    --text-faint: rgba(235, 235, 245, 0.38);
+    --accent: #ff453a;
+    --accent-2: #ff8a3a;
+    --blue: #0a84ff;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --hand: "Caveat", "Chalkboard SE", "Comic Sans MS", cursive;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Inter", -apple-system, "Segoe UI", sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  ::selection { background: rgba(255, 69, 58, 0.35); }
+
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+
+  /* ---------- ambient background ---------- */
+  .glow {
+    position: fixed; inset: 0; z-index: -2; pointer-events: none;
+    background:
+      radial-gradient(900px 500px at 75% -5%, rgba(255, 69, 58, 0.13), transparent 60%),
+      radial-gradient(800px 600px at 10% 15%, rgba(94, 92, 230, 0.12), transparent 55%),
+      radial-gradient(700px 500px at 90% 70%, rgba(10, 132, 255, 0.08), transparent 60%);
+  }
+  .grid-bg {
+    position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: .5;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+    background-size: 44px 44px;
+    mask-image: radial-gradient(ellipse 90% 60% at 50% 0%, black 30%, transparent 75%);
+    -webkit-mask-image: radial-gradient(ellipse 90% 60% at 50% 0%, black 30%, transparent 75%);
+  }
+
+  /* ---------- nav ---------- */
+  nav {
+    position: sticky; top: 0; z-index: 50;
+    backdrop-filter: blur(16px) saturate(1.4);
+    -webkit-backdrop-filter: blur(16px) saturate(1.4);
+    background: rgba(10, 10, 16, 0.72);
+    border-bottom: 1px solid var(--hairline-faint);
+  }
+  .nav-inner { display: flex; align-items: center; height: 60px; gap: 28px; }
+  .brand { display: flex; align-items: center; gap: 9px; font-weight: 700; font-size: 16px; letter-spacing: -.2px; color: var(--text); text-decoration: none; }
+  .brand-dot { width: 11px; height: 11px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 12px rgba(255, 69, 58, 0.8); }
+  .nav-links { display: flex; gap: 22px; margin-left: auto; }
+  .nav-links a { color: var(--text-dim); text-decoration: none; font-size: 13.5px; font-weight: 500; transition: color .15s; }
+  .nav-links a:hover { color: var(--text); }
+  .gh-btn {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-size: 13px; font-weight: 600; color: var(--text); text-decoration: none;
+    border: 1px solid var(--hairline); border-radius: 8px; padding: 7px 14px;
+    background: var(--card); transition: background .15s, border-color .15s;
+  }
+  .gh-btn:hover { background: rgba(255,255,255,.09); border-color: rgba(255,255,255,.18); }
+  .gh-btn svg { opacity: .9; }
+
+  /* ---------- hero ---------- */
+  header { padding: 84px 0 30px; text-align: center; position: relative; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 12.5px; font-weight: 600; color: var(--text-dim);
+    border: 1px solid var(--hairline); border-radius: 999px; padding: 6px 14px;
+    background: var(--card); margin-bottom: 26px;
+  }
+  .chip .pulse { width: 7px; height: 7px; border-radius: 50%; background: #30d158; box-shadow: 0 0 0 0 rgba(48,209,88,.5); animation: pulse 2.2s infinite; }
+  @keyframes pulse { 70% { box-shadow: 0 0 0 7px rgba(48,209,88,0); } 100% { box-shadow: 0 0 0 0 rgba(48,209,88,0); } }
+
+  h1 {
+    font-size: clamp(42px, 7vw, 76px);
+    font-weight: 800; letter-spacing: -0.035em; line-height: 1.04;
+    margin-bottom: 22px;
+  }
+  h1 .live {
+    position: relative; white-space: nowrap;
+    background: linear-gradient(100deg, var(--accent), var(--accent-2));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  h1 .live svg { position: absolute; left: 0; right: 0; bottom: -0.18em; width: 100%; height: 0.28em; overflow: visible; }
+  h1 .live svg path { stroke: var(--accent); stroke-width: 7; fill: none; stroke-linecap: round; opacity: .85; }
+
+  .lede {
+    max-width: 620px; margin: 0 auto 34px;
+    color: var(--text-dim); font-size: clamp(16px, 2.2vw, 19px); line-height: 1.65;
+  }
+  .lede b { color: var(--text); font-weight: 600; }
+
+  .cta-row { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; margin-bottom: 22px; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 9px;
+    font-size: 15px; font-weight: 700; text-decoration: none;
+    border-radius: 11px; padding: 13px 26px; letter-spacing: -.1px;
+    transition: transform .15s, box-shadow .15s, background .15s;
+  }
+  .btn-primary {
+    color: #fff;
+    background: linear-gradient(135deg, var(--accent), #e6342a);
+    box-shadow: 0 8px 28px rgba(255, 69, 58, 0.35), inset 0 1px 0 rgba(255,255,255,.25);
+  }
+  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 14px 36px rgba(255, 69, 58, 0.45), inset 0 1px 0 rgba(255,255,255,.25); }
+  .btn-ghost { color: var(--text); border: 1px solid var(--hairline); background: var(--card); }
+  .btn-ghost:hover { background: rgba(255,255,255,.08); transform: translateY(-2px); }
+  .platforms { font-size: 12.5px; color: var(--text-faint); font-weight: 500; }
+
+  /* ---------- demo ---------- */
+  .demo-section { padding: 38px 0 10px; }
+  .demo-hint {
+    text-align: center; margin-bottom: 14px;
+    font-family: var(--hand); font-size: 23px; color: var(--accent-2);
+    transform: rotate(-1.2deg);
+  }
+  .demo-shell {
+    border: 1px solid var(--hairline); border-radius: 18px; overflow: hidden;
+    background: var(--bg-soft);
+    box-shadow: 0 40px 110px rgba(0, 0, 0, 0.6), 0 0 0 0.5px rgba(255,255,255,.06), 0 0 90px rgba(255, 69, 58, 0.07);
+  }
+  .demo-bar {
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    padding: 10px 14px;
+    background: rgba(28, 28, 30, 0.92);
+    border-bottom: 1px solid var(--hairline-faint);
+  }
+  .demo-bar .grip { color: rgba(255,255,255,.35); font-size: 14px; letter-spacing: -2px; padding: 0 4px; user-select: none; }
+  .tb {
+    width: 36px; height: 36px; display: inline-flex; align-items: center; justify-content: center;
+    font-size: 17px; color: rgba(255,255,255,.85);
+    background: transparent; border: none; border-radius: 8px; cursor: pointer;
+    transition: background .12s;
+  }
+  .tb:hover { background: rgba(255,255,255,.1); }
+  .tb.on { background: #2563eb; color: #fff; }
+  .tb:disabled { opacity: .35; cursor: default; }
+  .demo-div { width: 1px; height: 24px; background: rgba(255,255,255,.18); margin: 0 6px; }
+  .swatch-btn { width: 28px; height: 28px; border-radius: 6px; border: 2px solid rgba(255,255,255,.6); cursor: pointer; padding: 0; margin: 0 4px; background: #FF3B30; }
+  .seg {
+    display: inline-flex; gap: 2px; padding: 3px; margin-left: auto;
+    background: rgba(255,255,255,.06); border: 1px solid var(--hairline); border-radius: 8px;
+  }
+  .seg button {
+    font: inherit; font-size: 12px; font-weight: 600; color: var(--text-dim);
+    background: transparent; border: none; border-radius: 6px; padding: 4px 12px; cursor: pointer;
+    transition: background .12s, color .12s;
+  }
+  .seg button.active { background: rgba(255,255,255,.15); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.3); }
+
+  .demo-stage {
+    position: relative; aspect-ratio: 16 / 9.4; min-height: 320px;
+    background:
+      radial-gradient(700px 380px at 18% 8%, rgba(94, 92, 230, 0.35), transparent 60%),
+      radial-gradient(600px 420px at 85% 92%, rgba(255, 69, 58, 0.2), transparent 55%),
+      linear-gradient(160deg, #14142b 0%, #1b1530 45%, #0e1322 100%);
+    overflow: hidden;
+  }
+
+  /* fake window inside demo */
+  .fw {
+    position: absolute; left: 50%; top: 54%; transform: translate(-50%, -50%);
+    width: 72%; height: 74%;
+    background: #fbfbfd; border-radius: 10px; overflow: hidden;
+    box-shadow: 0 24px 70px rgba(0,0,0,.55), 0 0 0 0.5px rgba(255,255,255,.25);
+    display: flex; flex-direction: column;
+    font-family: -apple-system, "Segoe UI", sans-serif;
+  }
+  .fw-chrome { height: 11%; min-height: 26px; flex: none; display: flex; align-items: center; gap: 6px; padding: 0 12px; background: linear-gradient(180deg, #f3f3f5, #e9e9ec); border-bottom: 1px solid #d9d9de; }
+  .fw-dot { width: 9px; height: 9px; border-radius: 50%; }
+  .fw-title { flex: 1; text-align: center; font-size: 10px; color: #6e6e73; font-weight: 500; }
+  .fw-body { flex: 1; padding: 3.5% 4%; min-height: 0; display: flex; flex-direction: column; gap: 4%; }
+  .fw-cards { display: flex; gap: 3.5%; flex: none; height: 26%; }
+  .fw-card { flex: 1; background: #fff; border: 1px solid #e7e7ec; border-radius: 8px; padding: 2.4% 3%; }
+  .fw-k { font-size: clamp(6px, 0.9vw, 10px); color: #86868b; font-weight: 600; text-transform: uppercase; letter-spacing: .4px; }
+  .fw-v { font-size: clamp(11px, 1.7vw, 19px); font-weight: 700; color: #1d1d1f; letter-spacing: -.4px; }
+  .fw-chart { flex: 1; background: #fff; border: 1px solid #e7e7ec; border-radius: 8px; padding: 3%; display: flex; align-items: flex-end; gap: 2.4%; }
+  .fw-bar { flex: 1; background: linear-gradient(180deg, #b9b8f7, #8584ee); border-radius: 3px 3px 1px 1px; }
+  .fw-bar.hot { background: linear-gradient(180deg, #7d7bf0, #5e5ce6); }
+
+  #demoCanvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: crosshair; touch-action: none; }
+  #demoText {
+    position: absolute; display: none; z-index: 6;
+    background: rgba(255,255,255,.92); color: #FF3B30;
+    border: 2px solid #FF3B30; border-radius: 5px; outline: none;
+    padding: 3px 8px; font-size: 18px; min-width: 140px;
+    font-family: inherit;
+  }
+  .demo-foot { padding: 9px 16px; font-size: 12px; color: var(--text-faint); display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; background: rgba(255,255,255,.02); border-top: 1px solid var(--hairline-faint); }
+  .demo-foot span b { color: var(--text-dim); font-weight: 600; }
+
+  /* ---------- sections ---------- */
+  section { padding: 92px 0 0; }
+  .eyebrow { font-size: 12.5px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); margin-bottom: 12px; }
+  h2 { font-size: clamp(28px, 4.4vw, 42px); font-weight: 800; letter-spacing: -0.03em; line-height: 1.12; margin-bottom: 14px; }
+  .sub { color: var(--text-dim); max-width: 560px; font-size: 16.5px; margin-bottom: 40px; }
+
+  /* features */
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .feat {
+    border: 1px solid var(--hairline); border-radius: 16px; padding: 24px 22px;
+    background: var(--card);
+    transition: transform .2s, background .2s, border-color .2s;
+  }
+  .feat:hover { transform: translateY(-4px); background: var(--card-strong); border-color: rgba(255,255,255,.16); }
+  .feat .ic {
+    width: 42px; height: 42px; border-radius: 11px; display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, rgba(255,69,58,.18), rgba(255,138,58,.1));
+    border: 1px solid rgba(255,69,58,.25); margin-bottom: 16px;
+  }
+  .feat .ic svg { stroke: var(--accent-2); }
+  .feat h3 { font-size: 16.5px; font-weight: 700; letter-spacing: -.2px; margin-bottom: 7px; }
+  .feat p { font-size: 14px; color: var(--text-dim); line-height: 1.6; }
+  .feat kbd {
+    font-family: var(--mono); font-size: 11px; padding: 2px 6px; border-radius: 4px;
+    background: rgba(255,255,255,.08); border: 1px solid var(--hairline); color: var(--text);
+  }
+
+  /* compare slider */
+  .compare {
+    position: relative; border-radius: 18px; overflow: hidden;
+    border: 1px solid var(--hairline);
+    box-shadow: 0 40px 110px rgba(0,0,0,.55);
+    cursor: ew-resize; user-select: none;
+  }
+  .compare img { display: block; width: 100%; height: auto; pointer-events: none; }
+  .compare .top { position: absolute; inset: 0; clip-path: inset(0 0 0 50%); }
+  .compare .handle {
+    position: absolute; top: 0; bottom: 0; left: 50%; width: 3px; margin-left: -1.5px;
+    background: rgba(255,255,255,.9); box-shadow: 0 0 18px rgba(0,0,0,.6); pointer-events: none;
+  }
+  .compare .knob {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 46px; height: 46px; border-radius: 50%;
+    background: rgba(20,20,24,.9); border: 1.5px solid rgba(255,255,255,.85);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 15px; letter-spacing: 2px; pointer-events: none;
+    backdrop-filter: blur(6px);
+  }
+  .tag {
+    position: absolute; top: 16px; font-size: 12px; font-weight: 700; letter-spacing: .04em;
+    padding: 6px 12px; border-radius: 999px; pointer-events: none;
+    background: rgba(12,12,16,.78); border: 1px solid rgba(255,255,255,.22); color: #fff;
+    backdrop-filter: blur(6px);
+  }
+  .tag.l { left: 16px; } .tag.r { right: 16px; font-family: var(--hand); font-size: 17px; padding: 4px 14px; transform: rotate(-1deg); }
+
+  /* screenshots */
+  .shots { display: grid; grid-template-columns: 3fr 2fr; gap: 16px; align-items: stretch; }
+  .shot {
+    border: 1px solid var(--hairline); border-radius: 16px; overflow: hidden;
+    background: var(--card); display: flex; flex-direction: column;
+  }
+  .shot img { width: 100%; height: auto; display: block; }
+  .shot.strip-shot { justify-content: center; }
+  .shot .cap { padding: 16px 20px; border-top: 1px solid var(--hairline-faint); margin-top: auto; }
+  .shot .cap h3 { font-size: 15px; font-weight: 700; letter-spacing: -.2px; }
+  .shot .cap p { font-size: 13px; color: var(--text-dim); margin-top: 3px; }
+
+  /* shortcuts */
+  .keys-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .keys-card { border: 1px solid var(--hairline); border-radius: 16px; background: var(--card); overflow: hidden; }
+  .keys-card .kc-head { padding: 14px 20px; font-size: 13px; font-weight: 700; letter-spacing: .02em; color: var(--text-dim); border-bottom: 1px solid var(--hairline-faint); text-transform: uppercase; font-size: 11.5px; letter-spacing: .1em; }
+  .krow { display: flex; align-items: center; justify-content: space-between; padding: 11px 20px; font-size: 14px; }
+  .krow + .krow { border-top: 1px solid var(--hairline-faint); }
+  .krow .keys { display: inline-flex; gap: 4px; }
+  .key {
+    font-family: var(--mono); font-size: 11.5px; line-height: 1; padding: 5px 7px; min-width: 24px; text-align: center;
+    color: var(--text); border-radius: 5px;
+    background: linear-gradient(180deg, rgba(255,255,255,.13), rgba(255,255,255,.05));
+    border: 1px solid rgba(255,255,255,.15);
+    box-shadow: 0 2px 0 rgba(0,0,0,.5);
+  }
+  .keys-note { font-size: 12.5px; color: var(--text-faint); margin-top: 14px; }
+
+  /* install */
+  .install-grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 28px; align-items: start; }
+  .steps { display: flex; flex-direction: column; gap: 0; }
+  .step { display: flex; gap: 16px; padding: 18px 0; }
+  .step + .step { border-top: 1px solid var(--hairline-faint); }
+  .step .n {
+    flex: none; width: 30px; height: 30px; border-radius: 9px; font-size: 13px; font-weight: 800;
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, rgba(255,69,58,.2), rgba(255,138,58,.08));
+    border: 1px solid rgba(255,69,58,.3); color: var(--accent-2);
+  }
+  .step h3 { font-size: 15.5px; font-weight: 700; margin-bottom: 3px; letter-spacing: -.2px; }
+  .step p { font-size: 13.5px; color: var(--text-dim); }
+  .step a { color: var(--accent-2); text-decoration: none; }
+  .step a:hover { text-decoration: underline; }
+  .codeblock {
+    border: 1px solid var(--hairline); border-radius: 14px; overflow: hidden; background: #0d0d14;
+    box-shadow: 0 20px 60px rgba(0,0,0,.4);
+  }
+  .codeblock .cb-head { display: flex; align-items: center; gap: 7px; padding: 11px 14px; border-bottom: 1px solid var(--hairline-faint); }
+  .cb-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .cb-title { font-size: 11.5px; color: var(--text-faint); margin-left: 6px; font-family: var(--mono); }
+  .codeblock pre { padding: 18px; font-family: var(--mono); font-size: 13.5px; line-height: 1.9; overflow-x: auto; }
+  .codeblock .c { color: var(--text-faint); }
+  .codeblock .p { color: var(--accent-2); user-select: none; }
+
+  /* footer */
+  footer { margin-top: 100px; border-top: 1px solid var(--hairline-faint); padding: 36px 0 46px; }
+  .foot-inner { display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap; }
+  .foot-inner .left { display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--text-dim); }
+  .foot-links { display: flex; gap: 20px; font-size: 13.5px; }
+  .foot-links a { color: var(--text-dim); text-decoration: none; }
+  .foot-links a:hover { color: var(--text); }
+  .foot-note { margin-top: 14px; font-size: 12px; color: var(--text-faint); }
+
+  /* reveal animation */
+  .reveal { opacity: 0; transform: translateY(22px); transition: opacity .7s cubic-bezier(.2,.7,.2,1), transform .7s cubic-bezier(.2,.7,.2,1); }
+  .reveal.in { opacity: 1; transform: none; }
+
+  @media (max-width: 880px) {
+    .grid { grid-template-columns: 1fr 1fr; }
+    .shots, .keys-grid, .install-grid { grid-template-columns: 1fr; }
+    .nav-links a:not(.gh-btn) { display: none; }
+  }
+  @media (max-width: 560px) {
+    .grid { grid-template-columns: 1fr; }
+    .demo-stage { aspect-ratio: 4 / 3.4; }
+    .seg { margin-left: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .reveal { transition: none; opacity: 1; transform: none; }
+    html { scroll-behavior: auto; }
+  }
+</style>
+</head>
+<body>
+<div class="glow"></div>
+<div class="grid-bg"></div>
+
+<nav>
+  <div class="wrap nav-inner">
+    <a class="brand" href="#"><span class="brand-dot"></span>Annotatr</a>
+    <div class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#styles">Styles</a>
+      <a href="#shortcuts">Shortcuts</a>
+      <a href="#install">Install</a>
+      <a class="gh-btn" href="https://github.com/dennisrongo/annotatr">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+        GitHub
+      </a>
+    </div>
+  </div>
+</nav>
+
+<header>
+  <div class="wrap">
+    <div class="chip"><span class="pulse"></span>Free &amp; open source · Built with Tauri</div>
+    <h1>Draw on your screen.<br><span class="live">Live.<svg viewBox="0 0 200 14" preserveAspectRatio="none"><path d="M4 10 C 50 3, 90 12, 134 7 S 186 6, 196 8"/></svg></span></h1>
+    <p class="lede">Annotatr is a featherweight overlay for <b>screen recordings, demos and tutorials</b>. Summon a tiny toolbar with a hotkey, draw arrows, boxes, highlights and text over any app — and watch them <b>fade away on their own</b>.</p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="https://github.com/dennisrongo/annotatr/releases">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v8.5M4.5 7.5L8 11l3.5-3.5M2.5 13.5h11"/></svg>
+        Get Annotatr
+      </a>
+      <a class="btn btn-ghost" href="https://github.com/dennisrongo/annotatr">View source</a>
+    </div>
+    <div class="platforms">macOS · Windows · Linux</div>
+  </div>
+</header>
+
+<div class="demo-section">
+  <div class="wrap">
+    <div class="demo-hint" id="demoHint">↓ this is a live demo — pick a tool and drag ↓</div>
+    <div class="demo-shell reveal">
+      <div class="demo-bar" id="demoBar">
+        <span class="grip">⋮⋮</span>
+        <button class="tb on" data-tool="arrow" title="Arrow">↗</button>
+        <button class="tb" data-tool="circle" title="Circle">○</button>
+        <button class="tb" data-tool="box" title="Box">□</button>
+        <button class="tb" data-tool="freehand" title="Freehand">✎</button>
+        <button class="tb" data-tool="highlighter" title="Highlighter">▭</button>
+        <button class="tb" data-tool="text" title="Text">T</button>
+        <span class="demo-div"></span>
+        <button class="swatch-btn" id="swatchBtn" title="Tool color"></button>
+        <input type="color" id="colorInput" value="#FF3B30" style="position:absolute;width:0;height:0;opacity:0;pointer-events:none;">
+        <span class="demo-div"></span>
+        <button class="tb" id="undoBtn" title="Undo last shape">↩</button>
+        <button class="tb" id="clearBtn" title="Clear all">✕</button>
+        <span class="seg" id="styleSeg">
+          <button class="active" data-style="classic">Classic</button>
+          <button data-style="sketchy">Sketchy</button>
+        </span>
+      </div>
+      <div class="demo-stage" id="demoStage">
+        <div class="fw">
+          <div class="fw-chrome">
+            <span class="fw-dot" style="background:#ff5f57"></span>
+            <span class="fw-dot" style="background:#febc2e"></span>
+            <span class="fw-dot" style="background:#28c840"></span>
+            <span class="fw-title">Acme Analytics — Q2 Report</span>
+          </div>
+          <div class="fw-body">
+            <div class="fw-cards">
+              <div class="fw-card"><div class="fw-k">Revenue</div><div class="fw-v">$128.4k</div></div>
+              <div class="fw-card"><div class="fw-k">Active users</div><div class="fw-v">8,210</div></div>
+              <div class="fw-card"><div class="fw-k">Churn</div><div class="fw-v">1.2%</div></div>
+            </div>
+            <div class="fw-chart">
+              <div class="fw-bar" style="height:38%"></div>
+              <div class="fw-bar" style="height:46%"></div>
+              <div class="fw-bar" style="height:42%"></div>
+              <div class="fw-bar" style="height:55%"></div>
+              <div class="fw-bar" style="height:50%"></div>
+              <div class="fw-bar" style="height:62%"></div>
+              <div class="fw-bar" style="height:58%"></div>
+              <div class="fw-bar hot" style="height:96%"></div>
+              <div class="fw-bar" style="height:70%"></div>
+              <div class="fw-bar" style="height:66%"></div>
+              <div class="fw-bar" style="height:74%"></div>
+              <div class="fw-bar" style="height:71%"></div>
+            </div>
+          </div>
+        </div>
+        <canvas id="demoCanvas"></canvas>
+        <input id="demoText" placeholder="Type, then Enter">
+      </div>
+      <div class="demo-foot">
+        <span>Shapes <b>auto-fade after a few seconds</b> — exactly like the real overlay.</span>
+        <span><b>Undo</b> ↩ &nbsp;·&nbsp; <b>Clear</b> ✕ &nbsp;·&nbsp; toggle <b>Classic / Sketchy</b> any time</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<section id="features">
+  <div class="wrap">
+    <div class="eyebrow reveal">Why Annotatr</div>
+    <h2 class="reveal">Annotate anything.<br>Interrupt nothing.</h2>
+    <p class="sub reveal">No screen sharing plugins, no editing afterwards. Annotatr floats above every app and stays out of the way of your recording.</p>
+    <div class="grid">
+      <div class="feat reveal">
+        <div class="ic"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke-width="1.6" stroke="currentColor" stroke-linecap="round"><rect x="2" y="5" width="16" height="10" rx="2"/><path d="M5.5 9h.01M8.5 9h.01M11.5 9h.01M14.5 9h.01M6.5 12h7"/></svg></div>
+        <h3>Global hotkeys</h3>
+        <p>Summon the toolbar or jump straight to a tool from any app — <kbd>⌃⇧D</kbd> and you're drawing. Every binding is configurable, with OS-conflict warnings.</p>
+      </div>
+      <div class="feat reveal">
+        <div class="ic"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke-width="1.6" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7.2"/><path d="M10 5.8V10l2.8 2.2"/></svg></div>
+        <h3>Auto-fade</h3>
+        <p>Shapes melt away with a smooth ease-out after a duration you choose. Your screen never collects clutter mid-take.</p>
+      </div>
+      <div class="feat reveal">
+        <div class="ic"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke-width="1.6" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 14.5c2-4.5 4-8 7-9.5 2.5-1.2 5 .5 4.5 3-.4 2.2-3 5.5-6.5 7-2.3 1-4.5.6-5-.5z"/><path d="M13.5 3.5l2.5 2.5"/></svg></div>
+        <h3>Sketchy mode</h3>
+        <p>Flip one toggle for a hand-drawn, Excalidraw-style look — powered by rough.js, with handwriting-style text to match.</p>
+      </div>
+      <div class="feat reveal">
+        <div class="ic"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke-width="1.6" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2.5S5.5 7.6 5.5 10.4a4.5 4.5 0 0 0 9 0C14.5 7.6 10 2.5 10 2.5z"/></svg></div>
+        <h3>Per-tool styling</h3>
+        <p>Each tool keeps its own color. Adjust thickness, font size and arrow heads once — change a color right from the toolbar swatch mid-recording.</p>
+      </div>
+      <div class="feat reveal">
+        <div class="ic"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke-width="1.6" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3.5" width="10" height="7.5" rx="1.5"/><rect x="8" y="9" width="10" height="7.5" rx="1.5"/></svg></div>
+        <h3>Multi-monitor</h3>
+        <p>The overlay follows your cursor to whichever display you're on, and shapes stay confined to the monitor they were drawn on. Retina-crisp everywhere.</p>
+      </div>
+      <div class="feat reveal">
+        <div class="ic"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke-width="1.6" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 3l3.5 3.5L7.5 16 3 17l1-4.5z"/><path d="M11.5 5l3.5 3.5"/></svg></div>
+        <h3>Edit after the fact</h3>
+        <p>Hit <kbd>⌘E</kbd>, click any shape, and tweak its color or thickness — or delete it. Undo with <kbd>⌘Z</kbd>, wipe everything with <kbd>⌘⇧X</kbd>.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="styles">
+  <div class="wrap">
+    <div class="eyebrow reveal">Two styles</div>
+    <h2 class="reveal">Clean lines or a hand-drawn vibe.</h2>
+    <p class="sub reveal">Drag the divider — same annotations, two renderers. Classic for crisp, professional callouts; Sketchy when you want that whiteboard feel.</p>
+    <div class="compare reveal" id="compare">
+      <img src="assets/overlay-classic.png" alt="Annotatr classic style annotations over a dashboard app" loading="lazy">
+      <div class="top"><img src="assets/overlay-sketchy.png" alt="Annotatr sketchy, Excalidraw-like annotations over the same dashboard" loading="lazy"></div>
+      <div class="handle"></div>
+      <div class="knob">⟨⟩</div>
+      <span class="tag l">Classic</span>
+      <span class="tag r">sketchy!</span>
+    </div>
+  </div>
+</section>
+
+<section id="screens">
+  <div class="wrap">
+    <div class="eyebrow reveal">A closer look</div>
+    <h2 class="reveal">Small app. Sharp edges.</h2>
+    <div class="shots" style="margin-top: 36px;">
+      <div class="shot reveal">
+        <img src="assets/settings.png" alt="Annotatr settings window, Drawing tab" loading="lazy">
+        <div class="cap">
+          <h3>Settings that feel native</h3>
+          <p>Style, thickness, fade timing, hotkeys, colors — everything saves automatically, and you can export the whole config as JSON.</p>
+        </div>
+      </div>
+      <div class="shot strip-shot reveal">
+        <img src="assets/toolbar.png" alt="Annotatr floating toolbar strip" loading="lazy">
+        <div class="cap">
+          <h3>The whole UI is one strip</h3>
+          <p>Six tools, a color swatch, undo and clear. Drag it anywhere — or park it off-screen so your recording stays spotless.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="shortcuts">
+  <div class="wrap">
+    <div class="eyebrow reveal">Muscle memory</div>
+    <h2 class="reveal">Everything is a keystroke away.</h2>
+    <div class="keys-grid" style="margin-top: 36px;">
+      <div class="keys-card reveal">
+        <div class="kc-head">Global hotkeys</div>
+        <div class="krow"><span>Toggle toolbar</span><span class="keys"><span class="key">⌃</span><span class="key">⇧</span><span class="key">D</span></span></div>
+        <div class="krow"><span>Arrow</span><span class="keys"><span class="key">⌃</span><span class="key">⇧</span><span class="key">A</span></span></div>
+        <div class="krow"><span>Circle</span><span class="keys"><span class="key">⌃</span><span class="key">⇧</span><span class="key">C</span></span></div>
+        <div class="krow"><span>Box</span><span class="keys"><span class="key">⌃</span><span class="key">⇧</span><span class="key">B</span></span></div>
+        <div class="krow"><span>Freehand</span><span class="keys"><span class="key">⌃</span><span class="key">⇧</span><span class="key">F</span></span></div>
+        <div class="krow"><span>Highlighter</span><span class="keys"><span class="key">⌃</span><span class="key">⇧</span><span class="key">H</span></span></div>
+        <div class="krow"><span>Text</span><span class="keys"><span class="key">⌃</span><span class="key">⇧</span><span class="key">T</span></span></div>
+      </div>
+      <div class="keys-card reveal">
+        <div class="kc-head">While drawing</div>
+        <div class="krow"><span>Undo last shape</span><span class="keys"><span class="key">⌘</span><span class="key">Z</span></span></div>
+        <div class="krow"><span>Clear all shapes</span><span class="keys"><span class="key">⌘</span><span class="key">⇧</span><span class="key">X</span></span></div>
+        <div class="krow"><span>Edit mode</span><span class="keys"><span class="key">⌘</span><span class="key">E</span></span></div>
+        <div class="krow"><span>New line in text</span><span class="keys"><span class="key">⇧</span><span class="key">↩</span></span></div>
+        <div class="krow"><span>Cancel / dismiss overlay</span><span class="keys"><span class="key">⎋</span></span></div>
+      </div>
+    </div>
+    <p class="keys-note reveal">Defaults shown — every global hotkey is rebindable in Settings. On Windows and Linux, ⌘ is Ctrl.</p>
+  </div>
+</section>
+
+<section id="install">
+  <div class="wrap">
+    <div class="eyebrow reveal">Get started</div>
+    <h2 class="reveal">Running in two minutes.</h2>
+    <div class="install-grid" style="margin-top: 36px;">
+      <div class="steps reveal">
+        <div class="step">
+          <span class="n">1</span>
+          <div>
+            <h3>Grab a release — or build from source</h3>
+            <p>Check the <a href="https://github.com/dennisrongo/annotatr/releases">releases page</a> for prebuilt binaries, or clone and build with the commands on the right.</p>
+          </div>
+        </div>
+        <div class="step">
+          <span class="n">2</span>
+          <div>
+            <h3>Prerequisites for building</h3>
+            <p><a href="https://nodejs.org/">Node.js 18+</a> and the <a href="https://rustup.rs/">Rust toolchain</a>. On macOS you'll also want the Xcode Command Line Tools.</p>
+          </div>
+        </div>
+        <div class="step">
+          <span class="n">3</span>
+          <div>
+            <h3>Press ⌃⇧D and draw</h3>
+            <p>The toolbar pops up over whatever you're doing. Pick a tool, drag, done — shapes fade on their own.</p>
+          </div>
+        </div>
+      </div>
+      <div class="codeblock reveal">
+        <div class="cb-head">
+          <span class="cb-dot" style="background:#ff5f57"></span>
+          <span class="cb-dot" style="background:#febc2e"></span>
+          <span class="cb-dot" style="background:#28c840"></span>
+          <span class="cb-title">terminal</span>
+        </div>
+        <pre><span class="p">$</span> git clone https://github.com/dennisrongo/annotatr.git
+<span class="p">$</span> cd annotatr
+<span class="p">$</span> ./init.sh   <span class="c"># checks prereqs, installs, runs</span>
+
+<span class="c"># or build a production bundle:</span>
+<span class="p">$</span> npm run tauri:build</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="foot-inner">
+      <div class="left"><span class="brand-dot"></span><b>Annotatr</b>&nbsp;·&nbsp;MIT License</div>
+      <div class="foot-links">
+        <a href="https://github.com/dennisrongo/annotatr">GitHub</a>
+        <a href="https://github.com/dennisrongo/annotatr/issues">Issues</a>
+        <a href="https://dennisrongo.com">dennisrongo.com</a>
+      </div>
+    </div>
+    <div class="foot-note">Made with ❤️ for screen recording enthusiasts by Dennis Rongo. The demo above — and every screenshot on this page — is rendered with the same drawing engine that ships in the app.</div>
+  </div>
+</footer>
+
+<script src="https://unpkg.com/roughjs@4.6.6/bundled/rough.js" defer></script>
+<script defer>
+window.addEventListener("DOMContentLoaded", () => {
+  /* ---------- reveal on scroll ---------- */
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); } });
+  }, { threshold: 0.12 });
+  document.querySelectorAll(".reveal").forEach(el => io.observe(el));
+
+  /* ---------- compare slider ---------- */
+  const cmp = document.getElementById("compare");
+  if (cmp) {
+    const top = cmp.querySelector(".top");
+    const handle = cmp.querySelector(".handle");
+    const knob = cmp.querySelector(".knob");
+    const setPos = (clientX) => {
+      const r = cmp.getBoundingClientRect();
+      const pct = Math.min(98, Math.max(2, ((clientX - r.left) / r.width) * 100));
+      top.style.clipPath = `inset(0 0 0 ${pct}%)`;
+      handle.style.left = pct + "%";
+      knob.style.left = pct + "%";
+    };
+    let dragging = false;
+    cmp.addEventListener("pointerdown", (e) => { dragging = true; cmp.setPointerCapture(e.pointerId); setPos(e.clientX); });
+    cmp.addEventListener("pointermove", (e) => { if (dragging) setPos(e.clientX); });
+    cmp.addEventListener("pointerup", () => { dragging = false; });
+    cmp.addEventListener("pointercancel", () => { dragging = false; });
+  }
+
+  /* ---------- live demo ---------- */
+  const stage = document.getElementById("demoStage");
+  const canvas = document.getElementById("demoCanvas");
+  const textInput = document.getElementById("demoText");
+  const ctx = canvas.getContext("2d");
+  let rc = null;
+
+  const FADE_MS = 6500;
+  const ROUGHOPTS = { roughness: 1.5, bowing: 1.2 };
+  let tool = "arrow";
+  let styleMode = "classic";
+  let color = "#FF3B30";
+  let shapes = [];
+  let drawing = null;
+  let drawingAuto = [];
+  let userHasDrawn = false;
+  let autoplayTimer = null;
+
+  function resize() {
+    const dpr = window.devicePixelRatio || 1;
+    const r = stage.getBoundingClientRect();
+    canvas.width = r.width * dpr;
+    canvas.height = r.height * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  resize();
+  window.addEventListener("resize", resize);
+
+  function tryRough() {
+    if (!rc && window.rough) rc = window.rough.canvas(canvas);
+    return rc;
+  }
+
+  const newSeed = () => Math.floor(Math.random() * 2147483646) + 1;
+
+  /* same fade curve as the app: hold until 80% of lifetime, then ease-out cubic */
+  function fadeOpacity(age) {
+    const start = FADE_MS * 0.8;
+    if (age < start) return 1;
+    if (age >= FADE_MS) return 0;
+    const t = (age - start) / (FADE_MS - start);
+    return 1 - (1 - Math.pow(1 - t, 3));
+  }
+
+  function drawArrowShape(s, sketchy) {
+    const t = s.thickness, head = Math.max(t * 3, 12);
+    const angle = Math.atan2(s.y2 - s.y1, s.x2 - s.x1);
+    const inset = head * Math.cos(Math.PI / 6);
+    const ex = s.x2 - inset * Math.cos(angle), ey = s.y2 - inset * Math.sin(angle);
+    const lx = s.x2 - head * Math.cos(angle - Math.PI / 6), ly = s.y2 - head * Math.sin(angle - Math.PI / 6);
+    const rx = s.x2 - head * Math.cos(angle + Math.PI / 6), ry = s.y2 - head * Math.sin(angle + Math.PI / 6);
+    if (sketchy) {
+      const o = { stroke: s.color, strokeWidth: t, seed: s.seed, ...ROUGHOPTS };
+      rc.line(s.x1, s.y1, ex, ey, o);
+      rc.polygon([[s.x2, s.y2], [lx, ly], [rx, ry]], { ...o, seed: s.seed + 2, fill: s.color, fillStyle: "solid", strokeWidth: Math.max(1, t / 2) });
+    } else {
+      ctx.strokeStyle = s.color; ctx.fillStyle = s.color; ctx.lineWidth = t;
+      ctx.beginPath(); ctx.moveTo(s.x1, s.y1); ctx.lineTo(ex, ey); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(s.x2, s.y2); ctx.lineTo(lx, ly); ctx.lineTo(rx, ry); ctx.closePath(); ctx.fill();
+    }
+  }
+
+  function drawShape(s) {
+    const sketchy = styleMode === "sketchy" && tryRough();
+    ctx.save();
+    ctx.globalAlpha = s.opacity;
+    ctx.lineCap = "round"; ctx.lineJoin = "round";
+    if (s.type === "arrow") {
+      drawArrowShape(s, sketchy);
+    } else if (s.type === "box") {
+      const x = Math.min(s.x1, s.x2), y = Math.min(s.y1, s.y2);
+      const w = Math.abs(s.x2 - s.x1), h = Math.abs(s.y2 - s.y1);
+      if (sketchy) rc.rectangle(x, y, w, h, { stroke: s.color, strokeWidth: s.thickness, seed: s.seed, ...ROUGHOPTS });
+      else { ctx.strokeStyle = s.color; ctx.lineWidth = s.thickness; ctx.strokeRect(x, y, w, h); }
+    } else if (s.type === "circle") {
+      const cx = (s.x1 + s.x2) / 2, cy = (s.y1 + s.y2) / 2;
+      const rx2 = Math.abs(s.x2 - s.x1) / 2, ry2 = Math.abs(s.y2 - s.y1) / 2;
+      if (sketchy) rc.ellipse(cx, cy, rx2 * 2, ry2 * 2, { stroke: s.color, strokeWidth: s.thickness, seed: s.seed, ...ROUGHOPTS });
+      else { ctx.strokeStyle = s.color; ctx.lineWidth = s.thickness; ctx.beginPath(); ctx.ellipse(cx, cy, rx2, ry2, 0, 0, Math.PI * 2); ctx.stroke(); }
+    } else if (s.type === "freehand") {
+      if (s.points.length > 1) {
+        if (sketchy) rc.curve(s.points.map(p => [p.x, p.y]), { stroke: s.color, strokeWidth: s.thickness, seed: s.seed, roughness: 0.8, bowing: 0.5 });
+        else {
+          ctx.strokeStyle = s.color; ctx.lineWidth = s.thickness;
+          ctx.beginPath(); ctx.moveTo(s.points[0].x, s.points[0].y);
+          for (let i = 1; i < s.points.length; i++) ctx.lineTo(s.points[i].x, s.points[i].y);
+          ctx.stroke();
+        }
+      }
+    } else if (s.type === "highlighter") {
+      if (s.points.length > 1) {
+        ctx.globalAlpha = s.opacity * 0.35;
+        ctx.strokeStyle = s.color; ctx.lineWidth = s.thickness * 4.5;
+        ctx.beginPath(); ctx.moveTo(s.points[0].x, s.points[0].y);
+        for (let i = 1; i < s.points.length; i++) ctx.lineTo(s.points[i].x, s.points[i].y);
+        ctx.stroke();
+      }
+    } else if (s.type === "text") {
+      ctx.fillStyle = s.color;
+      ctx.font = (styleMode === "sketchy")
+        ? `600 ${s.size * 1.25}px Caveat, "Chalkboard SE", "Comic Sans MS", cursive`
+        : `600 ${s.size}px Inter, system-ui, sans-serif`;
+      ctx.textBaseline = "top";
+      ctx.fillText(s.text, s.x1, s.y1);
+    }
+    ctx.restore();
+  }
+
+  function frame() {
+    const r = stage.getBoundingClientRect();
+    ctx.clearRect(0, 0, r.width, r.height);
+    const now = performance.now();
+    shapes = shapes.filter(s => now - s.born < FADE_MS);
+    shapes.forEach(s => { s.opacity = fadeOpacity(now - s.born); drawShape(s); });
+    if (drawing) { drawing.opacity = 1; drawShape(drawing); }
+    drawingAuto.forEach(s => { s.opacity = 1; drawShape(s); });
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  const pos = (e) => {
+    const r = canvas.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  };
+
+  function commitText() {
+    const v = textInput.value.trim();
+    if (v) {
+      shapes.push({ type: "text", text: v, x1: parseFloat(textInput.style.left), y1: parseFloat(textInput.style.top), color, size: 20, seed: newSeed(), born: performance.now(), opacity: 1 });
+    }
+    textInput.style.display = "none";
+    textInput.value = "";
+  }
+
+  canvas.addEventListener("pointerdown", (e) => {
+    userHasDrawn = true;
+    clearTimeout(autoplayTimer);
+    document.getElementById("demoHint").textContent = "nice. that's exactly how the app feels ✓";
+    const p = pos(e);
+    if (tool === "text") {
+      commitText();
+      textInput.style.left = p.x + "px";
+      textInput.style.top = p.y + "px";
+      textInput.style.color = color;
+      textInput.style.borderColor = color;
+      textInput.style.display = "block";
+      setTimeout(() => textInput.focus(), 0);
+      return;
+    }
+    canvas.setPointerCapture(e.pointerId);
+    const base = { color, thickness: 4, seed: newSeed(), born: 0, opacity: 1 };
+    drawing = (tool === "freehand" || tool === "highlighter")
+      ? { ...base, type: tool, points: [p] }
+      : { ...base, type: tool, x1: p.x, y1: p.y, x2: p.x, y2: p.y };
+  });
+  canvas.addEventListener("pointermove", (e) => {
+    if (!drawing) return;
+    const p = pos(e);
+    if (drawing.points) drawing.points.push(p);
+    else { drawing.x2 = p.x; drawing.y2 = p.y; }
+  });
+  const finish = () => {
+    if (!drawing) return;
+    const tooSmall = drawing.points
+      ? drawing.points.length < 2
+      : Math.hypot(drawing.x2 - drawing.x1, drawing.y2 - drawing.y1) < 4;
+    if (!tooSmall) { drawing.born = performance.now(); shapes.push(drawing); }
+    drawing = null;
+  };
+  canvas.addEventListener("pointerup", finish);
+  canvas.addEventListener("pointercancel", finish);
+
+  textInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); commitText(); }
+    if (e.key === "Escape") { textInput.value = ""; textInput.style.display = "none"; }
+  });
+  textInput.addEventListener("blur", commitText);
+
+  /* toolbar wiring */
+  document.querySelectorAll("#demoBar .tb[data-tool]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll("#demoBar .tb[data-tool]").forEach(b => b.classList.remove("on"));
+      btn.classList.add("on");
+      tool = btn.dataset.tool;
+    });
+  });
+  const colorInput = document.getElementById("colorInput");
+  const swatchBtn = document.getElementById("swatchBtn");
+  swatchBtn.addEventListener("click", () => colorInput.click());
+  colorInput.addEventListener("input", () => { color = colorInput.value; swatchBtn.style.background = color; });
+  document.getElementById("undoBtn").addEventListener("click", () => shapes.pop());
+  document.getElementById("clearBtn").addEventListener("click", () => { shapes = []; });
+  document.querySelectorAll("#styleSeg button").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll("#styleSeg button").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      styleMode = btn.dataset.style;
+    });
+  });
+
+  /* ---------- autoplay: a little scripted annotation tour ---------- */
+  function animateShape(spec, ms, after) {
+    const start = performance.now();
+    const s = { ...spec, born: 0, opacity: 1 };
+    drawingAuto.push(s);
+    function step(now) {
+      const t = Math.min(1, (now - start) / ms);
+      const ease = 1 - Math.pow(1 - t, 3);
+      s.x2 = spec.fx1 + (spec.fx2 - spec.fx1) * ease;
+      s.y2 = spec.fy1 + (spec.fy2 - spec.fy1) * ease;
+      if (t < 1) requestAnimationFrame(step);
+      else {
+        drawingAuto.splice(drawingAuto.indexOf(s), 1);
+        s.born = performance.now();
+        shapes.push(s);
+        if (after) after();
+      }
+    }
+    requestAnimationFrame(step);
+  }
+
+  function runAutoplay() {
+    if (userHasDrawn) return;
+    const r = stage.getBoundingClientRect();
+    const W = r.width, H = r.height;
+    /* autoplay shows off sketchy mode; the toggle stays in sync */
+    styleMode = "sketchy";
+    document.querySelectorAll("#styleSeg button").forEach(b => b.classList.toggle("active", b.dataset.style === "sketchy"));
+    animateShape({ type: "arrow", color: "#FF3B30", thickness: 4, seed: newSeed(), fx1: W * 0.88, fy1: H * 0.12, fx2: W * 0.72, fy2: H * 0.30, x1: W * 0.88, y1: H * 0.12, x2: W * 0.88, y2: H * 0.12 }, 550, () => {
+      setTimeout(() => {
+        if (userHasDrawn) return;
+        animateShape({ type: "circle", color: "#0A84FF", thickness: 4, seed: newSeed(), fx1: W * 0.50, fy1: H * 0.38, fx2: W * 0.60, fy2: H * 0.86, x1: W * 0.50, y1: H * 0.38, x2: W * 0.50, y2: H * 0.38 }, 480, () => {
+          setTimeout(() => {
+            if (userHasDrawn) return;
+            shapes.push({ type: "text", text: "your turn — grab a tool!", x1: W * 0.13, y1: H * 0.16, color: "#FF3B30", size: 19, seed: newSeed(), born: performance.now(), opacity: 1 });
+          }, 350);
+        });
+      }, 320);
+    });
+    autoplayTimer = setTimeout(runAutoplay, 9500);
+  }
+  /* any toolbar interaction takes control away from the autoplay */
+  document.getElementById("demoBar").addEventListener("click", () => {
+    userHasDrawn = true;
+    clearTimeout(autoplayTimer);
+  });
+  /* start autoplay when demo scrolls into view */
+  const demoIO = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting && !userHasDrawn) {
+        demoIO.disconnect();
+        setTimeout(runAutoplay, 700);
+      }
+    });
+  }, { threshold: 0.45 });
+  demoIO.observe(stage);
+});
+</script>
+</body>
+</html>
