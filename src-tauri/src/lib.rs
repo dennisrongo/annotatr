@@ -1219,6 +1219,27 @@ fn show_mini_panel(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// Show the main window (Settings window)
+/// Used to open the Settings window from the Mini Panel
+#[tauri::command]
+fn show_main_window(app: AppHandle) -> Result<(), String> {
+    let main_window = app.get_webview_window("main")
+        .ok_or("Main window not found")?;
+    main_window.show().map_err(|e| e.to_string())?;
+    main_window.set_focus().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Hide the main window (Settings window)
+/// Used to close the Settings window without closing the app
+#[tauri::command]
+fn hide_main_window(app: AppHandle) -> Result<(), String> {
+    let main_window = app.get_webview_window("main")
+        .ok_or("Main window not found")?;
+    main_window.hide().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// Feature #11: Get platform information
 /// Returns the detected platform and platform-specific window hints
 #[tauri::command]
@@ -1320,6 +1341,8 @@ pub fn run() {
             toggle_mini_panel,
             hide_mini_panel,
             show_mini_panel,
+            show_main_window,
+            hide_main_window,
             // Feature #135: Platform-specific optimizations
             get_platform_optimizations,
             get_canvas_optimizations,
