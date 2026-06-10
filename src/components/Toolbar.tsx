@@ -62,6 +62,15 @@ export default function Toolbar() {
       }
     });
 
+    // Escape must work even when a toolbar click made this window key
+    // (the overlay's own Escape handler only fires while the overlay is key)
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        invoke("dismiss_overlay").catch(console.error);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+
     // Persist position after the user drags the strip (debounced); moves
     // not preceded by a mousedown on the drag region are programmatic
     let moveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -76,6 +85,7 @@ export default function Toolbar() {
     });
 
     return () => {
+      window.removeEventListener("keydown", handleKeyDown);
       if (moveTimer) clearTimeout(moveTimer);
       unlistenSettings.then((fn) => fn()).catch(console.error);
       unlistenToolSelected.then((fn) => fn()).catch(console.error);

@@ -369,201 +369,6 @@ export default function Overlay() {
   }, [toolIndicators]);
 
   /**
-   * Feature #132: Alignment guides for shape drawing
-   * Detects when shapes align with center, edges, or other shapes
-   */
-
-  // Threshold distance for snapping (in pixels)
-  const SNAP_THRESHOLD = 10;
-
-  /**
-   * Detect alignment with center of screen
-   */
-  const detectCenterAlignment = useCallback((x: number, y: number): { horizontal: boolean; vertical: boolean } => {
-    const canvas = canvasRef.current;
-    if (!canvas) return { horizontal: false, vertical: false };
-
-    const centerX = canvas.width / (2 * (window.devicePixelRatio || 1));
-    const centerY = canvas.height / (2 * (window.devicePixelRatio || 1));
-
-    return {
-      horizontal: Math.abs(x - centerX) < SNAP_THRESHOLD,
-      vertical: Math.abs(y - centerY) < SNAP_THRESHOLD,
-    };
-  }, []);
-
-  /**
-   * Detect alignment with edges of screen
-   */
-  const detectEdgeAlignment = useCallback((x: number, y: number): { left: boolean; right: boolean; top: boolean; bottom: boolean } => {
-    const canvas = canvasRef.current;
-    if (!canvas) return { left: false, right: false, top: false, bottom: false };
-
-    const width = canvas.width / (window.devicePixelRatio || 1);
-    const height = canvas.height / (window.devicePixelRatio || 1);
-
-    return {
-      left: Math.abs(x) < SNAP_THRESHOLD,
-      right: Math.abs(x - width) < SNAP_THRESHOLD,
-      top: Math.abs(y) < SNAP_THRESHOLD,
-      bottom: Math.abs(y - height) < SNAP_THRESHOLD,
-    };
-  }, []);
-
-  /**
-   * Detect alignment with existing shapes (centers and edges)
-   */
-  const detectShapeAlignment = useCallback((x: number, y: number): Array<{ x: number; y: number; type: string }> => {
-    const alignments: Array<{ x: number; y: number; type: string }> = [];
-
-    shapesRef.current.forEach(shape => {
-      let shapeCenterX = 0;
-      let shapeCenterY = 0;
-
-      // Calculate center of existing shape
-      switch (shape.tool) {
-        case ToolType.ARROW:
-          shapeCenterX = (shape.startPoint.x + shape.endPoint.x) / 2;
-          shapeCenterY = (shape.startPoint.y + shape.endPoint.y) / 2;
-          break;
-        case ToolType.CIRCLE:
-          shapeCenterX = shape.center.x;
-          shapeCenterY = shape.center.y;
-          break;
-        case ToolType.BOX:
-          shapeCenterX = (shape.startPoint.x + shape.endPoint.x) / 2;
-          shapeCenterY = (shape.startPoint.y + shape.endPoint.y) / 2;
-          break;
-        case ToolType.FREEHAND:
-        case ToolType.HIGHLIGHTER:
-          if (shape.points.length > 0) {
-            const sumX = shape.points.reduce((sum, p) => sum + p.x, 0);
-            const sumY = shape.points.reduce((sum, p) => sum + p.y, 0);
-            shapeCenterX = sumX / shape.points.length;
-            shapeCenterY = sumY / shape.points.length;
-          }
-          break;
-        case ToolType.TEXT:
-          shapeCenterX = shape.position.x;
-          shapeCenterY = shape.position.y;
-          break;
-      }
-
-      // Check horizontal alignment with shape center
-      if (Math.abs(y - shapeCenterY) < SNAP_THRESHOLD) {
-        alignments.push({ x: 0, y: shapeCenterY, type: 'shape-horizontal' });
-      }
-
-      // Check vertical alignment with shape center
-      if (Math.abs(x - shapeCenterX) < SNAP_THRESHOLD) {
-        alignments.push({ x: shapeCenterX, y: 0, type: 'shape-vertical' });
-      }
-    });
-
-    return alignments;
-  }, []);
-
-  /**
-   * Draw alignment guides on canvas
-   */
-  const drawAlignmentGuides = useCallback((
-    ctx: CanvasRenderingContext2D,
-    guides: {
-      centerH: boolean;
-      centerV: boolean;
-      edges: { left: boolean; right: boolean; top: boolean; bottom: boolean };
-      shapes: Array<{ x: number; y: number; type: string }>;
-      currentX: number;
-      currentY: number;
-    }
-  ) => {
-    const { centerH, centerV, edges, shapes, currentX, currentY } = guides;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const width = canvas.width / (window.devicePixelRatio || 1);
-    const height = canvas.height / (window.devicePixelRatio || 1);
-
-    // Save context state
-    ctx.save();
-
-    // Set guide style
-    ctx.strokeStyle = "#00BFFF"; // Deep sky blue for visibility
-    ctx.lineWidth = 1;
-    ctx.setLineDash([5, 5]); // Dashed line
-    ctx.globalAlpha = 0.7;
-
-    // Draw center horizontal guide
-    if (centerH) {
-      ctx.beginPath();
-      ctx.moveTo(0, currentY);
-      ctx.lineTo(width, currentY);
-      ctx.stroke();
-    }
-
-    // Draw center vertical guide
-    if (centerV) {
-      ctx.beginPath();
-      ctx.moveTo(currentX, 0);
-      ctx.lineTo(currentX, height);
-      ctx.stroke();
-    }
-
-    // Draw edge guides
-    if (edges.left) {
-      ctx.beginPath();
-      ctx.moveTo(0, currentY);
-      ctx.lineTo(currentX, currentY);
-      ctx.stroke();
-    }
-    if (edges.right) {
-      ctx.beginPath();
-      ctx.moveTo(width, currentY);
-      ctx.lineTo(currentX, currentY);
-      ctx.stroke();
-    }
-    if (edges.top) {
-      ctx.beginPath();
-      ctx.moveTo(currentX, 0);
-      ctx.lineTo(currentX, currentY);
-      ctx.stroke();
-    }
-    if (edges.bottom) {
-      ctx.beginPath();
-      ctx.moveTo(currentX, height);
-      ctx.lineTo(currentX, currentY);
-      ctx.stroke();
-    }
-
-    // Draw shape alignment guides
-    shapes.forEach(guide => {
-      if (guide.type === 'shape-horizontal') {
-        ctx.beginPath();
-        ctx.moveTo(0, guide.y);
-        ctx.lineTo(width, guide.y);
-        ctx.stroke();
-      } else if (guide.type === 'shape-vertical') {
-        ctx.beginPath();
-        ctx.moveTo(guide.x, 0);
-        ctx.lineTo(guide.x, height);
-        ctx.stroke();
-      }
-    });
-
-    // Draw snap points (small circles at intersections)
-    ctx.fillStyle = "#00BFFF";
-    const snapRadius = 4;
-    if (centerH || centerV || edges.left || edges.right || edges.top || edges.bottom || shapes.length > 0) {
-      ctx.beginPath();
-      ctx.arc(currentX, currentY, snapRadius, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    // Restore context state
-    ctx.restore();
-  }, []);
-
-  /**
    * Create arrow shape from drawing state
    * Feature #9: Includes monitorId for per-monitor shape confinement
    * Feature #128: Includes customFadeDuration if set
@@ -870,42 +675,11 @@ export default function Overlay() {
       return;
     }
 
-    // Feature #132: Detect alignments for arrow, circle, box
-    const centerAlign = detectCenterAlignment(currentX, currentY);
-    const edgeAlign = detectEdgeAlignment(currentX, currentY);
-    const shapeAligns = detectShapeAlignment(currentX, currentY);
-
-    // Apply snapping to center
-    let snappedX = currentX;
-    let snappedY = currentY;
-
-    if (centerAlign.horizontal) {
-      const canvas = canvasRef.current;
-      if (canvas) {
-        snappedY = canvas.height / (2 * (window.devicePixelRatio || 1));
-      }
-    }
-    if (centerAlign.vertical) {
-      const canvas = canvasRef.current;
-      if (canvas) {
-        snappedX = canvas.width / (2 * (window.devicePixelRatio || 1));
-      }
-    }
-
-    // Snap to shape alignments
-    shapeAligns.forEach(guide => {
-      if (guide.type === 'shape-horizontal') {
-        snappedY = guide.y;
-      } else if (guide.type === 'shape-vertical') {
-        snappedX = guide.x;
-      }
-    });
-
-    // For arrow, circle, box - update drawing state with snapped position
+    // For arrow, circle, box - track the cursor exactly (no snapping)
     setDrawingState(prev => ({
       ...prev,
-      currentX: snappedX,
-      currentY: snappedY,
+      currentX,
+      currentY,
     }));
 
     // Redraw existing shapes and preview
@@ -922,30 +696,20 @@ export default function Overlay() {
 
     switch (currentTool) {
       case ToolType.ARROW:
-        previewShape = createArrowShape(drawingState.startX, drawingState.startY, snappedX, snappedY);
+        previewShape = createArrowShape(drawingState.startX, drawingState.startY, currentX, currentY);
         break;
       case ToolType.CIRCLE:
-        previewShape = createCircleShape(drawingState.startX, drawingState.startY, snappedX, snappedY);
+        previewShape = createCircleShape(drawingState.startX, drawingState.startY, currentX, currentY);
         break;
       case ToolType.BOX:
-        previewShape = createBoxShape(drawingState.startX, drawingState.startY, snappedX, snappedY);
+        previewShape = createBoxShape(drawingState.startX, drawingState.startY, currentX, currentY);
         break;
       default:
         return;
     }
 
     drawShape(ctx, previewShape);
-
-    // Feature #132: Draw alignment guides on top
-    drawAlignmentGuides(ctx, {
-      centerH: centerAlign.horizontal,
-      centerV: centerAlign.vertical,
-      edges: edgeAlign,
-      shapes: shapeAligns,
-      currentX: snappedX,
-      currentY: snappedY,
-    });
-  }, [drawingState.isDrawing, drawingState.startX, drawingState.startY, drawingState.freehandPoints, currentTool, getCanvasContext, createArrowShape, createCircleShape, createBoxShape, createFreehandShape, createHighlighterShape, detectCenterAlignment, detectEdgeAlignment, detectShapeAlignment, drawAlignmentGuides]);
+  }, [drawingState.isDrawing, drawingState.startX, drawingState.startY, drawingState.freehandPoints, currentTool, getCanvasContext, createArrowShape, createCircleShape, createBoxShape, createFreehandShape, createHighlighterShape]);
 
   /**
    * Handle text input submission

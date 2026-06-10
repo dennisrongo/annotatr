@@ -880,6 +880,31 @@ fn position_toolbar(app: &AppHandle) {
     }
 }
 
+/// Keep the toolbar one window level above the overlay so its buttons stay
+/// clickable while drawing. Tauri's always-on-top puts both windows at
+/// NSFloatingWindowLevel (3), where the overlay — shown later — covers the
+/// toolbar; NSModalPanelWindowLevel (8) keeps the toolbar on top.
+#[cfg(target_os = "macos")]
+fn raise_toolbar_above_overlay(app: &AppHandle) {
+    if let Some(panel) = app.get_webview_window("mini-panel") {
+        let panel_for_closure = panel.clone();
+        // NSWindow calls must happen on the main thread
+        let _ = panel.run_on_main_thread(move || {
+            if let Ok(ns_window) = panel_for_closure.ns_window() {
+                unsafe {
+                    use objc2::msg_send;
+                    use objc2::runtime::AnyObject;
+                    let ns = ns_window as *mut AnyObject;
+                    let _: () = msg_send![ns, setLevel: 8isize];
+                }
+            }
+        });
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn raise_toolbar_above_overlay(_app: &AppHandle) {}
+
 /// Show the toolbar without activating the app: tao's set_visible(true) is
 /// makeKeyAndOrderFront without activateIgnoringOtherApps, so the app the
 /// user is demoing keeps keyboard focus and its menu bar.
@@ -890,7 +915,10 @@ fn show_toolbar(app: &AppHandle) -> Result<(), String> {
         position_toolbar(app);
     }
     panel.show().map_err(|e| e.to_string())?;
+    // set_always_on_top resets the NSWindow level to floating, so the
+    // toolbar's elevated level must be re-applied after it
     let _ = panel.set_always_on_top(true);
+    raise_toolbar_above_overlay(app);
     Ok(())
 }
 
@@ -1193,6 +1221,10 @@ pub fn run() {
             if let Some(overlay) = app.get_webview_window("overlay") {
                 let _ = overlay.set_ignore_cursor_events(true);
             }
+
+            // Toolbar must outrank the overlay so it stays clickable
+            // while drawing
+            raise_toolbar_above_overlay(app.handle());
 
             // Hotkeys must work from launch, before any webview mounts
             register_hotkeys_from_store(app.handle());
