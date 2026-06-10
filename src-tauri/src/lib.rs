@@ -1166,6 +1166,13 @@ pub fn run() {
     let hotkey_dispatch = SharedHotkeyDispatch::default();
 
     tauri::Builder::default()
+        // Must be the first plugin registered: a second launch exits
+        // immediately and this callback fires in the running instance
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Err(e) = show_toolbar(app) {
+                eprintln!("Second instance launch: failed to show toolbar: {}", e);
+            }
+        }))
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(
@@ -1215,6 +1222,17 @@ pub fn run() {
             // menu bar stays on the app being demoed
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+
+            // System Settings-style chrome: the settings window is transparent
+            // with an NSVisualEffectView behind it; the webview paints the
+            // sidebar translucent so the blur shows through there only
+            #[cfg(target_os = "macos")]
+            if let Some(main) = app.get_webview_window("main") {
+                use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial};
+                if let Err(e) = apply_vibrancy(&main, NSVisualEffectMaterial::Sidebar, None, None) {
+                    eprintln!("Failed to apply window vibrancy: {}", e);
+                }
+            }
 
             // The overlay must be click-through from the very first frame;
             // window configs only control visibility, not cursor events
