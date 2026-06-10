@@ -1475,54 +1475,6 @@ export default function Overlay() {
         }}
       />
 
-      {/* Visual indicator for overlay active */}
-      <div
-        style={{
-          position: "absolute",
-          bottom: 20,
-          right: 20,
-          padding: "8px 12px",
-          backgroundColor: "rgba(0, 0, 0, 0.7)",
-          color: "white",
-          borderRadius: "4px",
-          fontSize: "12px",
-          pointerEvents: "none",
-        }}
-      >
-        Overlay Active • Press <strong>Escape</strong> to dismiss
-      </div>
-
-      {/* Feature #17: Enhanced drawing tool indicator with icon and color coding */}
-      {currentTool && (
-        <div
-          style={{
-            position: "absolute",
-            top: 20,
-            left: 20,
-            padding: "12px 16px",
-            backgroundColor: toolIndicators[currentTool].color,
-            color: "white",
-            borderRadius: "8px",
-            fontSize: "16px",
-            fontWeight: "bold",
-            pointerEvents: "none",
-            boxShadow: "0 4px 6px rgba(0, 0, 0, 0.3)",
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-            border: "2px solid rgba(255, 255, 255, 0.3)",
-          }}
-        >
-          <span style={{ fontSize: "24px" }}>{toolIndicators[currentTool].icon}</span>
-          <span>{toolIndicators[currentTool].label}</span>
-          {isDrawingMode && (
-            <span style={{ fontSize: "12px", marginLeft: "8px", opacity: 0.9 }}>
-              • Active
-            </span>
-          )}
-        </div>
-      )}
-
       {/* Feature #125: Edit mode indicator */}
       {isEditMode && (
         <div
