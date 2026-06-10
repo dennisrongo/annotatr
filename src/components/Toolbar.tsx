@@ -31,6 +31,10 @@ export default function Toolbar() {
   const colorInputRef = useRef<HTMLInputElement>(null);
   const activeToolRef = useRef<ToolType | null>(null);
   activeToolRef.current = activeTool;
+  // True while the user is dragging the strip. Rust also moves this window
+  // programmatically (cursor-monitor placement); persisting those moves
+  // would permanently pin the toolbar to its first position.
+  const userDragRef = useRef(false);
 
   // Load tool colors and keep them in sync with the Settings window
   useEffect(() => {
@@ -58,11 +62,14 @@ export default function Toolbar() {
       }
     });
 
-    // Persist position after the user drags the strip (debounced)
+    // Persist position after the user drags the strip (debounced); moves
+    // not preceded by a mousedown on the drag region are programmatic
     let moveTimer: ReturnType<typeof setTimeout> | null = null;
     const unlistenMoved = getCurrentWindow().onMoved(({ payload }) => {
+      if (!userDragRef.current) return;
       if (moveTimer) clearTimeout(moveTimer);
       moveTimer = setTimeout(() => {
+        userDragRef.current = false;
         invoke("save_mini_panel_position", { x: payload.x, y: payload.y, monitorId: null })
           .catch((error) => console.error("Failed to save toolbar position:", error));
       }, 500);
@@ -116,6 +123,9 @@ export default function Toolbar() {
   return (
     <div
       data-tauri-drag-region
+      onMouseDown={() => {
+        userDragRef.current = true;
+      }}
       style={{
         width: "100%",
         height: "100%",

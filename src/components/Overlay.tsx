@@ -115,6 +115,7 @@ export default function Overlay() {
   const settingsRef = useRef<Settings | null>(null);
   settingsRef.current = settings;
   const redrawRef = useRef<() => void>(() => {});
+  const isDrawingRef = useRef(false);
 
   // Feature #128: Custom fade duration for the next shape (null = use global setting)
   const [customFadeDuration, setCustomFadeDuration] = useState<number | null>(null);
@@ -217,8 +218,9 @@ export default function Overlay() {
     const { ctx } = context;
     redrawShapes(ctx, shapesRef.current, shapeOpacitiesRef.current);
 
-    // Feature #125: Draw selection indicator if a shape is selected
-    if (selectedShape && isEditMode) {
+    // Feature #125: Draw selection indicator if the selected shape still
+    // exists (it may have been removed by fade-out, clear, or undo)
+    if (selectedShape && isEditMode && shapesRef.current.some(s => s.id === selectedShape.id)) {
       drawSelectionIndicator(ctx, selectedShape);
     }
   }, [getCanvasContext, selectedShape, isEditMode]);
@@ -276,7 +278,11 @@ export default function Overlay() {
       }
 
       shapeOpacitiesRef.current = newOpacities;
-      redrawRef.current();
+      // Skip the redraw mid-drag: it would erase the in-progress preview,
+      // and every mousemove already redraws with fresh opacities
+      if (!isDrawingRef.current) {
+        redrawRef.current();
+      }
     }, 50); // 20fps for smooth fade animation
   }, [getFadeOpacity]);
 
@@ -853,7 +859,7 @@ export default function Overlay() {
       const { ctx } = context;
 
       // Clear and redraw all existing shapes
-      redrawShapes(ctx, shapesRef.current);
+      redrawShapes(ctx, shapesRef.current, shapeOpacitiesRef.current);
 
       // Draw preview of current freehand path
       const previewShape = currentTool === ToolType.FREEHAND
@@ -1083,7 +1089,6 @@ export default function Overlay() {
     drawingState,
     isEditMode,
     selectedShape,
-    textInputVisible,
     redrawAllShapes,
     undoLastShape,
     clearAllShapes,
@@ -1094,13 +1099,13 @@ export default function Overlay() {
     drawingState,
     isEditMode,
     selectedShape,
-    textInputVisible,
     redrawAllShapes,
     undoLastShape,
     clearAllShapes,
     cleanupOpacityTracking,
     showHotkeyFeedback,
   };
+  isDrawingRef.current = drawingState.isDrawing;
 
   const resetDrawingState = useCallback(() => {
     setDrawingState({
@@ -1122,6 +1127,11 @@ export default function Overlay() {
       // Keys already consumed by the text input textarea (its own handler
       // calls preventDefault before the event bubbles to window)
       if (event.defaultPrevented) return;
+
+      // While typing in the text input, shortcuts like Cmd+Z must edit the
+      // text, not delete drawn shapes
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === "TEXTAREA" || target.tagName === "INPUT")) return;
 
       // Feature #123: Handle Ctrl+Z / Cmd+Z to undo last shape
       if ((event.ctrlKey || event.metaKey) && event.key === "z") {
@@ -1230,7 +1240,9 @@ export default function Overlay() {
         .catch((error) => console.error("Failed to reload settings:", error));
     });
 
-    // Feature #20: Listen for overlay dismissed event to clean up shapes
+    // Feature #20: Listen for overlay dismissed event to clean up shapes.
+    // The window is only hidden (never reloaded), so EVERY piece of session
+    // state must reset here or it leaks into the next drawing session.
     const unlistenOverlayDismissed = listen("overlay-dismissed", () => {
       console.log("Overlay dismissed event received - cleaning up");
 
@@ -1241,6 +1253,11 @@ export default function Overlay() {
       shapesRef.current = [];
       resetDrawingState();
       setCurrentTool(null);
+      setIsEditMode(false);
+      setSelectedShape(null);
+      setEditPanelVisible(false);
+      setTextInputVisible(false);
+      setTextInputValue("");
 
       // Clear canvas
       const canvas = canvasRef.current;
@@ -1348,7 +1365,7 @@ export default function Overlay() {
       console.log(`[Feature #122] Canvas resized for DPI: ${dpr}x (${window.innerWidth}x${window.innerHeight} -> ${canvas.width}x${canvas.height})`);
 
       // Redraw shapes after resize
-      redrawShapes(ctx, shapesRef.current);
+      redrawShapes(ctx, shapesRef.current, shapeOpacitiesRef.current);
     };
 
     resizeCanvas();
@@ -1734,14 +1751,16 @@ export default function Overlay() {
             </button>
             <button
               onClick={() => {
+                // The shape may already be gone (faded out, cleared, undone);
+                // close the panel either way
                 const shapeIndex = shapesRef.current.findIndex(s => s.id === selectedShape.id);
                 if (shapeIndex !== -1) {
                   shapesRef.current.splice(shapeIndex, 1);
                   cleanupOpacityTracking(selectedShape.id);
-                  setSelectedShape(null);
-                  setEditPanelVisible(false);
-                  redrawAllShapes();
                 }
+                setSelectedShape(null);
+                setEditPanelVisible(false);
+                redrawAllShapes();
               }}
               style={{
                 flex: 1,

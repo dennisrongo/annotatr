@@ -174,12 +174,24 @@ function App() {
     return navigator.platform.toUpperCase().indexOf("MAC") >= 0;
   };
 
+  const [hotkeyError, setHotkeyError] = useState<string | null>(null);
+  const hotkeyCaptureRef = useRef<HTMLDivElement>(null);
+
+  // autoFocus is unreliable on a div — focus the capture box explicitly so
+  // keystrokes register right after clicking Edit
+  useEffect(() => {
+    if (editingHotkey) {
+      hotkeyCaptureRef.current?.focus();
+    }
+  }, [editingHotkey]);
+
   /**
    * Start editing a hotkey
    */
   const startEditingHotkey = (hotkeyName: string) => {
     setEditingHotkey(hotkeyName);
     setCapturedHotkey("");
+    setHotkeyError(null);
   };
 
   /**
@@ -206,18 +218,22 @@ function App() {
     if (e.altKey) keys.push("Alt");
     if (e.metaKey || e.key === "Meta") keys.push(isMac() ? "Cmd" : "Win");
 
-    // Capture the main key
-    const mainKey = e.key;
-    if (
-      !["Control", "Shift", "Alt", "Meta"].includes(mainKey) &&
-      mainKey.length === 1
-    ) {
-      keys.push(mainKey.toUpperCase());
-    } else if (
-      !["Control", "Shift", "Alt", "Meta"].includes(mainKey) &&
-      mainKey.length > 1
-    ) {
-      keys.push(mainKey);
+    // Capture the main key — but only keys the backend hotkey parser
+    // supports (A-Z, 0-9, F1-F12 and the named keys below). Accepting
+    // anything else would save a binding that can never register.
+    const SUPPORTED_NAMED_KEYS = [
+      "Space", "Enter", "Tab", "Escape", "Backspace", "Delete", "Insert",
+      "Home", "End", "PageUp", "PageDown",
+      "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown",
+      "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12",
+    ];
+    const mainKey = e.key === " " ? "Space" : e.key;
+    if (!["Control", "Shift", "Alt", "Meta"].includes(mainKey)) {
+      if (mainKey.length === 1 && /[a-zA-Z0-9]/.test(mainKey)) {
+        keys.push(mainKey.toUpperCase());
+      } else if (SUPPORTED_NAMED_KEYS.includes(mainKey)) {
+        keys.push(mainKey);
+      }
     }
 
     // Format as hotkey string
@@ -233,18 +249,22 @@ function App() {
   const saveHotkey = async () => {
     if (!editingHotkey || !capturedHotkey) return;
 
+    const updatedHotkeys = {
+      ...hotkeys,
+      [editingHotkey]: capturedHotkey,
+    };
+
     try {
-      const updatedHotkeys = {
-        ...hotkeys,
-        [editingHotkey]: capturedHotkey,
-      };
-      setHotkeys(updatedHotkeys);
-
-      await saveSettings({ hotkeys: updatedHotkeys as any });
-
-      // Re-register hotkeys
-      const settings = await loadSettings();
+      // Register FIRST: if the combo can't be registered (unparseable,
+      // duplicate, taken by another app), nothing is persisted and the
+      // previous bindings come back. Persisting a dead toggle binding would
+      // leave the app unreachable (no Dock icon, windows start hidden).
+      const settings = { ...(await loadSettings()), hotkeys: updatedHotkeys };
       await invoke("register_hotkeys", { hotkeyConfig: settings });
+
+      setHotkeys(updatedHotkeys);
+      setHotkeyError(null);
+      await saveSettings({ hotkeys: updatedHotkeys as any });
 
       // Check for conflicts
       const conflictsResult = await invoke<Record<string, any>>("check_hotkey_conflicts", {
@@ -260,6 +280,15 @@ function App() {
       cancelEditingHotkey();
     } catch (error) {
       console.error("Failed to save hotkey:", error);
+      setHotkeyError(String(error));
+      // Restore the previous working bindings
+      try {
+        const previous = await loadSettings();
+        await invoke("register_hotkeys", { hotkeyConfig: previous });
+      } catch (restoreError) {
+        console.error("Failed to restore previous hotkeys:", restoreError);
+      }
+      cancelEditingHotkey();
     }
   };
 
@@ -513,7 +542,7 @@ function App() {
             </div>
 
             <p style={styles.hint}>
-              💡 Changes are saved automatically. Use the Mini Panel for quick adjustments while drawing.
+              💡 Changes are saved automatically and apply to the next shape you draw.
             </p>
           </div>
         )}
@@ -522,6 +551,15 @@ function App() {
         {activeTab === "shortcuts" && (
           <div style={styles.tabContent}>
             <h2 style={styles.sectionTitle}>Keyboard Shortcuts</h2>
+
+            {/* Registration failure (binding was NOT saved) */}
+            {hotkeyError && (
+              <div style={styles.warningBox}>
+                <h3 style={styles.warningTitle}>⚠️ Hotkey Not Saved</h3>
+                <p style={styles.warningText}>{hotkeyError}</p>
+                <p style={styles.warningText}>Your previous binding is still active.</p>
+              </div>
+            )}
 
             {/* Conflict Warnings */}
             {Object.keys(hotkeyConflicts).length > 0 && (
@@ -555,7 +593,7 @@ function App() {
                       .trim()}
                   </span>
                   {editingHotkey === hotkeyName ? (
-                    <div style={styles.hotkeyEditContainer} tabIndex={0} onKeyDown={handleHotkeyCapture} autoFocus>
+                    <div ref={hotkeyCaptureRef} style={styles.hotkeyEditContainer} tabIndex={0} onKeyDown={handleHotkeyCapture}>
                       <code style={{
                         ...styles.hotkeyValue,
                         backgroundColor: capturedHotkey ? "#10b981" : "#fef3c7",

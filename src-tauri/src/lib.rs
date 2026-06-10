@@ -176,9 +176,19 @@ fn get_default_settings() -> serde_json::Value {
             "highlighter": "#FFFF00",
             "text": "#FF0000"
         },
-        "lineThickness": 12,
+        "lineThickness": {
+            "arrow": 12,
+            "circle": 12,
+            "box": 12,
+            "freehand": 12,
+            "highlighter": 12,
+            "text": 12
+        },
         "fontSize": 14,
-        "fadeDuration": 10
+        "fadeDuration": 10,
+        "panelTransparency": 0.95,
+        "panelCollapsed": false,
+        "arrowHeadStyle": "filled"
     })
 }
 
@@ -461,12 +471,15 @@ fn clear_registered_hotkeys(app: &AppHandle) -> Result<(), String> {
 
 /// Register the given hotkey config (map of action name -> combo string) with
 /// the OS and populate the dispatch table the plugin handler reads from.
-/// A combo that fails to parse or register is skipped with a log — one bad
-/// user binding must not kill the rest.
-fn apply_hotkey_config(app: &AppHandle, hotkeys_obj: &serde_json::Map<String, serde_json::Value>) -> Result<(), String> {
+/// A combo that fails to parse or register is skipped so one bad user
+/// binding cannot kill the rest; the failures are returned so callers can
+/// surface them instead of silently leaving an action unbound.
+fn apply_hotkey_config(app: &AppHandle, hotkeys_obj: &serde_json::Map<String, serde_json::Value>) -> Result<Vec<String>, String> {
     use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
 
     clear_registered_hotkeys(app)?;
+
+    let mut failures: Vec<String> = Vec::new();
 
     for (hotkey_name, hotkey_str) in hotkeys_obj.iter() {
         let Some(hotkey_value) = hotkey_str.as_str() else { continue };
@@ -475,14 +488,17 @@ fn apply_hotkey_config(app: &AppHandle, hotkeys_obj: &serde_json::Map<String, se
             Ok(parsed) => parsed,
             Err(e) => {
                 eprintln!("Skipping hotkey '{}' for '{}': {}", hotkey_value, hotkey_name, e);
+                failures.push(format!("{} ({}): {}", hotkey_name, hotkey_value, e));
                 continue;
             }
         };
 
         let shortcut = Shortcut::new(Some(modifiers), code);
         if let Err(e) = app.global_shortcut().register(shortcut) {
-            // Typically a conflict with another app's registration
+            // Typically a conflict with another app's registration or a
+            // duplicate combo within this config
             eprintln!("Failed to register hotkey '{}' for '{}': {}", hotkey_value, hotkey_name, e);
+            failures.push(format!("{} ({}): {}", hotkey_name, hotkey_value, e));
             continue;
         }
 
@@ -501,17 +517,24 @@ fn apply_hotkey_config(app: &AppHandle, hotkeys_obj: &serde_json::Map<String, se
         println!("Registered hotkey '{}' for '{}'", hotkey_value, hotkey_name);
     }
 
-    Ok(())
+    Ok(failures)
 }
 
 /// Feature #56, #57, #58, #62: Register global hotkeys for tools and toggle
-/// Thin wrapper kept for the frontend contract: App.tsx re-invokes this with
-/// the full settings object whenever hotkeys change
+/// Kept for the frontend contract: App.tsx re-invokes this with the full
+/// settings object whenever hotkeys change. Errs when any binding could not
+/// be registered so the UI can tell the user instead of silently unbinding
+/// the only way to summon an invisible app.
 #[tauri::command]
 fn register_hotkeys(app: AppHandle, hotkey_config: serde_json::Value) -> Result<(), String> {
     let hotkeys_obj = hotkey_config["hotkeys"].as_object()
         .ok_or("Invalid hotkeys config: missing 'hotkeys' object")?;
-    apply_hotkey_config(&app, hotkeys_obj)
+    let failures = apply_hotkey_config(&app, hotkeys_obj)?;
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(format!("Some hotkeys could not be registered: {}", failures.join("; ")))
+    }
 }
 
 /// Register hotkeys from persisted settings at startup, falling back to
@@ -525,11 +548,13 @@ fn register_hotkeys_from_store(app: &AppHandle) {
     let hotkeys = stored.unwrap_or_else(|| get_default_settings()["hotkeys"].clone());
 
     match hotkeys.as_object() {
-        Some(obj) => {
-            if let Err(e) = apply_hotkey_config(app, obj) {
-                eprintln!("Failed to register hotkeys at startup: {}", e);
+        Some(obj) => match apply_hotkey_config(app, obj) {
+            Ok(failures) if !failures.is_empty() => {
+                eprintln!("Some hotkeys failed to register at startup: {}", failures.join("; "));
             }
-        }
+            Err(e) => eprintln!("Failed to register hotkeys at startup: {}", e),
+            Ok(_) => {}
+        },
         None => eprintln!("Stored hotkeys setting is not an object; no hotkeys registered"),
     }
 }
@@ -568,9 +593,24 @@ fn parse_key_code(s: &str) -> Result<tauri_plugin_global_shortcut::Code, String>
 
     let s_upper = s.to_uppercase();
 
-    // Single character keys (A-Z)
+    // Single character keys (A-Z, 0-9)
     if s_upper.len() == 1 {
         let c = s_upper.chars().next().unwrap();
+        if c.is_ascii_digit() {
+            return match c {
+                '0' => Ok(Code::Digit0),
+                '1' => Ok(Code::Digit1),
+                '2' => Ok(Code::Digit2),
+                '3' => Ok(Code::Digit3),
+                '4' => Ok(Code::Digit4),
+                '5' => Ok(Code::Digit5),
+                '6' => Ok(Code::Digit6),
+                '7' => Ok(Code::Digit7),
+                '8' => Ok(Code::Digit8),
+                '9' => Ok(Code::Digit9),
+                _ => unreachable!(),
+            };
+        }
         if c.is_alphabetic() {
             return match c {
                 'A' => Ok(Code::KeyA),
@@ -773,7 +813,8 @@ fn check_hotkey_conflicts(hotkey_config: serde_json::Value) -> Result<serde_json
     let hotkeys_obj = hotkey_config["hotkeys"].as_object()
         .ok_or("Invalid hotkeys config: missing 'hotkeys' object")?;
 
-    // Check each hotkey for conflicts
+    // Only conflicting hotkeys go in the map — the frontend treats any
+    // entry as a conflict to warn about
     for (hotkey_name, hotkey_value) in hotkeys_obj.iter() {
         if let Some(hotkey_str) = hotkey_value.as_str() {
             if let Some(conflict_desc) = check_hotkey_conflict(hotkey_str) {
@@ -784,14 +825,6 @@ fn check_hotkey_conflicts(hotkey_config: serde_json::Value) -> Result<serde_json
                         "hotkey": hotkey_str,
                         "system_function": conflict_desc,
                         "severity": "warning"
-                    })
-                );
-            } else {
-                conflicts.insert(
-                    hotkey_name.clone(),
-                    serde_json::json!({
-                        "conflict": false,
-                        "hotkey": hotkey_str
                     })
                 );
             }
