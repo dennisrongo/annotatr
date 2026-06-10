@@ -53,14 +53,6 @@ export default function Overlay() {
   // Feature #9: Track current monitor ID for shape confinement
   const [currentMonitor, setCurrentMonitor] = useState<string | null>(null);
 
-  // Feature #67: Visual feedback when hotkey triggers
-  const [hotkeyFeedback, setHotkeyFeedback] = useState<{
-    visible: boolean;
-    tool: string;
-    icon: string;
-  }>({ visible: false, tool: "", icon: "" });
-  const hotkeyFeedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   // Feature #125: Shape editing mode
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedShape, setSelectedShape] = useState<Shape | null>(null);
@@ -119,16 +111,6 @@ export default function Overlay() {
 
   // Feature #128: Custom fade duration for the next shape (null = use global setting)
   const [customFadeDuration, setCustomFadeDuration] = useState<number | null>(null);
-
-  // Feature #17: Tool-specific visual indicators (icons, colors, labels)
-  const toolIndicators: Record<ToolType, { icon: string; color: string; label: string }> = {
-    [ToolType.ARROW]: { icon: "↗", color: "#3b82f6", label: "Arrow" },
-    [ToolType.CIRCLE]: { icon: "○", color: "#10b981", label: "Circle" },
-    [ToolType.BOX]: { icon: "□", color: "#f59e0b", label: "Box" },
-    [ToolType.FREEHAND]: { icon: "✎", color: "#ef4444", label: "Freehand" },
-    [ToolType.HIGHLIGHTER]: { icon: "▭", color: "#eab308", label: "Highlighter" },
-    [ToolType.TEXT]: { icon: "T", color: "#8b5cf6", label: "Text" },
-  };
 
   // Feature #107: Tool-specific cursor styles
   const getToolCursor = useCallback((tool: ToolType | null, drawingMode: boolean): string => {
@@ -338,35 +320,6 @@ export default function Overlay() {
     // Redraw the canvas (should now be empty)
     redrawAllShapes();
   }, [cleanupOpacityTracking, redrawAllShapes]);
-
-  /**
-   * Feature #67: Show visual feedback when a hotkey is triggered
-   * Displays a brief flash notification with the tool name and icon
-   */
-  const showHotkeyFeedback = useCallback((tool: ToolType) => {
-    // Clear any existing timer
-    if (hotkeyFeedbackTimerRef.current) {
-      clearTimeout(hotkeyFeedbackTimerRef.current);
-    }
-
-    // Get tool indicator
-    const indicator = toolIndicators[tool];
-    if (!indicator) return;
-
-    // Show feedback
-    setHotkeyFeedback({
-      visible: true,
-      tool: indicator.label,
-      icon: indicator.icon,
-    });
-
-    // Hide after 800ms
-    hotkeyFeedbackTimerRef.current = setTimeout(() => {
-      setHotkeyFeedback({ visible: false, tool: "", icon: "" });
-    }, 800);
-
-    console.log(`Hotkey feedback shown for: ${indicator.label}`);
-  }, [toolIndicators]);
 
   /**
    * Create arrow shape from drawing state
@@ -857,7 +810,6 @@ export default function Overlay() {
     undoLastShape,
     clearAllShapes,
     cleanupOpacityTracking,
-    showHotkeyFeedback,
   });
   latest.current = {
     drawingState,
@@ -867,7 +819,6 @@ export default function Overlay() {
     undoLastShape,
     clearAllShapes,
     cleanupOpacityTracking,
-    showHotkeyFeedback,
   };
   isDrawingRef.current = drawingState.isDrawing;
 
@@ -985,9 +936,6 @@ export default function Overlay() {
 
       if (Object.values(ToolType).includes(tool)) {
         setCurrentTool(tool);
-
-        // Feature #67: Show visual feedback when hotkey triggers
-        latest.current.showHotkeyFeedback(tool);
       }
     });
 
@@ -1089,11 +1037,6 @@ export default function Overlay() {
       unlistenOverlayDismissed.then((fn) => fn()).catch(console.error);
       unlistenClearShapes.then((fn) => fn()).catch(console.error);
       unlistenCustomFadeDuration.then((fn) => fn()).catch(console.error);
-
-      // Feature #67: Cleanup hotkey feedback timer
-      if (hotkeyFeedbackTimerRef.current) {
-        clearTimeout(hotkeyFeedbackTimerRef.current);
-      }
 
       // Stop the fade loop
       if (fadeIntervalRef.current !== null) {
@@ -1299,46 +1242,6 @@ export default function Overlay() {
           }}
           placeholder="Type multi-line text and press Enter to submit..."
         />
-      )}
-
-      {/* Feature #67: Visual feedback when hotkey triggers */}
-      {hotkeyFeedback.visible && (
-        <div
-          style={{
-            position: "fixed",
-            top: "50%",
-            left: "50%",
-            transform: "translate(-50%, -50%)",
-            padding: "20px 40px",
-            backgroundColor: "rgba(0, 0, 0, 0.85)",
-            color: "white",
-            borderRadius: "12px",
-            fontSize: "24px",
-            fontWeight: "bold",
-            boxShadow: "0 8px 32px rgba(0, 0, 0, 0.5)",
-            pointerEvents: "none",
-            zIndex: 10001,
-            display: "flex",
-            alignItems: "center",
-            gap: "16px",
-            animation: "fadeInOut 0.8s ease-in-out",
-            border: "3px solid rgba(255, 255, 255, 0.2)",
-          }}
-        >
-          <span style={{ fontSize: "36px" }}>{hotkeyFeedback.icon}</span>
-          <span>{hotkeyFeedback.tool}</span>
-          <style>
-            {`
-              @keyframes fadeInOut {
-                0% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
-                15% { opacity: 1; transform: translate(-50%, -50%) scale(1.05); }
-                30% { transform: translate(-50%, -50%) scale(1); }
-                70% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-                100% { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
-              }
-            `}
-          </style>
-        </div>
       )}
 
       {/* Feature #125: Edit panel for selected shape */}
