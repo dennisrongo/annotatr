@@ -40,7 +40,6 @@ export default function Overlay() {
     textInput: "",
     textPosition: null,
   });
-  const [isVisible, setIsVisible] = useState(true);
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [currentTool, setCurrentTool] = useState<ToolType | null>(null);
   const [textInputVisible, setTextInputVisible] = useState(false);
@@ -108,8 +107,14 @@ export default function Overlay() {
     return settings.lineThickness[thicknessKey] || defaultLineThickness;
   }, [settings, defaultLineThickness]);
 
-  // Feature #73: Auto-fade system - track shape opacities for smooth fade-out
-  const [shapeOpacities, setShapeOpacities] = useState<Record<string, number>>({});
+  // Feature #73: Auto-fade system - track shape opacities for smooth fade-out.
+  // Kept in refs (not state): the fade loop runs at 20fps and must not
+  // re-render the component on every tick.
+  const shapeOpacitiesRef = useRef<Record<string, number>>({});
+  const fadeIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const settingsRef = useRef<Settings | null>(null);
+  settingsRef.current = settings;
+  const redrawRef = useRef<() => void>(() => {});
 
   // Feature #128: Custom fade duration for the next shape (null = use global setting)
   const [customFadeDuration, setCustomFadeDuration] = useState<number | null>(null);
@@ -210,13 +215,14 @@ export default function Overlay() {
     if (!context) return;
 
     const { ctx } = context;
-    redrawShapes(ctx, shapesRef.current, shapeOpacities);
+    redrawShapes(ctx, shapesRef.current, shapeOpacitiesRef.current);
 
     // Feature #125: Draw selection indicator if a shape is selected
     if (selectedShape && isEditMode) {
       drawSelectionIndicator(ctx, selectedShape);
     }
-  }, [getCanvasContext, shapeOpacities, selectedShape, isEditMode]);
+  }, [getCanvasContext, selectedShape, isEditMode]);
+  redrawRef.current = redrawAllShapes;
 
   /**
    * Feature #120: Cleanup opacity tracking for specific shape IDs
@@ -224,24 +230,55 @@ export default function Overlay() {
    */
   const cleanupOpacityTracking = useCallback((shapeIds: string | string[]) => {
     const idsToRemove = Array.isArray(shapeIds) ? shapeIds : [shapeIds];
-
-    if (idsToRemove.length === 0) return;
-
-    const newOpacities = { ...shapeOpacities };
-    let cleanedCount = 0;
-
     idsToRemove.forEach(id => {
-      if (newOpacities[id]) {
-        delete newOpacities[id];
-        cleanedCount++;
-      }
+      delete shapeOpacitiesRef.current[id];
     });
+  }, []);
 
-    if (cleanedCount > 0) {
-      setShapeOpacities(newOpacities);
-      console.log(`[Feature #120] Cleaned up opacity tracking for ${cleanedCount} shape(s)`);
-    }
-  }, [shapeOpacities]);
+  /**
+   * Feature #35 & #73: Auto-fade with smooth opacity transitions.
+   * Feature #128: Supports per-shape custom fade durations.
+   * The interval runs only while shapes exist: it starts when a shape is
+   * added and clears itself once the last shape has fully faded — an idle
+   * overlay does zero work.
+   */
+  const ensureFadeLoop = useCallback(() => {
+    if (fadeIntervalRef.current !== null) return;
+
+    fadeIntervalRef.current = setInterval(() => {
+      if (shapesRef.current.length === 0) {
+        clearInterval(fadeIntervalRef.current!);
+        fadeIntervalRef.current = null;
+        shapeOpacitiesRef.current = {};
+        return;
+      }
+
+      const now = Date.now();
+      const defaultFadeDurationMs = (settingsRef.current?.fadeDuration || 10) * 1000;
+      const newOpacities: Record<string, number> = {};
+      const shapesToRemove: string[] = [];
+
+      shapesRef.current.forEach(shape => {
+        const age = now - shape.createdAt;
+        const shapeFadeDurationMs = shape.customFadeDuration
+          ? shape.customFadeDuration * 1000
+          : defaultFadeDurationMs;
+        const opacity = getFadeOpacity(age, shapeFadeDurationMs);
+        newOpacities[shape.id] = opacity;
+        if (opacity <= 0) {
+          shapesToRemove.push(shape.id);
+        }
+      });
+
+      if (shapesToRemove.length > 0) {
+        shapesRef.current = shapesRef.current.filter(shape => !shapesToRemove.includes(shape.id));
+        shapesToRemove.forEach(id => delete newOpacities[id]);
+      }
+
+      shapeOpacitiesRef.current = newOpacities;
+      redrawRef.current();
+    }, 50); // 20fps for smooth fade animation
+  }, [getFadeOpacity]);
 
   /**
    * Feature #123: Undo the most recently created shape
@@ -872,7 +909,7 @@ export default function Overlay() {
     const { ctx } = context;
 
     // Clear and redraw all existing shapes
-    redrawShapes(ctx, shapesRef.current, shapeOpacities);
+    redrawShapes(ctx, shapesRef.current, shapeOpacitiesRef.current);
 
     // Draw preview of current shape
     let previewShape: Shape;
@@ -902,7 +939,7 @@ export default function Overlay() {
       currentX: snappedX,
       currentY: snappedY,
     });
-  }, [drawingState.isDrawing, drawingState.startX, drawingState.startY, drawingState.freehandPoints, currentTool, getCanvasContext, createArrowShape, createCircleShape, createBoxShape, createFreehandShape, createHighlighterShape, detectCenterAlignment, detectEdgeAlignment, detectShapeAlignment, drawAlignmentGuides, shapeOpacities]);
+  }, [drawingState.isDrawing, drawingState.startX, drawingState.startY, drawingState.freehandPoints, currentTool, getCanvasContext, createArrowShape, createCircleShape, createBoxShape, createFreehandShape, createHighlighterShape, detectCenterAlignment, detectEdgeAlignment, detectShapeAlignment, drawAlignmentGuides]);
 
   /**
    * Handle text input submission
@@ -915,6 +952,7 @@ export default function Overlay() {
 
     const newTextShape = createTextShape(textInputPosition, textInputValue);
     shapesRef.current.push(newTextShape);
+    ensureFadeLoop();
     console.log("Created text shape:", newTextShape);
 
     // Feature #128: Reset custom fade duration after shape is created
@@ -926,7 +964,7 @@ export default function Overlay() {
     setTextInputVisible(false);
     setTextInputValue("");
     redrawAllShapes();
-  }, [textInputValue, textInputPosition, createTextShape, redrawAllShapes, customFadeDuration]);
+  }, [textInputValue, textInputPosition, createTextShape, redrawAllShapes, customFadeDuration, ensureFadeLoop]);
 
   /**
    * Handle text input keydown
@@ -1009,6 +1047,7 @@ export default function Overlay() {
 
     // Add shape to collection
     shapesRef.current.push(newShape);
+    ensureFadeLoop();
 
     console.log(`Created ${currentTool} shape:`, newShape);
 
@@ -1034,41 +1073,80 @@ export default function Overlay() {
 
     // Redraw all shapes
     redrawAllShapes();
-  }, [drawingState, currentTool, createArrowShape, createCircleShape, createBoxShape, createFreehandShape, createHighlighterShape, redrawAllShapes, customFadeDuration]);
+  }, [drawingState, currentTool, createArrowShape, createCircleShape, createBoxShape, createFreehandShape, createHighlighterShape, redrawAllShapes, customFadeDuration, ensureFadeLoop]);
+
+  // Latest-value snapshot so the mount-once listeners below always read
+  // fresh state without tearing down and resubscribing — resubscribe gaps
+  // were dropping Tauri events fired mid-drag (the old effect depended on
+  // drawingState, which changes on every mousemove)
+  const latest = useRef({
+    drawingState,
+    isEditMode,
+    selectedShape,
+    textInputVisible,
+    redrawAllShapes,
+    undoLastShape,
+    clearAllShapes,
+    cleanupOpacityTracking,
+    showHotkeyFeedback,
+  });
+  latest.current = {
+    drawingState,
+    isEditMode,
+    selectedShape,
+    textInputVisible,
+    redrawAllShapes,
+    undoLastShape,
+    clearAllShapes,
+    cleanupOpacityTracking,
+    showHotkeyFeedback,
+  };
+
+  const resetDrawingState = useCallback(() => {
+    setDrawingState({
+      isDrawing: false,
+      currentTool: null,
+      startX: 0,
+      startY: 0,
+      currentX: 0,
+      currentY: 0,
+      freehandPoints: [],
+      textInput: "",
+      textPosition: null,
+    });
+  }, []);
 
   useEffect(() => {
     // Feature #10 & #114: Handle Escape key to dismiss overlay or cancel drawing
     const handleKeyDown = async (event: KeyboardEvent) => {
+      // Keys already consumed by the text input textarea (its own handler
+      // calls preventDefault before the event bubbles to window)
+      if (event.defaultPrevented) return;
+
       // Feature #123: Handle Ctrl+Z / Cmd+Z to undo last shape
       if ((event.ctrlKey || event.metaKey) && event.key === "z") {
         event.preventDefault();
-        console.log("Undo hotkey pressed (Ctrl+Z / Cmd+Z)");
-        undoLastShape();
+        latest.current.undoLastShape();
         return;
       }
 
       // Feature #124: Handle Ctrl+Shift+X / Cmd+Shift+X to clear all shapes
       if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === "x") {
         event.preventDefault();
-        console.log("Clear all shapes hotkey pressed (Ctrl+Shift+X / Cmd+Shift+X)");
-        clearAllShapes();
+        latest.current.clearAllShapes();
         return;
       }
 
       // Feature #125: Handle Ctrl+E / Cmd+E to toggle edit mode
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "e") {
         event.preventDefault();
-        console.log("Edit mode toggle hotkey pressed (Ctrl+E / Cmd+E)");
         setIsEditMode(prev => {
           const newMode = !prev;
-          console.log(`Edit mode: ${newMode ? "ENABLED" : "DISABLED"}`);
-
           // Clear selection when exiting edit mode
-          if (!newMode && selectedShape) {
+          if (!newMode) {
             setSelectedShape(null);
             setEditPanelVisible(false);
           }
-
           return newMode;
         });
         return;
@@ -1078,54 +1156,31 @@ export default function Overlay() {
         event.preventDefault();
 
         // Feature #114: If currently drawing, cancel the in-progress shape
-        if (drawingState.isDrawing) {
+        if (latest.current.drawingState.isDrawing) {
           console.log("Escape key pressed - canceling in-progress drawing");
-          setDrawingState({
-            isDrawing: false,
-            currentTool: null,
-            startX: 0,
-            startY: 0,
-            currentX: 0,
-            currentY: 0,
-            freehandPoints: [],
-            textInput: "",
-            textPosition: null,
-          });
+          resetDrawingState();
           // Redraw to clear any preview
-          redrawAllShapes();
+          latest.current.redrawAllShapes();
           return;
         }
 
         // Feature #125: If in edit mode with a selected shape, deselect it
-        if (isEditMode && selectedShape) {
+        if (latest.current.isEditMode && latest.current.selectedShape) {
           console.log("Escape key pressed - deselecting shape");
           setSelectedShape(null);
           setEditPanelVisible(false);
-          redrawAllShapes();
+          latest.current.redrawAllShapes();
           return;
         }
 
-        // Otherwise, dismiss the overlay
+        // Otherwise, dismiss the overlay. Rust hides the window, returns
+        // activation to the previously frontmost app, and emits
+        // overlay-dismissed, which performs the rest of the cleanup here.
         console.log("Escape key pressed - dismissing overlay");
         try {
-          // Call dismiss_overlay command
           await invoke("dismiss_overlay");
-
-          // Clean up any active drawing state
-          setDrawingState({
-            isDrawing: false,
-            currentTool: null,
-            startX: 0,
-            startY: 0,
-            currentX: 0,
-            currentY: 0,
-            freehandPoints: [],
-            textInput: "",
-            textPosition: null,
-          });
+          resetDrawingState();
           setCurrentTool(null);
-
-          setIsVisible(false);
         } catch (error) {
           console.error("Failed to dismiss overlay:", error);
         }
@@ -1134,53 +1189,6 @@ export default function Overlay() {
 
     // Add keyboard event listener
     window.addEventListener("keydown", handleKeyDown);
-
-    // Listen for toggle events from hotkeys
-    const unlistenToggle = listen<boolean>("toggle-overlay", async (event) => {
-      console.log("Toggle overlay event received:", event.payload);
-
-      // Feature #114: If currently drawing, cancel the in-progress shape
-      if (drawingState.isDrawing) {
-        console.log("Toggle hotkey pressed - canceling in-progress drawing");
-        setDrawingState({
-          isDrawing: false,
-          currentTool: null,
-          startX: 0,
-          startY: 0,
-          currentX: 0,
-          currentY: 0,
-          freehandPoints: [],
-          textInput: "",
-          textPosition: null,
-        });
-        // Redraw to clear any preview
-        redrawAllShapes();
-        return;
-      }
-
-      try {
-        const newState = await invoke<boolean>("toggle_overlay");
-        setIsVisible(newState);
-
-        if (!newState) {
-          // Clear drawing state when hiding
-          setDrawingState({
-            isDrawing: false,
-            currentTool: null,
-            startX: 0,
-            startY: 0,
-            currentX: 0,
-            currentY: 0,
-            freehandPoints: [],
-            textInput: "",
-            textPosition: null,
-          });
-          setCurrentTool(null);
-        }
-      } catch (error) {
-        console.error("Failed to toggle overlay:", error);
-      }
-    });
 
     // Listen for drawing mode changes
     const unlistenDrawingMode = listen<boolean>("drawing-mode-changed", (event) => {
@@ -1191,17 +1199,7 @@ export default function Overlay() {
 
       if (!event.payload) {
         // Clear drawing state when drawing mode is deactivated
-        setDrawingState({
-          isDrawing: false,
-          currentTool: null,
-          startX: 0,
-          startY: 0,
-          currentX: 0,
-          currentY: 0,
-          freehandPoints: [],
-          textInput: "",
-          textPosition: null,
-        });
+        resetDrawingState();
         setCurrentTool(null);
       }
     });
@@ -1213,11 +1211,23 @@ export default function Overlay() {
 
       if (Object.values(ToolType).includes(tool)) {
         setCurrentTool(tool);
-        console.log(`Tool changed to: ${tool}`);
 
         // Feature #67: Show visual feedback when hotkey triggers
-        showHotkeyFeedback(tool);
+        latest.current.showHotkeyFeedback(tool);
       }
+    });
+
+    // Toolbar undo button
+    const unlistenUndo = listen("undo-last-shape", () => {
+      latest.current.undoLastShape();
+    });
+
+    // Settings saved anywhere (toolbar color swatch, Settings window):
+    // reload so color/thickness/fade changes apply to the next shape
+    const unlistenSettingsUpdated = listen("settings_updated", () => {
+      loadSettings()
+        .then(setSettings)
+        .catch((error) => console.error("Failed to reload settings:", error));
     });
 
     // Feature #20: Listen for overlay dismissed event to clean up shapes
@@ -1225,59 +1235,35 @@ export default function Overlay() {
       console.log("Overlay dismissed event received - cleaning up");
 
       // Feature #120: Clean up all opacity tracking before clearing shapes
-      const allShapeIds = shapesRef.current.map(shape => shape.id);
-      cleanupOpacityTracking(allShapeIds);
+      latest.current.cleanupOpacityTracking(shapesRef.current.map(shape => shape.id));
 
-      // Clear all shapes
+      // Clear all shapes and drawing state
       shapesRef.current = [];
-
-      // Clear drawing state
-      setDrawingState({
-        isDrawing: false,
-        currentTool: null,
-        startX: 0,
-        startY: 0,
-        currentX: 0,
-        currentY: 0,
-        freehandPoints: [],
-        textInput: "",
-        textPosition: null,
-      });
+      resetDrawingState();
       setCurrentTool(null);
 
       // Clear canvas
       const canvas = canvasRef.current;
-      if (canvas) {
-        const ctx = canvas.getContext("2d");
-        if (ctx) {
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-        }
+      const ctx = canvas?.getContext("2d");
+      if (canvas && ctx) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
       }
-
-      console.log("Overlay cleanup complete");
     });
 
     // Feature #20: Listen for clear all shapes event
     const unlistenClearShapes = listen("clear-all-shapes", () => {
-      console.log("Clear all shapes event received");
-
       // Feature #120: Clean up all opacity tracking before clearing shapes
-      const allShapeIds = shapesRef.current.map(shape => shape.id);
-      cleanupOpacityTracking(allShapeIds);
+      latest.current.cleanupOpacityTracking(shapesRef.current.map(shape => shape.id));
 
       // Clear all shapes
       shapesRef.current = [];
 
       // Clear canvas
       const canvas = canvasRef.current;
-      if (canvas) {
-        const ctx = canvas.getContext("2d");
-        if (ctx) {
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-        }
+      const ctx = canvas?.getContext("2d");
+      if (canvas && ctx) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
       }
-
-      console.log("All shapes cleared");
     });
 
     // Feature #128: Listen for custom fade duration updates from mini panel
@@ -1287,61 +1273,25 @@ export default function Overlay() {
       setCustomFadeDuration(duration);
     });
 
-    // Feature #15: Handle window focus changes to ensure z-index stays on top
-    const handleFocus = async () => {
-      console.log("Overlay window focused - ensuring z-index");
-      try {
-        await invoke("ensure_on_top");
-      } catch (error) {
-        console.error("Failed to ensure on top:", error);
+    // Feature #15: Handle window focus changes to ensure z-index stays on top.
+    // The window being hidden surfaces as visibilityState "hidden", so these
+    // are no-ops while the overlay is dismissed.
+    const handleFocus = () => {
+      invoke("ensure_on_top").catch((error) => console.error("Failed to ensure on top:", error));
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        invoke("ensure_on_top").catch((error) => console.error("Failed to ensure on top:", error));
       }
     };
 
-    // Feature #15: Handle window visibility changes to ensure z-index
-    const handleVisibilityChange = async () => {
-      if (document.visibilityState === "visible" && isVisible) {
-        console.log("Overlay became visible - ensuring z-index");
-        try {
-          await invoke("ensure_on_top");
-        } catch (error) {
-          console.error("Failed to ensure on top:", error);
-        }
-      }
-    };
-
-    // Add focus and visibility listeners
     window.addEventListener("focus", handleFocus);
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
-    // Feature #120: Handle app shutdown cleanup
-    const handleBeforeUnload = () => {
-      console.log("[Feature #120] App shutting down - cleaning up resources");
-
-      // Clean up all opacity tracking
-      const allShapeIds = shapesRef.current.map(shape => shape.id);
-      if (allShapeIds.length > 0) {
-        cleanupOpacityTracking(allShapeIds);
-      }
-
-      // Clear all shapes
-      shapesRef.current = [];
-
-      // Clear opacity state
-      setShapeOpacities({});
-
-      console.log("[Feature #120] Shutdown cleanup complete");
-    };
-
-    window.addEventListener("beforeunload", handleBeforeUnload);
-
-    // Feature #15: Periodic z-index check every 5 seconds to ensure overlay stays on top
-    const zIndexCheckInterval = setInterval(async () => {
-      if (isVisible) {
-        try {
-          await invoke("ensure_on_top");
-        } catch (error) {
-          console.error("Failed to ensure on top during periodic check:", error);
-        }
+    // Feature #15: Periodic z-index check to ensure overlay stays on top
+    const zIndexCheckInterval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        invoke("ensure_on_top").catch((error) => console.error("Failed to ensure on top:", error));
       }
     }, 5000);
 
@@ -1350,11 +1300,11 @@ export default function Overlay() {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("beforeunload", handleBeforeUnload);
       clearInterval(zIndexCheckInterval);
-      unlistenToggle.then((fn) => fn());
-      unlistenDrawingMode.then((fn) => fn());
+      unlistenDrawingMode.then((fn) => fn()).catch(console.error);
       unlistenToolSelected.then((fn) => fn()).catch(console.error);
+      unlistenUndo.then((fn) => fn()).catch(console.error);
+      unlistenSettingsUpdated.then((fn) => fn()).catch(console.error);
       unlistenOverlayDismissed.then((fn) => fn()).catch(console.error);
       unlistenClearShapes.then((fn) => fn()).catch(console.error);
       unlistenCustomFadeDuration.then((fn) => fn()).catch(console.error);
@@ -1364,14 +1314,13 @@ export default function Overlay() {
         clearTimeout(hotkeyFeedbackTimerRef.current);
       }
 
-      // Feature #120: Clean up all opacity tracking on unmount
-      const allShapeIds = shapesRef.current.map(shape => shape.id);
-      if (allShapeIds.length > 0) {
-        cleanupOpacityTracking(allShapeIds);
+      // Stop the fade loop
+      if (fadeIntervalRef.current !== null) {
+        clearInterval(fadeIntervalRef.current);
+        fadeIntervalRef.current = null;
       }
-      console.log("[Feature #120] Cleanup complete on component unmount");
     };
-  }, [isVisible, drawingState, redrawAllShapes, undoLastShape, cleanupOpacityTracking]);
+  }, [resetDrawingState]);
 
   // Feature #122: Initialize canvas with DPI/Retina display support
   useEffect(() => {
@@ -1408,7 +1357,7 @@ export default function Overlay() {
     return () => {
       window.removeEventListener("resize", resizeCanvas);
     };
-  }, [redrawAllShapes]);
+  }, []);
 
   // Feature #30 & #31: Load settings on mount to get font size and colors
   useEffect(() => {
@@ -1470,72 +1419,13 @@ export default function Overlay() {
       console.log(`[Feature #9] Filtered shapes: ${shapesBefore} -> ${shapesAfter} (removed ${shapesBefore - shapesAfter} shapes from other monitors)`);
 
       // Redraw with filtered shapes
-      redrawAllShapes();
+      redrawRef.current();
     });
 
     return () => {
       unlistenMonitorChanged.then((fn) => fn()).catch(console.error);
     };
-  }, [cleanupOpacityTracking, redrawAllShapes]);
-
-  // Feature #35 & #73: Auto-fade system with smooth opacity transitions
-  // Feature #128: Support per-shape custom fade durations
-  useEffect(() => {
-    const fadeCheckInterval = setInterval(() => {
-      const now = Date.now();
-      const defaultFadeDurationMs = (settings?.fadeDuration || 10) * 1000;
-
-      // Calculate new opacities for all shapes
-      const newOpacities: Record<string, number> = {};
-      const shapesToRemove: string[] = [];
-
-      shapesRef.current.forEach(shape => {
-        const age = now - shape.createdAt;
-
-        // Feature #128: Use custom fade duration if present, otherwise use global setting
-        const shapeFadeDurationMs = shape.customFadeDuration
-          ? shape.customFadeDuration * 1000
-          : defaultFadeDurationMs;
-
-        // Calculate opacity using smooth easing
-        const opacity = getFadeOpacity(age, shapeFadeDurationMs);
-        newOpacities[shape.id] = opacity;
-
-        // Mark for removal if completely faded
-        if (opacity <= 0) {
-          shapesToRemove.push(shape.id);
-        }
-      });
-
-      // Update opacities state (triggers redraw with new values)
-      setShapeOpacities(newOpacities);
-
-      // Remove fully faded shapes
-      if (shapesToRemove.length > 0) {
-        const shapesBefore = shapesRef.current.length;
-        shapesRef.current = shapesRef.current.filter(shape =>
-          !shapesToRemove.includes(shape.id)
-        );
-        const shapesRemoved = shapesBefore - shapesRef.current.length;
-
-        // Clean up opacities for removed shapes
-        const cleanedOpacities = { ...newOpacities };
-        shapesToRemove.forEach(id => delete cleanedOpacities[id]);
-        setShapeOpacities(cleanedOpacities);
-
-        console.log(`[Auto-Fade] Removed ${shapesRemoved} fully faded shape(s)`);
-      }
-
-      // Trigger redraw with updated opacities
-      redrawAllShapes();
-    }, 50); // Update every 50ms for smooth animation (20fps)
-
-    return () => clearInterval(fadeCheckInterval);
-  }, [settings?.fadeDuration, redrawAllShapes, getFadeOpacity]);
-
-  if (!isVisible) {
-    return null;
-  }
+  }, [cleanupOpacityTracking]);
 
   return (
     <div
@@ -1644,23 +1534,6 @@ export default function Overlay() {
           </span>
         </div>
       )}
-
-      {/* Shape count indicator */}
-      <div
-        style={{
-          position: "absolute",
-          top: 20,
-          right: 20,
-          padding: "8px 12px",
-          backgroundColor: "rgba(0, 128, 0, 0.7)",
-          color: "white",
-          borderRadius: "4px",
-          fontSize: "12px",
-          pointerEvents: "none",
-        }}
-      >
-        Shapes: <strong>{shapesRef.current.length}</strong>
-      </div>
 
       {/* Text input field (shown when text tool is used) */}
       {/* Feature #30 & #31: Uses font size and color from settings */}

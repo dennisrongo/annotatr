@@ -11,6 +11,7 @@
   },
   "app": {
     "withGlobalTauri": true,
+    "macOSPrivateApi": true,
     "windows": [
       {
         "label": "main",
@@ -28,25 +29,39 @@
         "url": "overlay.html",
         "width": 1920,
         "height": 1080,
-        "resizable": true,
-        "fullscreen": true,
-        "decorations": false,
-        "transparent": true,
-        "alwaysOnTop": true,
-        "skipTaskbar": true
-      },
-      {
-        "label": "mini-panel",
-        "title": "Annotatr Mini Panel",
-        "url": "mini-panel.html",
-        "width": 400,
-        "height": 120,
         "resizable": false,
         "fullscreen": false,
         "decorations": false,
         "transparent": true,
         "alwaysOnTop": true,
-        "skipTaskbar": false
+        "skipTaskbar": true,
+        "visible": false,
+        "shadow": false,
+        "acceptFirstMouse": true,
+        "visibleOnAllWorkspaces": true,
+        "closable": false,
+        "minimizable": false,
+        "maximizable": false
+      },
+      {
+        "label": "mini-panel",
+        "title": "Annotatr",
+        "url": "mini-panel.html",
+        "width": 520,
+        "height": 56,
+        "resizable": false,
+        "fullscreen": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visible": false,
+        "shadow": false,
+        "acceptFirstMouse": true,
+        "visibleOnAllWorkspaces": true,
+        "closable": false,
+        "minimizable": false,
+        "maximizable": false
       }
     ],
     "security": {

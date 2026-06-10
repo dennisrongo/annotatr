@@ -1,13 +1,10 @@
 // Prevents additional console window on Windows in release
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod utils;
-mod platform_optimizations;
-
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_store::StoreBuilder;
-use tauri_plugin_global_shortcut::{Modifiers, Code};
-use crate::utils::get_platform_window_hints;
+use tauri_plugin_global_shortcut::{Modifiers, Code, ShortcutState};
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use std::path::PathBuf;
 
@@ -45,11 +42,25 @@ impl Default for HotkeyRegistry {
 
 type SharedHotkeyRegistry = Arc<Mutex<HotkeyRegistry>>;
 
-// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
+/// Action triggered by a global hotkey press
+#[derive(Clone)]
+enum HotkeyAction {
+    /// Settings key "toggleDrawingMode": toggle the toolbar/session on or off
+    ToggleToolbar,
+    /// Activate a drawing tool ("arrow", "circle", "box", "freehand", "highlighter", "text")
+    Tool(String),
 }
+
+/// Dispatch table for global hotkeys, keyed by Shortcut::id().
+/// The plugin handler looks up the pressed shortcut here; `held` suppresses
+/// OS key-repeat (a second Pressed before Released is ignored).
+#[derive(Default)]
+struct HotkeyDispatch {
+    actions: HashMap<u32, HotkeyAction>,
+    held: HashSet<u32>,
+}
+
+type SharedHotkeyDispatch = Arc<Mutex<HotkeyDispatch>>;
 
 // Settings commands
 /// Save a setting to persistent storage
@@ -172,12 +183,6 @@ fn get_default_settings() -> serde_json::Value {
 }
 
 // Overlay commands
-#[tauri::command]
-fn create_overlay_window() -> Result<(), String> {
-    // Window is created via tauri.conf.json, this is for runtime setup
-    Ok(())
-}
-
 /// Show the overlay window
 /// This makes the overlay visible and brings it to the foreground
 /// Feature #8: Positions overlay on the monitor where the cursor is currently located
@@ -225,6 +230,11 @@ fn show_overlay(app: AppHandle) -> Result<(), String> {
         }
     }
 
+    // Re-enable mouse capture: dismiss_overlay leaves the window in
+    // click-through mode (ignore_cursor_events=true), so every show path
+    // must capture input again or drawing breaks after the first dismiss
+    overlay_window.set_ignore_cursor_events(false).map_err(|e| e.to_string())?;
+
     // Show the window if it's hidden
     overlay_window.show().map_err(|e| e.to_string())?;
 
@@ -242,62 +252,6 @@ fn show_overlay(app: AppHandle) -> Result<(), String> {
     println!("Overlay window shown and focused, z-index set to topmost");
 
     Ok(())
-}
-
-/// Hide the overlay window
-/// This hides the overlay without destroying it
-#[tauri::command]
-fn hide_overlay(app: AppHandle) -> Result<(), String> {
-    // Get the overlay window by label
-    let overlay_window = app.get_webview_window("overlay")
-        .ok_or("Overlay window not found")?;
-
-    // Update state
-    let state = app.state::<SharedState>();
-    if let Ok(mut state_guard) = state.try_lock() {
-        state_guard.is_visible = false;
-    }
-
-    // Hide the window
-    overlay_window.hide().map_err(|e| e.to_string())?;
-
-    println!("Overlay window hidden");
-
-    Ok(())
-}
-
-/// Focus the overlay window
-/// Brings the overlay to the foreground without changing visibility state
-#[tauri::command]
-fn focus_overlay(app: AppHandle) -> Result<(), String> {
-    // Get the overlay window by label
-    let overlay_window = app.get_webview_window("overlay")
-        .ok_or("Overlay window not found")?;
-
-    // Check if window is visible first
-    if !overlay_window.is_visible().map_err(|e| e.to_string())? {
-        return Err("Overlay window is not visible".to_string());
-    }
-
-    // Bring window to foreground and focus it
-    overlay_window.set_focus().map_err(|e| e.to_string())?;
-
-    println!("Overlay window focused");
-
-    Ok(())
-}
-
-/// Get the current visibility state of the overlay
-#[tauri::command]
-fn get_overlay_state(app: AppHandle) -> Result<bool, String> {
-    if let Ok(state_guard) = app.state::<SharedState>().try_lock() {
-        Ok(state_guard.is_visible)
-    } else {
-        // Fallback: check window directly
-        let overlay_window = app.get_webview_window("overlay")
-            .ok_or("Overlay window not found")?;
-        Ok(overlay_window.is_visible().map_err(|e| e.to_string())?)
-    }
 }
 
 /// Get the current monitor ID
@@ -453,36 +407,6 @@ fn get_cursor_monitor(app: AppHandle) -> Result<serde_json::Value, String> {
     }))
 }
 
-/// Enable mouse input capture (drawing mode active)
-/// When enabled, the overlay captures mouse events instead of letting them pass through
-#[tauri::command]
-fn enable_mouse_capture(app: AppHandle) -> Result<(), String> {
-    let overlay_window = app.get_webview_window("overlay")
-        .ok_or("Overlay window not found")?;
-
-    // Disable ignore_cursor_events to capture mouse input
-    overlay_window.set_ignore_cursor_events(false).map_err(|e| e.to_string())?;
-
-    println!("Mouse capture enabled - overlay will capture mouse events");
-
-    Ok(())
-}
-
-/// Disable mouse input capture (pass-through mode)
-/// When disabled, mouse events pass through to underlying applications
-#[tauri::command]
-fn disable_mouse_capture(app: AppHandle) -> Result<(), String> {
-    let overlay_window = app.get_webview_window("overlay")
-        .ok_or("Overlay window not found")?;
-
-    // Enable ignore_cursor_events to allow click-through
-    overlay_window.set_ignore_cursor_events(true).map_err(|e| e.to_string())?;
-
-    println!("Mouse capture disabled - overlay allows pass-through");
-
-    Ok(())
-}
-
 /// Set drawing mode and emit event to notify UI components
 /// When enabled, activates drawing mode and changes cursor
 /// When disabled, deactivates drawing mode and resets cursor
@@ -495,31 +419,6 @@ fn set_drawing_mode(app: AppHandle, enabled: bool) -> Result<(), String> {
     println!("Drawing mode changed to: {}", enabled);
 
     Ok(())
-}
-
-// Drawing commands
-#[tauri::command]
-fn drawing_start(tool: String, x: i32, y: i32) -> Result<(), String> {
-    // TODO: Implement drawing start
-    Ok(())
-}
-
-#[tauri::command]
-fn drawing_update(x: i32, y: i32) -> Result<(), String> {
-    // TODO: Implement drawing update
-    Ok(())
-}
-
-#[tauri::command]
-fn drawing_end(shape_data: serde_json::Value) -> Result<(), String> {
-    // TODO: Implement drawing end
-    Ok(())
-}
-
-#[tauri::command]
-fn create_shape(shape_data: serde_json::Value) -> Result<String, String> {
-    // TODO: Implement shape creation
-    Ok("shape-id".to_string())
 }
 
 /// Feature #20: Clear all shapes from the overlay
@@ -536,86 +435,103 @@ fn clear_all_shapes(app: AppHandle) -> Result<(), String> {
 }
 
 // Hotkey commands
-/// Feature #65: Unregister all currently registered hotkeys
-/// This is called before re-registering hotkeys with new settings
-#[tauri::command]
-fn unregister_all_hotkeys(app: AppHandle) -> Result<(), String> {
-    use tauri_plugin_global_shortcut::GlobalShortcutExt;
+/// Unregister all currently registered hotkeys and clear the dispatch table
+fn clear_registered_hotkeys(app: &AppHandle) -> Result<(), String> {
+    use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
 
-    // Get the registry of registered hotkeys
-    if let Ok(mut registry_guard) = app.state::<SharedHotkeyRegistry>().try_lock() {
-        // Unregister each hotkey
+    if let Ok(mut registry_guard) = app.state::<SharedHotkeyRegistry>().lock() {
         for hotkey_str in registry_guard.registered_hotkeys.iter() {
             if let Ok((modifiers, code)) = parse_hotkey_string(hotkey_str) {
-                use tauri_plugin_global_shortcut::Shortcut;
                 let shortcut = Shortcut::new(Some(modifiers), code);
-                app.global_shortcut().unregister(shortcut)
-                    .map_err(|e| format!("Failed to unregister hotkey '{}': {}", hotkey_str, e))?;
-                println!("Unregistered hotkey: {}", hotkey_str);
+                if let Err(e) = app.global_shortcut().unregister(shortcut) {
+                    eprintln!("Failed to unregister hotkey '{}': {}", hotkey_str, e);
+                }
             }
         }
-
-        // Clear the registry
         registry_guard.registered_hotkeys.clear();
+    }
 
-        println!("All hotkeys unregistered");
+    if let Ok(mut dispatch) = app.state::<SharedHotkeyDispatch>().lock() {
+        dispatch.actions.clear();
+        dispatch.held.clear();
+    }
+
+    Ok(())
+}
+
+/// Register the given hotkey config (map of action name -> combo string) with
+/// the OS and populate the dispatch table the plugin handler reads from.
+/// A combo that fails to parse or register is skipped with a log — one bad
+/// user binding must not kill the rest.
+fn apply_hotkey_config(app: &AppHandle, hotkeys_obj: &serde_json::Map<String, serde_json::Value>) -> Result<(), String> {
+    use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
+
+    clear_registered_hotkeys(app)?;
+
+    for (hotkey_name, hotkey_str) in hotkeys_obj.iter() {
+        let Some(hotkey_value) = hotkey_str.as_str() else { continue };
+
+        let (modifiers, code) = match parse_hotkey_string(hotkey_value) {
+            Ok(parsed) => parsed,
+            Err(e) => {
+                eprintln!("Skipping hotkey '{}' for '{}': {}", hotkey_value, hotkey_name, e);
+                continue;
+            }
+        };
+
+        let shortcut = Shortcut::new(Some(modifiers), code);
+        if let Err(e) = app.global_shortcut().register(shortcut) {
+            // Typically a conflict with another app's registration
+            eprintln!("Failed to register hotkey '{}' for '{}': {}", hotkey_value, hotkey_name, e);
+            continue;
+        }
+
+        let action = if hotkey_name == "toggleDrawingMode" {
+            HotkeyAction::ToggleToolbar
+        } else {
+            HotkeyAction::Tool(convert_hotkey_tool_name(hotkey_name))
+        };
+
+        if let Ok(mut dispatch) = app.state::<SharedHotkeyDispatch>().lock() {
+            dispatch.actions.insert(shortcut.id(), action);
+        }
+        if let Ok(mut registry_guard) = app.state::<SharedHotkeyRegistry>().lock() {
+            registry_guard.registered_hotkeys.push(hotkey_value.to_string());
+        }
+        println!("Registered hotkey '{}' for '{}'", hotkey_value, hotkey_name);
     }
 
     Ok(())
 }
 
 /// Feature #56, #57, #58, #62: Register global hotkeys for tools and toggle
-/// Registers shortcuts like Ctrl+Shift+A for Arrow tool, Ctrl+Shift+D for toggle
-/// Feature #65: Now tracks registered hotkeys and deregisters old ones before registering new
+/// Thin wrapper kept for the frontend contract: App.tsx re-invokes this with
+/// the full settings object whenever hotkeys change
 #[tauri::command]
 fn register_hotkeys(app: AppHandle, hotkey_config: serde_json::Value) -> Result<(), String> {
-    use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
-
-    // Feature #65: First, unregister all existing hotkeys
-    unregister_all_hotkeys(app.clone())?;
-
-    // Get the hotkeys object from config
     let hotkeys_obj = hotkey_config["hotkeys"].as_object()
         .ok_or("Invalid hotkeys config: missing 'hotkeys' object")?;
+    apply_hotkey_config(&app, hotkeys_obj)
+}
 
-    // Get the registry to track registered hotkeys
-    let registry = app.state::<SharedHotkeyRegistry>();
-    let mut registry_guard = registry.lock()
-        .map_err(|e| format!("Registry lock error: {}", e))?;
+/// Register hotkeys from persisted settings at startup, falling back to
+/// defaults. Runs in the setup hook so hotkeys work before any webview mounts.
+fn register_hotkeys_from_store(app: &AppHandle) {
+    let stored = StoreBuilder::new(app, PathBuf::from("settings.json"))
+        .build()
+        .ok()
+        .and_then(|store| store.get("hotkeys"));
 
-    // Build a mapping of hotkey strings to their action types
-    let mut hotkey_actions: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let hotkeys = stored.unwrap_or_else(|| get_default_settings()["hotkeys"].clone());
 
-    // Register each hotkey
-    for (hotkey_name, hotkey_str) in hotkeys_obj.iter() {
-        if let Some(hotkey_value) = hotkey_str.as_str() {
-            // Parse the hotkey string (e.g., "Ctrl+Shift+A")
-            let (modifiers, code) = parse_hotkey_string(hotkey_value)
-                .map_err(|e| format!("Failed to parse hotkey '{}': {}", hotkey_value, e))?;
-
-            let shortcut = Shortcut::new(Some(modifiers), code);
-
-            // Register the shortcut - actions are now handled via event listener
-            app.global_shortcut().register(shortcut)
-                .map_err(|e| format!("Failed to register hotkey '{}': {}", hotkey_value, e))?;
-
-            // Track the action type for this hotkey
-            hotkey_actions.insert(hotkey_value.to_string(), hotkey_name.clone());
-
-            // Feature #65: Track the registered hotkey
-            registry_guard.registered_hotkeys.push(hotkey_value.to_string());
-            println!("Registered hotkey '{}' for tool '{}'", hotkey_value, hotkey_name);
+    match hotkeys.as_object() {
+        Some(obj) => {
+            if let Err(e) = apply_hotkey_config(app, obj) {
+                eprintln!("Failed to register hotkeys at startup: {}", e);
+            }
         }
+        None => eprintln!("Stored hotkeys setting is not an object; no hotkeys registered"),
     }
-
-    println!("Total hotkeys registered: {}", registry_guard.registered_hotkeys.len());
-
-    // Save the hotkey actions mapping to state so the event handler can use it
-    // For now, we'll use the frontend to emit the appropriate event based on which hotkey was pressed
-    app.emit("hotkeys-registered", hotkey_actions)
-        .map_err(|e| format!("Failed to emit hotkeys-registered event: {}", e))?;
-
-    Ok(())
 }
 
 /// Parse a hotkey string like "Ctrl+Shift+A" into (Modifiers, Code)
@@ -888,48 +804,141 @@ fn check_hotkey_conflicts(hotkey_config: serde_json::Value) -> Result<serde_json
     }))
 }
 
-/// Feature #18: Activate overlay and select a tool via hotkey
-/// This command is called when a hotkey for a specific tool is pressed
-#[tauri::command]
-fn activate_tool_hotkey(app: AppHandle, tool: String) -> Result<(), String> {
-    // Convert hotkey config key to ToolType value
-    // Example: "freehandTool" -> "freehand"
-    let tool_type = convert_hotkey_tool_name(&tool);
+/// Position the toolbar window: stored position if it still lands on a
+/// monitor, otherwise bottom-center of the cursor's monitor. Validation
+/// matters — a stale stored position on a disconnected monitor would make
+/// the toolbar summon invisibly.
+fn position_toolbar(app: &AppHandle) {
+    let Some(panel) = app.get_webview_window("mini-panel") else { return };
 
-    // Show the overlay if not already visible
-    let overlay_window = app.get_webview_window("overlay")
-        .ok_or("Overlay window not found")?;
+    let stored = StoreBuilder::new(app, PathBuf::from("settings.json"))
+        .build()
+        .ok()
+        .and_then(|store| store.get("mini_panel_position"))
+        .and_then(|pos| Some((pos["x"].as_i64()? as i32, pos["y"].as_i64()? as i32)));
 
-    if !overlay_window.is_visible().map_err(|e| e.to_string())? {
-        overlay_window.show().map_err(|e| e.to_string())?;
-        overlay_window.set_focus().map_err(|e| e.to_string())?;
-        overlay_window.set_always_on_top(true).map_err(|e| e.to_string())?;
-
-        // Update state
-        if let Ok(mut state_guard) = app.state::<SharedState>().try_lock() {
-            state_guard.is_visible = true;
-            state_guard.drawing_mode = true;
+    if let Some((x, y)) = stored {
+        if let Ok(monitors) = panel.available_monitors() {
+            let on_screen = monitors.iter().any(|m| {
+                let p = m.position();
+                let s = m.size();
+                x >= p.x && x < p.x + s.width as i32 && y >= p.y && y < p.y + s.height as i32
+            });
+            if on_screen {
+                let _ = panel.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y }));
+                return;
+            }
         }
     }
 
-    // Emit tool-selected event to notify overlay
+    // Default: bottom-center of the monitor the cursor is on
+    if let Ok(info) = get_cursor_monitor(app.clone()) {
+        if let Some(m) = info["monitor"].as_object() {
+            let mx = m["x"].as_i64().unwrap_or(0) as i32;
+            let my = m["y"].as_i64().unwrap_or(0) as i32;
+            let mw = m["width"].as_u64().unwrap_or(1920) as i32;
+            let mh = m["height"].as_u64().unwrap_or(1080) as i32;
+            if let Ok(size) = panel.outer_size() {
+                let x = mx + (mw - size.width as i32) / 2;
+                let y = my + mh - size.height as i32 - 80;
+                let _ = panel.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y }));
+            }
+        }
+    }
+}
+
+/// Show the toolbar without activating the app: tao's set_visible(true) is
+/// makeKeyAndOrderFront without activateIgnoringOtherApps, so the app the
+/// user is demoing keeps keyboard focus and its menu bar.
+fn show_toolbar(app: &AppHandle) -> Result<(), String> {
+    let panel = app.get_webview_window("mini-panel")
+        .ok_or("Mini panel window not found")?;
+    if !panel.is_visible().unwrap_or(false) {
+        position_toolbar(app);
+    }
+    panel.show().map_err(|e| e.to_string())?;
+    let _ = panel.set_always_on_top(true);
+    Ok(())
+}
+
+/// Activate a drawing tool: ensure toolbar + overlay are up, capture the
+/// mouse, and tell the overlay which tool to use. Called from the global
+/// hotkey handler and from the toolbar's tool buttons (via the
+/// activate_tool_hotkey command).
+fn activate_tool(app: &AppHandle, tool: String) -> Result<(), String> {
+    // Convert hotkey config key to ToolType value ("freehandTool" -> "freehand");
+    // plain tool names pass through unchanged
+    let tool_type = convert_hotkey_tool_name(&tool);
+
+    // Keep the toolbar visible alongside the overlay so the user can switch tools
+    show_toolbar(app)?;
+
+    // Unconditionally run the full show path: position on the cursor's
+    // monitor, re-enable mouse capture, show, raise, focus. Focus is
+    // intentional — the overlay must be key so Escape works before any click.
+    show_overlay(app.clone())?;
+
+    if let Ok(mut state_guard) = app.state::<SharedState>().try_lock() {
+        state_guard.is_visible = true;
+        state_guard.drawing_mode = true;
+    }
+
     app.emit("tool-selected", tool_type.clone())
         .map_err(|e| format!("Failed to emit event: {}", e))?;
-
-    // Emit drawing-mode-changed event
     app.emit("drawing-mode-changed", true)
         .map_err(|e| format!("Failed to emit event: {}", e))?;
 
-    println!("Activated tool '{}' via hotkey (from config key '{}'), overlay shown", tool_type, tool);
+    println!("Activated tool '{}' (from '{}'), overlay shown", tool_type, tool);
 
     Ok(())
 }
 
-/// Dismiss the overlay (hide and clean up state)
-/// Feature #20: This is called when Escape key is pressed or toggle hotkey is triggered
-/// Properly deactivates overlay and cleans up existing shapes
+/// Feature #18: Activate overlay and select a tool via hotkey
+/// This command is called when a tool button is clicked in the toolbar
 #[tauri::command]
-fn dismiss_overlay(app: AppHandle) -> Result<(), String> {
+fn activate_tool_hotkey(app: AppHandle, tool: String) -> Result<(), String> {
+    activate_tool(&app, tool)
+}
+
+/// Toggle the annotation session: Idle -> toolbar shown (no focus steal),
+/// anything visible -> everything hidden and activation returned to the
+/// previously frontmost app. Wired to the toggle hotkey.
+fn toggle_session(app: &AppHandle) -> Result<bool, String> {
+    let panel = app.get_webview_window("mini-panel")
+        .ok_or("Mini panel window not found")?;
+    let overlay_visible = app.get_webview_window("overlay")
+        .and_then(|w| w.is_visible().ok())
+        .unwrap_or(false);
+    let panel_visible = panel.is_visible().unwrap_or(false);
+
+    if overlay_visible || panel_visible {
+        // -> Idle
+        dismiss_overlay_internal(app, false)?;
+        let _ = panel.hide();
+        // Hand activation back to the previously frontmost app
+        #[cfg(target_os = "macos")]
+        let _ = app.hide();
+        println!("Session toggled OFF (idle)");
+        Ok(false)
+    } else {
+        // Idle -> ToolbarOnly
+        show_toolbar(app)?;
+        println!("Session toggled ON (toolbar shown)");
+        Ok(true)
+    }
+}
+
+/// Quit the application (toolbar power button)
+#[tauri::command]
+fn quit_app(app: AppHandle) {
+    app.exit(0);
+}
+
+/// Dismiss the overlay (hide and clean up state)
+/// Feature #20: Properly deactivates overlay and cleans up existing shapes.
+/// When `return_focus` is true (Escape during drawing), activation is handed
+/// back to the previously frontmost app and the toolbar is kept visible.
+fn dismiss_overlay_internal(app: &AppHandle, return_focus: bool) -> Result<(), String> {
     // Get the overlay window by label
     let overlay_window = app.get_webview_window("overlay")
         .ok_or("Overlay window not found")?;
@@ -960,62 +969,31 @@ fn dismiss_overlay(app: AppHandle) -> Result<(), String> {
     app.emit("drawing-mode-changed", false)
         .map_err(|e| format!("Failed to emit drawing-mode-changed event: {}", e))?;
 
+    // Drawing -> ToolbarOnly: NSApp hide returns activation to the previous
+    // app (the one being demoed); re-show the toolbar afterwards since
+    // app.hide() hides ALL our windows. show() does not re-activate us.
+    #[cfg(target_os = "macos")]
+    if return_focus {
+        let panel_was_visible = app.get_webview_window("mini-panel")
+            .and_then(|p| p.is_visible().ok())
+            .unwrap_or(false);
+        let _ = app.hide();
+        if panel_was_visible {
+            if let Some(panel) = app.get_webview_window("mini-panel") {
+                let _ = panel.show();
+            }
+        }
+    }
+
     println!("Overlay dismissed - shapes cleared, drawing state reset");
 
     Ok(())
 }
 
-/// Toggle overlay visibility
-/// Shows overlay if hidden, hides if visible
+/// Dismiss the overlay; called from the overlay's Escape handler
 #[tauri::command]
-fn toggle_overlay(app: AppHandle) -> Result<bool, String> {
-    let overlay_window = app.get_webview_window("overlay")
-        .ok_or("Overlay window not found")?;
-
-    let is_visible = overlay_window.is_visible().map_err(|e| e.to_string())?;
-
-    if is_visible {
-        // Hide the overlay
-        dismiss_overlay(app)?;
-        Ok(false)
-    } else {
-        // Show the overlay
-        show_overlay(app)?;
-        Ok(true)
-    }
-}
-
-/// Feature #62: Toggle drawing mode on/off
-/// Shows overlay and enables drawing mode if disabled, or dismisses overlay if enabled
-#[tauri::command]
-fn toggle_drawing_mode(app: AppHandle) -> Result<bool, String> {
-    let overlay_window = app.get_webview_window("overlay")
-        .ok_or("Overlay window not found")?;
-
-    let is_visible = overlay_window.is_visible().map_err(|e| e.to_string())?;
-
-    if is_visible {
-        // Overlay is visible - dismiss it (turn off drawing mode)
-        dismiss_overlay(app)?;
-        println!("Drawing mode toggled OFF (overlay dismissed)");
-        Ok(false)
-    } else {
-        // Overlay is hidden - show it and enable drawing mode (turn on drawing mode)
-        show_overlay(app.clone())?;
-
-        // Update state to enable drawing mode
-        if let Ok(mut state_guard) = app.state::<SharedState>().try_lock() {
-            state_guard.is_visible = true;
-            state_guard.drawing_mode = true;
-        }
-
-        // Emit drawing mode enabled event
-        app.emit("drawing-mode-changed", true)
-            .map_err(|e| format!("Failed to emit event: {}", e))?;
-
-        println!("Drawing mode toggled ON (overlay shown, drawing mode enabled)");
-        Ok(true)
-    }
+fn dismiss_overlay(app: AppHandle) -> Result<(), String> {
+    dismiss_overlay_internal(&app, true)
 }
 
 /// Feature #15: Ensure overlay stays on top after window focus changes
@@ -1039,37 +1017,6 @@ fn ensure_on_top(app: AppHandle) -> Result<(), String> {
     println!("Overlay z-index re-asserted to stay on top");
 
     Ok(())
-}
-
-/// Feature #19: Set mini panel position (supports off-screen positioning)
-/// Allows the panel to be positioned off-screen to hide it from recordings
-#[tauri::command]
-fn set_mini_panel_position(app: AppHandle, x: i32, y: i32) -> Result<(), String> {
-    let panel_window = app.get_webview_window("mini-panel")
-        .ok_or("Mini panel window not found")?;
-
-    // Feature #19: Allow off-screen positioning by not validating bounds
-    // The window can be positioned anywhere, including off-screen
-    panel_window.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y })).map_err(|e| e.to_string())?;
-
-    println!("Mini panel positioned at off-screen coordinates ({}, {})", x, y);
-
-    Ok(())
-}
-
-/// Feature #19: Get mini panel position
-/// Returns the current position of the mini panel
-#[tauri::command]
-fn get_mini_panel_position(app: AppHandle) -> Result<serde_json::Value, String> {
-    let panel_window = app.get_webview_window("mini-panel")
-        .ok_or("Mini panel window not found")?;
-
-    let position = panel_window.outer_position().map_err(|e| e.to_string())?;
-
-    Ok(serde_json::json!({
-        "x": position.x,
-        "y": position.y
-    }))
 }
 
 /// Feature #19: Save mini panel position to persistent storage
@@ -1127,98 +1074,6 @@ fn save_mini_panel_position(app: AppHandle, x: i32, y: i32, monitor_id: Option<S
     Ok(())
 }
 
-/// Feature #19: Load and restore mini panel position from storage
-/// Feature #50: Also restores the monitor the panel was on
-/// Restores the panel to its last saved position (including off-screen)
-#[tauri::command]
-fn restore_mini_panel_position(app: AppHandle) -> Result<serde_json::Value, String> {
-    let store_path = PathBuf::from("settings.json");
-    let store = StoreBuilder::new(&app, store_path).build()
-        .map_err(|e| format!("Failed to create store: {}", e))?;
-
-    // Get panel position from storage
-    if let Some(position) = store.get("mini_panel_position") {
-        let x = position["x"].as_i64().unwrap_or(0) as i32;
-        let y = position["y"].as_i64().unwrap_or(0) as i32;
-        let monitor_id = position["monitor_id"].as_str().unwrap_or("monitor_0");
-
-        // Restore position
-        let panel_window = app.get_webview_window("mini-panel")
-            .ok_or("Mini panel window not found")?;
-
-        panel_window.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y })).map_err(|e| e.to_string())?;
-
-        println!("Mini panel position restored to: ({}, {}) on monitor {}", x, y, monitor_id);
-
-        Ok(serde_json::json!({
-            "x": x,
-            "y": y,
-            "monitor_id": monitor_id,
-            "restored": true
-        }))
-    } else {
-        // No saved position, return current position
-        let panel_window = app.get_webview_window("mini-panel")
-            .ok_or("Mini panel window not found")?;
-
-        let position = panel_window.outer_position().map_err(|e| e.to_string())?;
-
-        Ok(serde_json::json!({
-            "x": position.x,
-            "y": position.y,
-            "restored": false
-        }))
-    }
-}
-
-/// Feature #52: Toggle mini panel visibility (minimize/hide)
-/// Shows the panel if hidden, hides if visible
-#[tauri::command]
-fn toggle_mini_panel(app: AppHandle) -> Result<bool, String> {
-    let panel_window = app.get_webview_window("mini-panel")
-        .ok_or("Mini panel window not found")?;
-
-    let is_visible = panel_window.is_visible().map_err(|e| e.to_string())?;
-
-    if is_visible {
-        // Hide the panel
-        panel_window.hide().map_err(|e| e.to_string())?;
-        println!("Mini panel hidden (minimized)");
-        Ok(false)
-    } else {
-        // Show the panel
-        panel_window.show().map_err(|e| e.to_string())?;
-        panel_window.set_focus().map_err(|e| e.to_string())?;
-        println!("Mini panel shown (restored)");
-        Ok(true)
-    }
-}
-
-/// Feature #52: Hide the mini panel
-#[tauri::command]
-fn hide_mini_panel(app: AppHandle) -> Result<(), String> {
-    let panel_window = app.get_webview_window("mini-panel")
-        .ok_or("Mini panel window not found")?;
-
-    panel_window.hide().map_err(|e| e.to_string())?;
-    println!("Mini panel hidden (minimized)");
-
-    Ok(())
-}
-
-/// Feature #52: Show the mini panel
-#[tauri::command]
-fn show_mini_panel(app: AppHandle) -> Result<(), String> {
-    let panel_window = app.get_webview_window("mini-panel")
-        .ok_or("Mini panel window not found")?;
-
-    panel_window.show().map_err(|e| e.to_string())?;
-    panel_window.set_focus().map_err(|e| e.to_string())?;
-    println!("Mini panel shown (restored)");
-
-    Ok(())
-}
-
 /// Show the main window (Settings window)
 /// Used to open the Settings window from the Mini Panel
 #[tauri::command]
@@ -1240,114 +1095,109 @@ fn hide_main_window(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-/// Feature #11: Get platform information
-/// Returns the detected platform and platform-specific window hints
-#[tauri::command]
-fn get_platform_info() -> Result<serde_json::Value, String> {
-    use utils::{get_platform, Platform};
-
-    let platform = match get_platform() {
-        Platform::Windows => "windows",
-        Platform::Macos => "macos",
-        Platform::Linux => "linux",
-        Platform::Unknown => "unknown",
-    };
-
-    let hints = get_platform_window_hints();
-
-    println!("Platform detected: {} - {}", platform, hints);
-
-    Ok(serde_json::json!({
-        "platform": platform,
-        "hints": hints,
-        "overlay_implementation": "Tauri cross-platform window API with platform-specific optimizations"
-    }))
-}
-
-// Feature #135: Platform-specific performance optimizations
-/// Get platform-specific optimizations configuration
-#[tauri::command]
-fn get_platform_optimizations() -> serde_json::Value {
-    platform_optimizations::get_platform_optimizations()
-}
-
-/// Get recommended canvas rendering settings for the current platform
-#[tauri::command]
-fn get_canvas_optimizations() -> serde_json::Value {
-    platform_optimizations::get_canvas_optimizations()
-}
-
-/// Get platform-specific performance tips
-#[tauri::command]
-fn get_performance_tips() -> Vec<String> {
-    platform_optimizations::get_performance_tips()
-}
-
-/// Benchmark platform performance
-#[tauri::command]
-fn benchmark_platform() -> serde_json::Value {
-    platform_optimizations::benchmark_platform()
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Initialize shared state
     let overlay_state = SharedState::default();
     // Feature #65: Initialize hotkey registry
     let hotkey_registry = SharedHotkeyRegistry::default();
+    // Dispatch table for global hotkey presses
+    let hotkey_dispatch = SharedHotkeyDispatch::default();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_store::Builder::new().build())
-        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(|app, shortcut, event| {
+                    let id = shortcut.id();
+                    // Resolve the action in a tight lock scope: the window
+                    // calls below must never run under the dispatch mutex
+                    let action = {
+                        let dispatch = app.state::<SharedHotkeyDispatch>();
+                        let Ok(mut d) = dispatch.lock() else { return };
+                        match event.state() {
+                            ShortcutState::Released => {
+                                d.held.remove(&id);
+                                return;
+                            }
+                            ShortcutState::Pressed => {
+                                if !d.held.insert(id) {
+                                    // OS key-repeat while held: ignore
+                                    return;
+                                }
+                                d.actions.get(&id).cloned()
+                            }
+                        }
+                    };
+                    match action {
+                        Some(HotkeyAction::ToggleToolbar) => {
+                            if let Err(e) = toggle_session(app) {
+                                eprintln!("Toggle hotkey failed: {}", e);
+                            }
+                        }
+                        Some(HotkeyAction::Tool(tool)) => {
+                            if let Err(e) = activate_tool(app, tool) {
+                                eprintln!("Tool hotkey failed: {}", e);
+                            }
+                        }
+                        None => {}
+                    }
+                })
+                .build(),
+        )
         .manage(overlay_state)
         .manage(hotkey_registry)
+        .manage(hotkey_dispatch)
+        .setup(|app| {
+            // Background utility: no Dock icon, no Cmd+Tab entry, and the
+            // menu bar stays on the app being demoed
+            #[cfg(target_os = "macos")]
+            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+
+            // The overlay must be click-through from the very first frame;
+            // window configs only control visibility, not cursor events
+            if let Some(overlay) = app.get_webview_window("overlay") {
+                let _ = overlay.set_ignore_cursor_events(true);
+            }
+
+            // Hotkeys must work from launch, before any webview mounts
+            register_hotkeys_from_store(app.handle());
+
+            Ok(())
+        })
+        .on_window_event(|window, event| {
+            // Settings window: the red close button hides instead of
+            // destroying, so show_main_window keeps working and Tauri never
+            // auto-exits when the last visible window closes
+            if window.label() == "main" {
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
+        })
         .invoke_handler(tauri::generate_handler![
-            greet,
             save_settings,
             load_settings,
             load_setting,
             reset_settings,
-            create_overlay_window,
             show_overlay,
-            hide_overlay,
-            focus_overlay,
-            get_overlay_state,
             get_current_monitor,
             get_monitor_info,
             get_cursor_monitor,
             set_overlay_position,
-            enable_mouse_capture,
-            disable_mouse_capture,
             set_drawing_mode,
-            drawing_start,
-            drawing_update,
-            drawing_end,
-            create_shape,
             clear_all_shapes,
             register_hotkeys,
-            unregister_all_hotkeys,
             check_hotkey_conflicts,
             activate_tool_hotkey,
             dismiss_overlay,
-            toggle_overlay,
-            toggle_drawing_mode,
             ensure_on_top,
-            get_platform_info,
-            set_mini_panel_position,
-            get_mini_panel_position,
             save_mini_panel_position,
-            restore_mini_panel_position,
-            toggle_mini_panel,
-            hide_mini_panel,
-            show_mini_panel,
             show_main_window,
             hide_main_window,
-            // Feature #135: Platform-specific optimizations
-            get_platform_optimizations,
-            get_canvas_optimizations,
-            get_performance_tips,
-            benchmark_platform
+            quit_app
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
