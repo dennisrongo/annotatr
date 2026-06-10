@@ -23,6 +23,10 @@
         "resizable": true,
         "fullscreen": false,
         "decorations": true,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "transparent": true,
+        "theme": "Dark",
         "visible": false
       },
       {
@@ -49,7 +53,7 @@
         "label": "mini-panel",
         "title": "Annotatr",
         "url": "mini-panel.html",
-        "width": 520,
+        "width": 462,
         "height": 56,
         "resizable": false,
         "fullscreen": false,

@@ -1,5 +1,7 @@
 /* Minimal global reset for the settings window.
-   All component styling lives in App.tsx (st-* classes). */
+   All component styling lives in App.tsx (st-* classes).
+   Backgrounds stay transparent so the macOS vibrancy layer behind the
+   window shows through the sidebar; .st-app paints opaque fallbacks. */
 
 *,
 *::before,
@@ -14,7 +16,7 @@ body,
   width: 100%;
   margin: 0;
   padding: 0;
-  background: #1f1f22;
+  background: transparent;
 }
 
 body {

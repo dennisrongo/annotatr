@@ -5,6 +5,9 @@ import { open as openExternal } from "@tauri-apps/plugin-shell";
 import { loadSettings, saveSettings, DEFAULT_SETTINGS, exportSettings, importSettings, resetSettings } from "./lib/storage";
 import { ArrowHeadStyle, ShapeStyle } from "./types/shapes";
 
+/** macOS gets vibrancy + an overlay title bar; other platforms keep opaque chrome */
+const IS_MAC = typeof navigator !== "undefined" && navigator.platform.toUpperCase().includes("MAC");
+
 /**
  * Preset color palette for drawing tools
  */
@@ -286,13 +289,6 @@ function App() {
     }
   };
 
-  /**
-   * Helper to detect if running on macOS
-   */
-  const isMac = (): boolean => {
-    return navigator.platform.toUpperCase().indexOf("MAC") >= 0;
-  };
-
   const [hotkeyError, setHotkeyError] = useState<string | null>(null);
   const hotkeyCaptureRef = useRef<HTMLDivElement>(null);
 
@@ -335,7 +331,7 @@ function App() {
     if (e.ctrlKey) keys.push("Ctrl");
     if (e.shiftKey) keys.push("Shift");
     if (e.altKey) keys.push("Alt");
-    if (e.metaKey || e.key === "Meta") keys.push(isMac() ? "Cmd" : "Win");
+    if (e.metaKey || e.key === "Meta") keys.push(IS_MAC ? "Cmd" : "Win");
 
     // Capture the main key — but only keys the backend hotkey parser
     // supports (A-Z, 0-9, F1-F12 and the named keys below). Accepting
@@ -557,12 +553,16 @@ function App() {
   const conflictEntries = Object.entries(hotkeyConflicts).filter(([, info]: [string, any]) => info.conflict);
 
   return (
-    <div className="st-app">
+    <div className={`st-app${IS_MAC ? " mac" : ""}`}>
       <style>{CSS}</style>
 
-      {/* Sidebar navigation */}
-      <aside className="st-sidebar">
-        <div className="st-brand">
+      {/* With the overlay title bar the window has no chrome to grab, so the
+          top strip (and the sidebar background below) doubles as one */}
+      {IS_MAC && <div className="st-drag-strip" data-tauri-drag-region />}
+
+      {/* Sidebar navigation (background drags the window, like System Settings) */}
+      <aside className="st-sidebar" data-tauri-drag-region>
+        <div className="st-brand" data-tauri-drag-region>
           <span className="st-brand-dot" />
           <span className="st-brand-name">Annotatr</span>
         </div>
@@ -671,8 +671,9 @@ function App() {
                         alignItems: "center",
                         justifyContent: "center",
                         gap: 3,
-                        backgroundColor: "rgba(28, 28, 30, 0.92)",
-                        opacity: panelTransparency,
+                        // Mirrors the toolbar: opacity dims the background only,
+                        // the icons (dots here) stay visible
+                        backgroundColor: `rgba(28, 28, 30, ${(0.94 * panelTransparency).toFixed(3)})`,
                       }}
                     >
                       <span className="st-strip-preview-dot" />
@@ -911,6 +912,7 @@ function App() {
 const CSS = `
 :root {
   --bg-sidebar: #161618;
+  --sidebar-tint: rgba(22, 22, 26, 0.52);
   --bg-content: #1f1f22;
   --card: rgba(255, 255, 255, 0.045);
   --hairline: rgba(255, 255, 255, 0.08);
@@ -919,6 +921,7 @@ const CSS = `
   --text-dim: rgba(235, 235, 245, 0.55);
   --text-faint: rgba(235, 235, 245, 0.32);
   --accent: #ff453a;
+  --blue: #0a84ff;
   --mono: ui-monospace, "SF Mono", Menlo, monospace;
 }
 
@@ -930,7 +933,7 @@ html, body, #root {
   min-width: 0;
   min-height: 0;
   display: block;
-  background: var(--bg-content);
+  background: transparent;
   overflow: hidden;
 }
 
@@ -947,6 +950,18 @@ html, body, #root {
   cursor: default;
 }
 
+.st-app:not(.mac) { background: var(--bg-content); }
+
+/* Invisible grab strip across the top (overlay title bar has no chrome) */
+.st-drag-strip {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 38px;
+  z-index: 40;
+}
+
 /* ---- Sidebar ---- */
 .st-sidebar {
   width: 168px;
@@ -957,6 +972,13 @@ html, body, #root {
   background: var(--bg-sidebar);
   border-right: 1px solid var(--hairline);
   padding: 14px 10px 12px;
+}
+
+/* macOS: translucent over the window's NSVisualEffectView, and pushed
+   down to clear the inset traffic lights */
+.mac .st-sidebar {
+  background: var(--sidebar-tint);
+  padding-top: 46px;
 }
 
 .st-brand {
@@ -1016,6 +1038,14 @@ html, body, #root {
   flex: 1;
   overflow-y: auto;
   padding: 20px 22px 26px;
+  background: var(--bg-content);
+}
+
+/* Native-feeling keyboard focus ring */
+.st-app button:focus-visible,
+.st-capture-wrap:focus-visible {
+  outline: 2px solid rgba(10, 132, 255, 0.65);
+  outline-offset: 1px;
 }
 
 .st-content::-webkit-scrollbar { width: 8px; }
@@ -1198,6 +1228,7 @@ html, body, #root {
 }
 
 .st-btn:hover { background: rgba(255, 255, 255, 0.11); }
+.st-btn:active { background: rgba(255, 255, 255, 0.16); }
 .st-btn:disabled { opacity: 0.4; cursor: default; }
 
 .st-btn-icon {
@@ -1312,9 +1343,9 @@ html, body, #root {
 .st-seg button:hover { color: var(--text); }
 
 .st-seg button.active {
-  background: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.16);
   color: var(--text);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 1px 2.5px rgba(0, 0, 0, 0.35), inset 0 0.5px 0 rgba(255, 255, 255, 0.12);
 }
 
 .st-hidden-input {
