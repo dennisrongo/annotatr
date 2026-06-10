@@ -2,7 +2,49 @@
  * Drawing utilities for rendering shapes on canvas
  */
 
-import { Shape, ArrowShape, CircleShape, BoxShape, FreehandShape, HighlighterShape, TextShape, ArrowHeadStyle } from "../types/shapes";
+import rough from "roughjs";
+import { Shape, ArrowShape, CircleShape, BoxShape, FreehandShape, HighlighterShape, TextShape, ArrowHeadStyle, ShapeStyle } from "../types/shapes";
+
+type RoughCanvas = ReturnType<typeof rough.canvas>;
+
+// RoughCanvas wraps the canvas's one-and-only 2d context, so a single
+// instance per canvas element can be reused across redraws
+const roughCanvasCache = new WeakMap<HTMLCanvasElement, RoughCanvas>();
+
+function getRoughCanvas(ctx: CanvasRenderingContext2D): RoughCanvas {
+  let rc = roughCanvasCache.get(ctx.canvas);
+  if (!rc) {
+    rc = rough.canvas(ctx.canvas);
+    roughCanvasCache.set(ctx.canvas, rc);
+  }
+  return rc;
+}
+
+/** Deterministic 31-bit hash so shapes without a roughSeed still render stably */
+function seedFromString(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) {
+    h = (Math.imul(h, 31) + s.charCodeAt(i)) | 0;
+  }
+  return ((h >>> 0) % 2147483646) + 1;
+}
+
+function sketchSeed(shape: Shape): number {
+  return shape.roughSeed ?? seedFromString(shape.id);
+}
+
+/** Shared rough.js options tuned to match Excalidraw's hand-drawn look */
+function sketchOptions(shape: Shape) {
+  return {
+    stroke: shape.color,
+    strokeWidth: shape.lineThickness,
+    roughness: 1.5,
+    bowing: 1.2,
+    seed: sketchSeed(shape),
+  };
+}
+
+export const SKETCHY_FONT_STACK = '"Excalifont", "Virgil", "Segoe Print", "Chalkboard SE", "Comic Sans MS", cursive';
 
 /**
  * Draw an arrow head at the specified position
@@ -31,7 +73,6 @@ function drawArrowHead(
 
   ctx.strokeStyle = color;
   ctx.fillStyle = color;
-  ctx.lineWidth = 2;
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
 
@@ -61,12 +102,53 @@ function drawArrowHead(
 }
 
 /**
+ * Draw a sketchy arrow head (lines for open style, solid polygon otherwise)
+ */
+function drawSketchyArrowHead(
+  rc: RoughCanvas,
+  shape: ArrowShape,
+  x: number,
+  y: number,
+  angle: number,
+  headLength: number,
+  style: ArrowHeadStyle,
+  isStart: boolean = false
+): void {
+  const angleOffset = isStart ? Math.PI : 0;
+  const finalAngle = angle + angleOffset;
+
+  const leftX = x - headLength * Math.cos(finalAngle - Math.PI / 6);
+  const leftY = y - headLength * Math.sin(finalAngle - Math.PI / 6);
+  const rightX = x - headLength * Math.cos(finalAngle + Math.PI / 6);
+  const rightY = y - headLength * Math.sin(finalAngle + Math.PI / 6);
+
+  // Offset the seed so the head's wobble differs from the shaft's
+  const options = { ...sketchOptions(shape), seed: sketchSeed(shape) + (isStart ? 1 : 2) };
+
+  if (style === ArrowHeadStyle.OPEN) {
+    rc.line(x, y, leftX, leftY, options);
+    rc.line(x, y, rightX, rightY, options);
+  } else {
+    rc.polygon(
+      [[x, y], [leftX, leftY], [rightX, rightY]],
+      {
+        ...options,
+        fill: shape.color,
+        fillStyle: "solid",
+        strokeWidth: Math.max(1, shape.lineThickness / 2),
+      }
+    );
+  }
+}
+
+/**
  * Draw an arrow shape on the canvas
  * Feature #131: Supports different arrow head styles
  */
 export function drawArrow(
   ctx: CanvasRenderingContext2D,
-  shape: ArrowShape
+  shape: ArrowShape,
+  style: ShapeStyle = ShapeStyle.CLASSIC
 ): void {
   const { startPoint, endPoint, color, lineThickness, arrowHeadStyle = ArrowHeadStyle.FILLED } = shape;
 
@@ -77,13 +159,42 @@ export function drawArrow(
   ctx.lineJoin = "round";
 
   // Calculate arrow parameters
-  const headLength = lineThickness * 3; // Length of arrow head
-  const angle = Math.atan2(endPoint.y - startPoint.y, endPoint.x - startPoint.x);
+  const headLength = Math.max(lineThickness * 3, 12); // Length of arrow head
+  const dx = endPoint.x - startPoint.x;
+  const dy = endPoint.y - startPoint.y;
+  const length = Math.hypot(dx, dy);
+  const angle = Math.atan2(dy, dx);
+
+  // End the shaft at the base of each filled head — a shaft drawn to the tip
+  // pokes out around the head. Open heads have no fill to tuck under, so the
+  // shaft keeps its full length.
+  const inset = Math.min(headLength * Math.cos(Math.PI / 6), length / 2);
+  const insetEnd = arrowHeadStyle !== ArrowHeadStyle.OPEN;
+  const insetStart = arrowHeadStyle === ArrowHeadStyle.DOUBLE_HEADED;
+  const shaftStartX = insetStart ? startPoint.x + inset * Math.cos(angle) : startPoint.x;
+  const shaftStartY = insetStart ? startPoint.y + inset * Math.sin(angle) : startPoint.y;
+  const shaftEndX = insetEnd ? endPoint.x - inset * Math.cos(angle) : endPoint.x;
+  const shaftEndY = insetEnd ? endPoint.y - inset * Math.sin(angle) : endPoint.y;
+
+  if (style === ShapeStyle.SKETCHY) {
+    const rc = getRoughCanvas(ctx);
+    rc.line(shaftStartX, shaftStartY, shaftEndX, shaftEndY, sketchOptions(shape));
+
+    if (arrowHeadStyle === ArrowHeadStyle.DOUBLE_HEADED) {
+      drawSketchyArrowHead(rc, shape, endPoint.x, endPoint.y, angle, headLength, ArrowHeadStyle.FILLED, false);
+      drawSketchyArrowHead(rc, shape, startPoint.x, startPoint.y, angle, headLength, ArrowHeadStyle.FILLED, true);
+    } else if (arrowHeadStyle === ArrowHeadStyle.OPEN) {
+      drawSketchyArrowHead(rc, shape, endPoint.x, endPoint.y, angle, headLength, ArrowHeadStyle.OPEN, false);
+    } else {
+      drawSketchyArrowHead(rc, shape, endPoint.x, endPoint.y, angle, headLength, ArrowHeadStyle.FILLED, false);
+    }
+    return;
+  }
 
   // Draw the shaft
   ctx.beginPath();
-  ctx.moveTo(startPoint.x, startPoint.y);
-  ctx.lineTo(endPoint.x, endPoint.y);
+  ctx.moveTo(shaftStartX, shaftStartY);
+  ctx.lineTo(shaftEndX, shaftEndY);
   ctx.stroke();
 
   // Draw arrow head(s) based on style
@@ -105,9 +216,15 @@ export function drawArrow(
  */
 export function drawCircle(
   ctx: CanvasRenderingContext2D,
-  shape: CircleShape
+  shape: CircleShape,
+  style: ShapeStyle = ShapeStyle.CLASSIC
 ): void {
   const { center, radiusX, radiusY, color, lineThickness } = shape;
+
+  if (style === ShapeStyle.SKETCHY) {
+    getRoughCanvas(ctx).ellipse(center.x, center.y, radiusX * 2, radiusY * 2, sketchOptions(shape));
+    return;
+  }
 
   ctx.strokeStyle = color;
   ctx.lineWidth = lineThickness;
@@ -124,9 +241,18 @@ export function drawCircle(
  */
 export function drawBox(
   ctx: CanvasRenderingContext2D,
-  shape: BoxShape
+  shape: BoxShape,
+  style: ShapeStyle = ShapeStyle.CLASSIC
 ): void {
   const { startPoint, width, height, color, lineThickness } = shape;
+
+  if (style === ShapeStyle.SKETCHY) {
+    // Normalize: width/height are negative when dragged up or left
+    const x = width < 0 ? startPoint.x + width : startPoint.x;
+    const y = height < 0 ? startPoint.y + height : startPoint.y;
+    getRoughCanvas(ctx).rectangle(x, y, Math.abs(width), Math.abs(height), sketchOptions(shape));
+    return;
+  }
 
   ctx.strokeStyle = color;
   ctx.lineWidth = lineThickness;
@@ -141,11 +267,22 @@ export function drawBox(
  */
 export function drawFreehand(
   ctx: CanvasRenderingContext2D,
-  shape: FreehandShape
+  shape: FreehandShape,
+  style: ShapeStyle = ShapeStyle.CLASSIC
 ): void {
   const { points, color, lineThickness } = shape;
 
   if (points.length < 2) return;
+
+  if (style === ShapeStyle.SKETCHY) {
+    // Lighter roughness than the geometric shapes: the user's hand already
+    // provides the wobble, rough.js just adds the sketchy stroke texture
+    getRoughCanvas(ctx).curve(
+      points.map((p): [number, number] => [p.x, p.y]),
+      { ...sketchOptions(shape), roughness: 0.8, bowing: 0.5 }
+    );
+    return;
+  }
 
   ctx.strokeStyle = color;
   ctx.lineWidth = lineThickness;
@@ -199,12 +336,14 @@ export function drawHighlighter(
  */
 export function drawText(
   ctx: CanvasRenderingContext2D,
-  shape: TextShape
+  shape: TextShape,
+  style: ShapeStyle = ShapeStyle.CLASSIC
 ): void {
   const { position, text, color, fontSize } = shape;
 
   ctx.fillStyle = color;
-  ctx.font = `${fontSize}px sans-serif`;
+  const fontFamily = style === ShapeStyle.SKETCHY ? SKETCHY_FONT_STACK : "sans-serif";
+  ctx.font = `${fontSize}px ${fontFamily}`;
   ctx.textBaseline = "top";
 
   // Feature #129: Handle multi-line text
@@ -222,11 +361,13 @@ export function drawText(
  * @param ctx - Canvas rendering context
  * @param shape - Shape to draw
  * @param opacity - Optional opacity value (0-1) for fading
+ * @param style - Rendering style (classic or sketchy hand-drawn)
  */
 export function drawShape(
   ctx: CanvasRenderingContext2D,
   shape: Shape,
-  opacity?: number
+  opacity?: number,
+  style: ShapeStyle = ShapeStyle.CLASSIC
 ): void {
   // Feature #35: Apply opacity if provided (for auto-fade)
   const previousAlpha = ctx.globalAlpha;
@@ -236,22 +377,24 @@ export function drawShape(
 
   switch (shape.tool) {
     case "arrow":
-      drawArrow(ctx, shape as ArrowShape);
+      drawArrow(ctx, shape as ArrowShape, style);
       break;
     case "circle":
-      drawCircle(ctx, shape as CircleShape);
+      drawCircle(ctx, shape as CircleShape, style);
       break;
     case "box":
-      drawBox(ctx, shape as BoxShape);
+      drawBox(ctx, shape as BoxShape, style);
       break;
     case "freehand":
-      drawFreehand(ctx, shape as FreehandShape);
+      drawFreehand(ctx, shape as FreehandShape, style);
       break;
     case "highlighter":
+      // Intentionally style-independent: rough.js multi-stroke overlaps
+      // would show as darker bands through the semi-transparent marker
       drawHighlighter(ctx, shape as HighlighterShape);
       break;
     case "text":
-      drawText(ctx, shape as TextShape);
+      drawText(ctx, shape as TextShape, style);
       break;
     default:
       console.warn("Unknown shape type:", shape);
@@ -276,15 +419,17 @@ export function clearCanvas(ctx: CanvasRenderingContext2D): void {
  * @param ctx - Canvas rendering context
  * @param shapes - Array of shapes to redraw
  * @param opacities - Optional map of shape IDs to opacity values for fading
+ * @param style - Rendering style (classic or sketchy hand-drawn)
  */
 export function redrawShapes(
   ctx: CanvasRenderingContext2D,
   shapes: Shape[],
-  opacities?: Record<string, number>
+  opacities?: Record<string, number>,
+  style: ShapeStyle = ShapeStyle.CLASSIC
 ): void {
   clearCanvas(ctx);
   shapes.forEach((shape) => {
     const opacity = opacities?.[shape.id];
-    drawShape(ctx, shape, opacity);
+    drawShape(ctx, shape, opacity, style);
   });
 }

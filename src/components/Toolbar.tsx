@@ -28,6 +28,7 @@ const TOOLS: Array<{ tool: ToolType; icon: string; label: string }> = [
 export default function Toolbar() {
   const [activeTool, setActiveTool] = useState<ToolType | null>(null);
   const [colors, setColors] = useState<Settings["colors"]>(DEFAULT_SETTINGS.colors);
+  const [panelOpacity, setPanelOpacity] = useState(DEFAULT_SETTINGS.panelTransparency);
   const colorInputRef = useRef<HTMLInputElement>(null);
   const activeToolRef = useRef<ToolType | null>(null);
   activeToolRef.current = activeTool;
@@ -36,16 +37,21 @@ export default function Toolbar() {
   // would permanently pin the toolbar to its first position.
   const userDragRef = useRef(false);
 
-  // Load tool colors and keep them in sync with the Settings window
+  // Load tool colors and panel opacity, and keep them in sync with the
+  // Settings window (every save there emits "settings_updated", so dragging
+  // the opacity slider live-previews on this strip)
   useEffect(() => {
-    const refreshColors = () => {
+    const refreshSettings = () => {
       loadSettings()
-        .then((settings) => setColors(settings.colors))
-        .catch((error) => console.error("Failed to load colors:", error));
+        .then((settings) => {
+          setColors(settings.colors);
+          setPanelOpacity(settings.panelTransparency);
+        })
+        .catch((error) => console.error("Failed to load settings:", error));
     };
-    refreshColors();
+    refreshSettings();
 
-    const unlistenSettings = listen("settings_updated", refreshColors);
+    const unlistenSettings = listen("settings_updated", refreshSettings);
 
     // Mirror tool selection (from toolbar clicks AND global hotkeys)
     const unlistenToolSelected = listen<string>("tool-selected", (event) => {
@@ -144,6 +150,7 @@ export default function Toolbar() {
         padding: "0 10px",
         gap: 2,
         backgroundColor: "rgba(28, 28, 30, 0.92)",
+        opacity: panelOpacity,
         borderRadius: 12,
         userSelect: "none",
         overflow: "hidden",

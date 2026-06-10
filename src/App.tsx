@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { getVersion } from "@tauri-apps/api/app";
+import { open as openExternal } from "@tauri-apps/plugin-shell";
 import { loadSettings, saveSettings, DEFAULT_SETTINGS, exportSettings, importSettings, resetSettings } from "./lib/storage";
-import { ArrowHeadStyle } from "./types/shapes";
+import { ArrowHeadStyle, ShapeStyle } from "./types/shapes";
 
 /**
  * Preset color palette for drawing tools
@@ -19,7 +21,7 @@ const PRESET_COLORS = [
   "#000000", // Black
 ];
 
-type TabId = "general" | "shortcuts" | "colors" | "advanced";
+type TabId = "general" | "shortcuts" | "colors" | "advanced" | "about";
 
 /** Human-readable names for hotkey actions */
 const HOTKEY_LABELS: Record<string, string> = {
@@ -112,6 +114,12 @@ const ICONS: Record<TabId, React.ReactNode> = {
       <circle cx="10" cy="11" r="1.8" />
     </svg>
   ),
+  about: (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+      <circle cx="8" cy="8" r="6.25" />
+      <path d="M8 7.25v3.5M8 5.1h.01" />
+    </svg>
+  ),
 };
 
 const TABS: Array<{ id: TabId; label: string }> = [
@@ -119,6 +127,7 @@ const TABS: Array<{ id: TabId; label: string }> = [
   { id: "shortcuts", label: "Shortcuts" },
   { id: "colors", label: "Colors" },
   { id: "advanced", label: "Advanced" },
+  { id: "about", label: "About" },
 ];
 
 function App() {
@@ -131,6 +140,7 @@ function App() {
   const [fadeDuration, setFadeDuration] = useState(DEFAULT_SETTINGS.fadeDuration);
   const [panelTransparency, setPanelTransparency] = useState(DEFAULT_SETTINGS.panelTransparency);
   const [arrowHeadStyle, setArrowHeadStyle] = useState<ArrowHeadStyle>(DEFAULT_SETTINGS.arrowHeadStyle);
+  const [shapeStyle, setShapeStyle] = useState<ShapeStyle>(DEFAULT_SETTINGS.shapeStyle);
 
   // Hotkey state
   const [hotkeys, setHotkeys] = useState<Record<string, string>>(DEFAULT_SETTINGS.hotkeys);
@@ -142,6 +152,25 @@ function App() {
   const [currentColorForTool, setCurrentColorForTool] = useState<Record<string, string>>(DEFAULT_SETTINGS.colors);
   const [editingColorForTool, setEditingColorForTool] = useState<string | null>(null);
   const settingsColorInputRef = useRef<HTMLInputElement>(null);
+
+  // App version (from tauri.conf.json) for the About tab
+  const [appVersion, setAppVersion] = useState("");
+
+  useEffect(() => {
+    getVersion()
+      .then(setAppVersion)
+      .catch((error) => console.error("Failed to get app version:", error));
+  }, []);
+
+  /** Open the author's website in the default browser */
+  const handleOpenWebsite = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    try {
+      await openExternal("https://dennisrongo.com");
+    } catch (error) {
+      console.error("Failed to open website:", error);
+    }
+  };
 
   // Load settings on mount
   useEffect(() => {
@@ -159,6 +188,7 @@ function App() {
         setFadeDuration(settings.fadeDuration);
         setPanelTransparency(settings.panelTransparency);
         setArrowHeadStyle(settings.arrowHeadStyle);
+        setShapeStyle(settings.shapeStyle);
         setHotkeys(settings.hotkeys);
         setCurrentColorForTool(settings.colors);
 
@@ -241,6 +271,18 @@ function App() {
       await saveSettings({ arrowHeadStyle: style });
     } catch (error) {
       console.error("Failed to save arrow head style:", error);
+    }
+  };
+
+  /**
+   * Handle shape style change (classic vs sketchy/Excalidraw-like)
+   */
+  const handleShapeStyleChange = async (style: ShapeStyle) => {
+    setShapeStyle(style);
+    try {
+      await saveSettings({ shapeStyle: style });
+    } catch (error) {
+      console.error("Failed to save shape style:", error);
     }
   };
 
@@ -437,6 +479,7 @@ function App() {
       setFadeDuration(reloadedSettings.fadeDuration);
       setPanelTransparency(reloadedSettings.panelTransparency);
       setArrowHeadStyle(reloadedSettings.arrowHeadStyle);
+      setShapeStyle(reloadedSettings.shapeStyle);
       setHotkeys(reloadedSettings.hotkeys);
       setCurrentColorForTool(reloadedSettings.colors);
       setHotkeyConflicts({});
@@ -490,6 +533,7 @@ function App() {
           setFadeDuration(imported.fadeDuration);
           setPanelTransparency(imported.panelTransparency);
           setArrowHeadStyle(imported.arrowHeadStyle);
+          setShapeStyle(imported.shapeStyle);
           setHotkeys(imported.hotkeys);
           setCurrentColorForTool(imported.colors);
 
@@ -550,6 +594,29 @@ function App() {
             <div className="st-card">
               <div className="st-row">
                 <div>
+                  <div className="st-row-label">Shape style</div>
+                  <div className="st-row-sub">Clean strokes or a hand-drawn, Excalidraw-like look</div>
+                </div>
+                <div className="st-seg">
+                  <button
+                    type="button"
+                    className={shapeStyle === ShapeStyle.CLASSIC ? "active" : ""}
+                    onClick={() => handleShapeStyleChange(ShapeStyle.CLASSIC)}
+                  >
+                    Classic
+                  </button>
+                  <button
+                    type="button"
+                    className={shapeStyle === ShapeStyle.SKETCHY ? "active" : ""}
+                    onClick={() => handleShapeStyleChange(ShapeStyle.SKETCHY)}
+                  >
+                    Sketchy
+                  </button>
+                </div>
+              </div>
+
+              <div className="st-row">
+                <div>
                   <div className="st-row-label">Line thickness</div>
                   <div className="st-row-sub">Stroke width for all tools</div>
                 </div>
@@ -595,6 +662,24 @@ function App() {
                   <div className="st-row-sub">Background of the floating strip</div>
                 </div>
                 <div className="st-slider-wrap">
+                  <span className="st-strip-preview" title="Toolbar preview">
+                    <span
+                      style={{
+                        position: "absolute",
+                        inset: 0,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 3,
+                        backgroundColor: "rgba(28, 28, 30, 0.92)",
+                        opacity: panelTransparency,
+                      }}
+                    >
+                      <span className="st-strip-preview-dot" />
+                      <span className="st-strip-preview-dot" />
+                      <span className="st-strip-preview-dot" />
+                    </span>
+                  </span>
                   <Slider
                     min={0}
                     max={100}
@@ -770,6 +855,41 @@ function App() {
                 <button type="button" className="st-btn st-btn-danger" onClick={handleResetSettings}>
                   Reset to Defaults
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* About */}
+        {activeTab === "about" && (
+          <div className="st-page" key="about">
+            <h1 className="st-page-title">About</h1>
+
+            <div className="st-card">
+              <div className="st-about-hero">
+                <span className="st-about-mark" />
+                <div>
+                  <div className="st-about-name">Annotatr</div>
+                  <div className="st-about-tagline">Screen annotation for recordings</div>
+                </div>
+              </div>
+
+              <div className="st-row">
+                <div className="st-row-label">Version</div>
+                <span className="st-value">{appVersion || "—"}</span>
+              </div>
+
+              <div className="st-row">
+                <div>
+                  <div className="st-row-label">Created by</div>
+                  <div className="st-row-sub">Dennis Rongo</div>
+                </div>
+                <a className="st-link" href="https://dennisrongo.com" onClick={handleOpenWebsite}>
+                  dennisrongo.com
+                  <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M4.5 2.5h5v5M9.5 2.5L2.5 9.5" />
+                  </svg>
+                </a>
               </div>
             </div>
           </div>
@@ -997,6 +1117,25 @@ html, body, #root {
   box-shadow: 0 0 6px rgba(0, 0, 0, 0.4);
 }
 
+/* Toolbar-opacity preview: colorful "screen content" behind the strip color */
+.st-strip-preview {
+  position: relative;
+  flex: none;
+  width: 38px;
+  height: 22px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: linear-gradient(135deg, #ff453a 0%, #ffd60a 35%, #34c759 65%, #0a84ff 100%);
+}
+
+.st-strip-preview-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.85);
+}
+
 /* ---- Keycaps & hotkeys ---- */
 .st-keys { display: inline-flex; gap: 4px; }
 
@@ -1185,6 +1324,50 @@ html, body, #root {
   opacity: 0;
   pointer-events: none;
 }
+
+/* ---- About tab ---- */
+.st-about-hero {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 14px;
+  border-bottom: 1px solid var(--hairline-faint);
+}
+
+.st-about-mark {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border-radius: 50%;
+  background: radial-gradient(circle at 32% 30%, #ff6b61, var(--accent) 65%);
+  box-shadow: 0 0 16px rgba(255, 69, 58, 0.55);
+}
+
+.st-about-name {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+}
+
+.st-about-tagline {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.st-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--accent);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.st-link:hover { text-decoration: underline; }
+.st-link svg { opacity: 0.7; }
 `;
 
 export default App;

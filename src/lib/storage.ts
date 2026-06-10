@@ -4,7 +4,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
-import { ArrowHeadStyle } from '../types/shapes';
+import { ArrowHeadStyle, ShapeStyle } from '../types/shapes';
 
 export interface Settings {
   hotkeys: {
@@ -41,6 +41,8 @@ export interface Settings {
   panelCollapsed: boolean;
   // Feature #131: Arrow head style customization
   arrowHeadStyle: ArrowHeadStyle;
+  // Shape rendering style (classic strokes or hand-drawn Excalidraw-like)
+  shapeStyle: ShapeStyle;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -78,6 +80,8 @@ export const DEFAULT_SETTINGS: Settings = {
   panelCollapsed: false,
   // Feature #131: Arrow head style default (filled triangle)
   arrowHeadStyle: ArrowHeadStyle.FILLED,
+  // Shape rendering style default (classic clean strokes)
+  shapeStyle: ShapeStyle.CLASSIC,
 };
 
 /**
@@ -349,6 +353,12 @@ function validateImportedSettings(imported: unknown): Settings {
         settings.panelTransparency < 0.0 || settings.panelTransparency > 1.0) {
       throw new Error('Invalid settings: panelTransparency must be between 0.0 and 1.0');
     }
+  }
+
+  // Validate shape style if present
+  if (settings.shapeStyle !== undefined &&
+      !Object.values(ShapeStyle).includes(settings.shapeStyle as ShapeStyle)) {
+    throw new Error('Invalid settings: shapeStyle must be "classic" or "sketchy"');
   }
 
   // Merge with defaults to ensure all keys exist

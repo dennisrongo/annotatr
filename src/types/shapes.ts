@@ -20,6 +20,14 @@ export enum ArrowHeadStyle {
   DOUBLE_HEADED = "double", // Arrow heads on both ends
 }
 
+/**
+ * Rendering style for shapes
+ */
+export enum ShapeStyle {
+  CLASSIC = "classic",  // Clean strokes (default)
+  SKETCHY = "sketchy",  // Hand-drawn, Excalidraw-like look (rough.js)
+}
+
 export interface Point {
   x: number;
   y: number;
@@ -33,6 +41,9 @@ export interface BaseShape {
   createdAt: number;
   monitorId?: string; // Feature #9: Track which monitor this shape belongs to (optional for now)
   customFadeDuration?: number; // Feature #128: Optional custom fade duration in seconds (overrides global setting)
+  // Seed for the sketchy render style. Fixed at mousedown so the hand-drawn
+  // wobble stays identical across preview frames and fade redraws.
+  roughSeed?: number;
 }
 
 export interface ArrowShape extends BaseShape {

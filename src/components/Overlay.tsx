@@ -1,8 +1,8 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { ToolType, Shape, ArrowShape, CircleShape, BoxShape, FreehandShape, HighlighterShape, TextShape, Point } from "../types/shapes";
-import { drawShape, redrawShapes } from "../lib/drawing";
+import { ToolType, Shape, ArrowShape, CircleShape, BoxShape, FreehandShape, HighlighterShape, TextShape, Point, ShapeStyle } from "../types/shapes";
+import { drawShape, redrawShapes, SKETCHY_FONT_STACK } from "../lib/drawing";
 import { loadSettings, Settings, DEFAULT_SETTINGS } from "../lib/storage";
 import { findShapeAtPoint, updateShapeProperty, drawSelectionIndicator } from "../lib/shapeEditing";
 
@@ -109,6 +109,13 @@ export default function Overlay() {
   const redrawRef = useRef<() => void>(() => {});
   const isDrawingRef = useRef(false);
 
+  // Sketchy style: seed picked at mousedown so the hand-drawn wobble stays
+  // identical across preview frames and on the final shape
+  const sketchSeedRef = useRef(1);
+  const getShapeStyle = useCallback((): ShapeStyle => {
+    return settingsRef.current?.shapeStyle ?? ShapeStyle.CLASSIC;
+  }, []);
+
   // Feature #128: Custom fade duration for the next shape (null = use global setting)
   const [customFadeDuration, setCustomFadeDuration] = useState<number | null>(null);
 
@@ -198,14 +205,14 @@ export default function Overlay() {
     if (!context) return;
 
     const { ctx } = context;
-    redrawShapes(ctx, shapesRef.current, shapeOpacitiesRef.current);
+    redrawShapes(ctx, shapesRef.current, shapeOpacitiesRef.current, getShapeStyle());
 
     // Feature #125: Draw selection indicator if the selected shape still
     // exists (it may have been removed by fade-out, clear, or undo)
     if (selectedShape && isEditMode && shapesRef.current.some(s => s.id === selectedShape.id)) {
       drawSelectionIndicator(ctx, selectedShape);
     }
-  }, [getCanvasContext, selectedShape, isEditMode]);
+  }, [getCanvasContext, selectedShape, isEditMode, getShapeStyle]);
   redrawRef.current = redrawAllShapes;
 
   /**
@@ -343,6 +350,7 @@ export default function Overlay() {
       createdAt: Date.now(),
       monitorId: currentMonitor || "default", // Feature #9: Track monitor ID
       arrowHeadStyle: settings?.arrowHeadStyle, // Feature #131: Arrow head style customization
+      roughSeed: sketchSeedRef.current,
     };
 
     // Feature #128: Add custom fade duration if set
@@ -365,10 +373,12 @@ export default function Overlay() {
     currentX: number,
     currentY: number
   ): CircleShape => {
-    const centerX = startX;
-    const centerY = startY;
-    const radiusX = Math.abs(currentX - startX);
-    const radiusY = Math.abs(currentY - startY);
+    // Start point and cursor form opposite corners of the bounding box,
+    // matching how the box tool expands from the drag origin
+    const centerX = (startX + currentX) / 2;
+    const centerY = (startY + currentY) / 2;
+    const radiusX = Math.abs(currentX - startX) / 2;
+    const radiusY = Math.abs(currentY - startY) / 2;
 
     const shape: CircleShape = {
       id: generateShapeId(),
@@ -381,6 +391,7 @@ export default function Overlay() {
       lineThickness: getToolLineThickness(ToolType.CIRCLE), // Feature #106: Use tool-specific line thickness
       createdAt: Date.now(),
       monitorId: currentMonitor || "default", // Feature #9: Track monitor ID
+      roughSeed: sketchSeedRef.current,
     };
 
     // Feature #128: Add custom fade duration if set
@@ -417,6 +428,7 @@ export default function Overlay() {
       lineThickness: getToolLineThickness(ToolType.BOX), // Feature #106: Use tool-specific line thickness
       createdAt: Date.now(),
       monitorId: currentMonitor || "default", // Feature #9: Track monitor ID
+      roughSeed: sketchSeedRef.current,
     };
 
     // Feature #128: Add custom fade duration if set
@@ -442,6 +454,7 @@ export default function Overlay() {
       lineThickness: getToolLineThickness(ToolType.FREEHAND), // Feature #106: Use tool-specific line thickness
       createdAt: Date.now(),
       monitorId: currentMonitor || "default", // Feature #9: Track monitor ID
+      roughSeed: sketchSeedRef.current,
     };
 
     // Feature #128: Add custom fade duration if set
@@ -567,6 +580,9 @@ export default function Overlay() {
       return;
     }
 
+    // New drag → new sketch seed, held constant until the shape is finished
+    sketchSeedRef.current = Math.floor(Math.random() * 2147483646) + 1;
+
     // For freehand and highlighter, start tracking points
     const initialPoints = currentTool === ToolType.FREEHAND || currentTool === ToolType.HIGHLIGHTER
       ? [{ x: startX, y: startY }]
@@ -617,14 +633,14 @@ export default function Overlay() {
       const { ctx } = context;
 
       // Clear and redraw all existing shapes
-      redrawShapes(ctx, shapesRef.current, shapeOpacitiesRef.current);
+      redrawShapes(ctx, shapesRef.current, shapeOpacitiesRef.current, getShapeStyle());
 
       // Draw preview of current freehand path
       const previewShape = currentTool === ToolType.FREEHAND
         ? createFreehandShape([...drawingState.freehandPoints, newPoint])
         : createHighlighterShape([...drawingState.freehandPoints, newPoint]);
 
-      drawShape(ctx, previewShape);
+      drawShape(ctx, previewShape, undefined, getShapeStyle());
       return;
     }
 
@@ -642,7 +658,7 @@ export default function Overlay() {
     const { ctx } = context;
 
     // Clear and redraw all existing shapes
-    redrawShapes(ctx, shapesRef.current, shapeOpacitiesRef.current);
+    redrawShapes(ctx, shapesRef.current, shapeOpacitiesRef.current, getShapeStyle());
 
     // Draw preview of current shape
     let previewShape: Shape;
@@ -661,8 +677,8 @@ export default function Overlay() {
         return;
     }
 
-    drawShape(ctx, previewShape);
-  }, [drawingState.isDrawing, drawingState.startX, drawingState.startY, drawingState.freehandPoints, currentTool, getCanvasContext, createArrowShape, createCircleShape, createBoxShape, createFreehandShape, createHighlighterShape]);
+    drawShape(ctx, previewShape, undefined, getShapeStyle());
+  }, [drawingState.isDrawing, drawingState.startX, drawingState.startY, drawingState.freehandPoints, currentTool, getCanvasContext, createArrowShape, createCircleShape, createBoxShape, createFreehandShape, createHighlighterShape, getShapeStyle]);
 
   /**
    * Handle text input submission
@@ -1072,7 +1088,7 @@ export default function Overlay() {
       console.log(`[Feature #122] Canvas resized for DPI: ${dpr}x (${window.innerWidth}x${window.innerHeight} -> ${canvas.width}x${canvas.height})`);
 
       // Redraw shapes after resize
-      redrawShapes(ctx, shapesRef.current, shapeOpacitiesRef.current);
+      redrawShapes(ctx, shapesRef.current, shapeOpacitiesRef.current, settingsRef.current?.shapeStyle ?? ShapeStyle.CLASSIC);
     };
 
     resizeCanvas();
@@ -1227,6 +1243,8 @@ export default function Overlay() {
             top: textInputPosition.y,
             // Feature #30: Use font size from settings
             fontSize: settings ? `${Math.round(settings.fontSize * 1.7)}px` : "24px",
+            // Match the canvas font so the input previews the final text
+            fontFamily: settings?.shapeStyle === ShapeStyle.SKETCHY ? SKETCHY_FONT_STACK : "sans-serif",
             padding: "4px 8px",
             // Feature #31: Use text color from settings for border and text
             border: `2px solid ${settings?.colors.text || "#FF0000"}`,
