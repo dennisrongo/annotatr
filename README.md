@@ -4,6 +4,16 @@
 
 A cross-platform screen annotation overlay tool that lets you draw arrows, circles, boxes, freehand strokes, highlights, and text on your screen in real-time — perfect for tutorials, presentations, and screen recordings with any capture software (OBS, Loom, Zoom, etc.).
 
+<p align="center">
+  <img src="docs/assets/toolbar.png" alt="Annotatr's floating toolbar: six drawing tools, color swatch, undo, clear, settings, and quit" width="620">
+</p>
+
+| Classic strokes | Sketchy (hand-drawn) |
+|:---:|:---:|
+| ![Clean classic-style annotations drawn over an app](docs/assets/overlay-classic.png) | ![Hand-drawn sketchy-style annotations drawn over an app](docs/assets/overlay-sketchy.png) |
+
+<p align="center"><em>Summon the toolbar with a hotkey, draw live over any app, and let shapes fade away on their own — <a href="https://dennisrongo.github.io/annotatr/">try the live demo</a>.</em></p>
+
 ## Features
 
 - **6 Drawing Tools**: Arrow, Circle, Box, Freehand, Highlighter, and Text
@@ -77,6 +87,10 @@ A cross-platform screen annotation overlay tool that lets you draw arrows, circl
 | Toggle edit mode (click a shape to restyle or delete it) | `Ctrl/Cmd+E` |
 
 ### Settings
+
+<p align="center">
+  <img src="docs/assets/settings.png" alt="Annotatr's settings window with native macOS chrome, showing the Drawing tab" width="640">
+</p>
 
 The Settings window (gear icon on the toolbar) is organized into tabs:
 
