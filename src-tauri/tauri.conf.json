@@ -16,8 +16,10 @@
       {
         "label": "main",
         "title": "Annotatr Settings",
-        "width": 600,
-        "height": 500,
+        "width": 660,
+        "height": 520,
+        "minWidth": 580,
+        "minHeight": 440,
         "resizable": true,
         "fullscreen": false,
         "decorations": true,

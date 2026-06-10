@@ -1,9 +1,0 @@
-Total messages: 9 (Errors: 6, Warnings: 0)
-Returning 6 messages for level "error"
-
-[ERROR] Failed to load platform info: Error @ http://127.0.0.1:5173/src/App.tsx:149
-[ERROR] [Storage] Failed to save storage_test_key: Error @ http://127.0.0.1:5173/src/lib/storage.ts:28
-[ERROR] Failed to load platform info: Error @ http://127.0.0.1:5173/src/App.tsx:149
-[ERROR] [Storage] Failed to save storage_test_key: Error @ http://127.0.0.1:5173/src/lib/storage.ts:28
-[ERROR] [Storage] Connectivity test FAILED: Error @ http://127.0.0.1:5173/src/lib/storage.ts:90
-[ERROR] [Storage] Connectivity test FAILED: Error @ http://127.0.0.1:5173/src/lib/storage.ts:90

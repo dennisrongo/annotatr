@@ -7,31 +7,119 @@ import { ArrowHeadStyle } from "./types/shapes";
  * Preset color palette for drawing tools
  */
 const PRESET_COLORS = [
-  "#FF0000", // Red
-  "#FF8C00", // Dark Orange
-  "#FFD700", // Gold
-  "#00FF00", // Lime
-  "#008000", // Green
-  "#00FFFF", // Cyan
-  "#0000FF", // Blue
-  "#800080", // Purple
-  "#FF00FF", // Magenta
-  "#000000", // Black
+  "#FF3B30", // Red
+  "#FF9500", // Orange
+  "#FFD60A", // Yellow
+  "#34C759", // Green
+  "#00C7BE", // Teal
+  "#0A84FF", // Blue
+  "#BF5AF2", // Purple
+  "#FF2D55", // Pink
   "#FFFFFF", // White
-  "#808080", // Gray
-];
-
-/**
- * Settings tabs definition
- */
-const SETTINGS_TABS = [
-  { id: "general", label: "General", icon: "⚙️" },
-  { id: "shortcuts", label: "Shortcuts", icon: "⌨️" },
-  { id: "colors", label: "Colors", icon: "🎨" },
-  { id: "advanced", label: "Advanced", icon: "🔧" },
+  "#000000", // Black
 ];
 
 type TabId = "general" | "shortcuts" | "colors" | "advanced";
+
+/** Human-readable names for hotkey actions */
+const HOTKEY_LABELS: Record<string, string> = {
+  toggleDrawingMode: "Toggle Toolbar",
+  arrowTool: "Arrow",
+  circleTool: "Circle",
+  boxTool: "Box",
+  freehandTool: "Freehand",
+  highlighterTool: "Highlighter",
+  textTool: "Text",
+};
+
+/** macOS-style symbols for modifier/special keys */
+const KEY_SYMBOLS: Record<string, string> = {
+  Cmd: "⌘",
+  Ctrl: "⌃",
+  Shift: "⇧",
+  Alt: "⌥",
+  Win: "⊞",
+  Space: "Space",
+  ArrowLeft: "←",
+  ArrowRight: "→",
+  ArrowUp: "↑",
+  ArrowDown: "↓",
+  Escape: "⎋",
+  Enter: "↩",
+  Backspace: "⌫",
+  Delete: "⌦",
+  Tab: "⇥",
+};
+
+/** Render a "Ctrl+Shift+A" combo as individual keycaps */
+function Keycaps({ combo }: { combo: string }) {
+  return (
+    <span className="st-keys">
+      {combo.split("+").map((key, i) => (
+        <kbd key={i} className="st-key">{KEY_SYMBOLS[key] ?? key}</kbd>
+      ))}
+    </span>
+  );
+}
+
+/** Range slider with an accent-filled track */
+function Slider({
+  min, max, step, value, onChange,
+}: {
+  min: number; max: number; step: number; value: number;
+  onChange: (value: number) => void;
+}) {
+  const pct = ((value - min) / (max - min)) * 100;
+  return (
+    <input
+      type="range"
+      className="st-slider"
+      min={min}
+      max={max}
+      step={step}
+      value={value}
+      onChange={(e) => onChange(parseInt(e.target.value, 10))}
+      style={{
+        background: `linear-gradient(to right, var(--accent) ${pct}%, rgba(255,255,255,0.12) ${pct}%)`,
+      }}
+    />
+  );
+}
+
+/** Sidebar nav icons (16x16, stroke = currentColor) */
+const ICONS: Record<TabId, React.ReactNode> = {
+  general: (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M11.3 2.2l2.5 2.5L5.5 13 2.5 13.5 3 10.5z" />
+      <path d="M9.5 4l2.5 2.5" />
+    </svg>
+  ),
+  shortcuts: (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+      <rect x="1.75" y="4" width="12.5" height="8" rx="1.5" />
+      <path d="M4.25 7h.01M7 7h.01M9.75 7h.01M12 7h.01M4.75 9.75h6.5" />
+    </svg>
+  ),
+  colors: (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round">
+      <path d="M8 1.8S3.25 7.2 3.25 10.1a4.75 4.75 0 0 0 9.5 0C12.75 7.2 8 1.8 8 1.8z" />
+    </svg>
+  ),
+  advanced: (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+      <path d="M2 5h2.2M7.8 5H14M2 11h6.2M11.8 11H14" />
+      <circle cx="6" cy="5" r="1.8" />
+      <circle cx="10" cy="11" r="1.8" />
+    </svg>
+  ),
+};
+
+const TABS: Array<{ id: TabId; label: string }> = [
+  { id: "general", label: "Drawing" },
+  { id: "shortcuts", label: "Shortcuts" },
+  { id: "colors", label: "Colors" },
+  { id: "advanced", label: "Advanced" },
+];
 
 function App() {
   // Active tab state
@@ -87,17 +175,6 @@ function App() {
     };
     loadAllSettings();
   }, []);
-
-  /**
-   * Hide the settings window
-   */
-  const hideWindow = async () => {
-    try {
-      await invoke("hide_main_window");
-    } catch (error) {
-      console.error("Failed to hide window:", error);
-    }
-  };
 
   /**
    * Handle line thickness change
@@ -433,200 +510,170 @@ function App() {
     }
   };
 
+  const conflictEntries = Object.entries(hotkeyConflicts).filter(([, info]: [string, any]) => info.conflict);
+
   return (
-    <div style={styles.container}>
-      {/* Header */}
-      <div style={styles.header}>
-        <h1 style={styles.title}>Annotatr Settings</h1>
-        <button
-          type="button"
-          onClick={hideWindow}
-          style={styles.closeButton}
-          title="Close settings"
-        >
-          ×
-        </button>
-      </div>
+    <div className="st-app">
+      <style>{CSS}</style>
 
-      {/* Tabs */}
-      <div style={styles.tabs}>
-        {SETTINGS_TABS.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => setActiveTab(tab.id as TabId)}
-            style={{
-              ...styles.tab,
-              ...(activeTab === tab.id ? styles.tabActive : {}),
-            }}
-          >
-            <span>{tab.icon}</span>
-            <span>{tab.label}</span>
-          </button>
-        ))}
-      </div>
+      {/* Sidebar navigation */}
+      <aside className="st-sidebar">
+        <div className="st-brand">
+          <span className="st-brand-dot" />
+          <span className="st-brand-name">Annotatr</span>
+        </div>
 
-      {/* Content */}
-      <div style={styles.content}>
-        {/* General Tab */}
+        <nav className="st-nav">
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              className={`st-nav-item${activeTab === tab.id ? " active" : ""}`}
+              onClick={() => setActiveTab(tab.id)}
+            >
+              {ICONS[tab.id]}
+              <span>{tab.label}</span>
+            </button>
+          ))}
+        </nav>
+
+        <div className="st-sidebar-foot">Changes save automatically</div>
+      </aside>
+
+      {/* Content pane */}
+      <main className="st-content">
+        {/* Drawing (General) */}
         {activeTab === "general" && (
-          <div style={styles.tabContent}>
-            <h2 style={styles.sectionTitle}>Drawing Settings</h2>
+          <div className="st-page" key="general">
+            <h1 className="st-page-title">Drawing</h1>
 
-            {/* Line Thickness */}
-            <div style={styles.settingRow}>
-              <label style={styles.label}>Line Thickness</label>
-              <div style={styles.sliderContainer}>
-                <span style={styles.sliderValue}>{lineThickness}px</span>
-                <input
-                  type="range"
-                  min="1"
-                  max="50"
-                  step="1"
-                  value={lineThickness}
-                  onChange={(e) => handleLineThicknessChange(parseInt(e.target.value, 10))}
-                  style={styles.slider}
-                />
+            <div className="st-card">
+              <div className="st-row">
+                <div>
+                  <div className="st-row-label">Line thickness</div>
+                  <div className="st-row-sub">Stroke width for all tools</div>
+                </div>
+                <div className="st-slider-wrap">
+                  <span
+                    className="st-dot-preview"
+                    style={{
+                      width: Math.min(lineThickness, 26),
+                      height: Math.min(lineThickness, 26),
+                      backgroundColor: currentColorForTool.arrow || "#FF3B30",
+                    }}
+                  />
+                  <Slider min={1} max={50} step={1} value={lineThickness} onChange={handleLineThicknessChange} />
+                  <span className="st-value">{lineThickness}px</span>
+                </div>
+              </div>
+
+              <div className="st-row">
+                <div>
+                  <div className="st-row-label">Font size</div>
+                  <div className="st-row-sub">Text tool annotations</div>
+                </div>
+                <div className="st-slider-wrap">
+                  <Slider min={8} max={72} step={1} value={fontSize} onChange={handleFontSizeChange} />
+                  <span className="st-value">{fontSize}pt</span>
+                </div>
+              </div>
+
+              <div className="st-row">
+                <div>
+                  <div className="st-row-label">Fade duration</div>
+                  <div className="st-row-sub">How long shapes stay on screen</div>
+                </div>
+                <div className="st-slider-wrap">
+                  <Slider min={1} max={60} step={1} value={fadeDuration} onChange={handleFadeDurationChange} />
+                  <span className="st-value">{fadeDuration}s</span>
+                </div>
+              </div>
+
+              <div className="st-row">
+                <div>
+                  <div className="st-row-label">Toolbar opacity</div>
+                  <div className="st-row-sub">Background of the floating strip</div>
+                </div>
+                <div className="st-slider-wrap">
+                  <Slider
+                    min={0}
+                    max={100}
+                    step={5}
+                    value={Math.round(panelTransparency * 100)}
+                    onChange={(v) => handlePanelTransparencyChange(v / 100)}
+                  />
+                  <span className="st-value">{Math.round(panelTransparency * 100)}%</span>
+                </div>
               </div>
             </div>
-
-            {/* Font Size */}
-            <div style={styles.settingRow}>
-              <label style={styles.label}>Font Size</label>
-              <div style={styles.sliderContainer}>
-                <span style={styles.sliderValue}>{fontSize}pt</span>
-                <input
-                  type="range"
-                  min="8"
-                  max="72"
-                  step="1"
-                  value={fontSize}
-                  onChange={(e) => handleFontSizeChange(parseInt(e.target.value, 10))}
-                  style={styles.slider}
-                />
-              </div>
-            </div>
-
-            {/* Fade Duration */}
-            <div style={styles.settingRow}>
-              <label style={styles.label}>Fade Duration</label>
-              <div style={styles.sliderContainer}>
-                <span style={styles.sliderValue}>{fadeDuration}s</span>
-                <input
-                  type="range"
-                  min="1"
-                  max="60"
-                  step="1"
-                  value={fadeDuration}
-                  onChange={(e) => handleFadeDurationChange(parseInt(e.target.value, 10))}
-                  style={styles.slider}
-                />
-              </div>
-            </div>
-
-            {/* Panel Transparency */}
-            <div style={styles.settingRow}>
-              <label style={styles.label}>Panel Transparency</label>
-              <div style={styles.sliderContainer}>
-                <span style={styles.sliderValue}>{Math.round(panelTransparency * 100)}%</span>
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  step="5"
-                  value={Math.round(panelTransparency * 100)}
-                  onChange={(e) => handlePanelTransparencyChange(parseInt(e.target.value, 10) / 100)}
-                  style={styles.slider}
-                />
-              </div>
-            </div>
-
-            <p style={styles.hint}>
-              💡 Changes are saved automatically and apply to the next shape you draw.
-            </p>
           </div>
         )}
 
-        {/* Shortcuts Tab */}
+        {/* Shortcuts */}
         {activeTab === "shortcuts" && (
-          <div style={styles.tabContent}>
-            <h2 style={styles.sectionTitle}>Keyboard Shortcuts</h2>
+          <div className="st-page" key="shortcuts">
+            <h1 className="st-page-title">Shortcuts</h1>
 
-            {/* Registration failure (binding was NOT saved) */}
             {hotkeyError && (
-              <div style={styles.warningBox}>
-                <h3 style={styles.warningTitle}>⚠️ Hotkey Not Saved</h3>
-                <p style={styles.warningText}>{hotkeyError}</p>
-                <p style={styles.warningText}>Your previous binding is still active.</p>
+              <div className="st-callout error">
+                <strong>Hotkey not saved.</strong> {hotkeyError} Your previous binding is still active.
               </div>
             )}
 
-            {/* Conflict Warnings */}
-            {Object.keys(hotkeyConflicts).length > 0 && (
-              <div style={styles.warningBox}>
-                <h3 style={styles.warningTitle}>⚠️ Hotkey Conflicts Detected</h3>
-                <p style={styles.warningText}>
-                  The following hotkeys may conflict with system shortcuts:
-                </p>
-                <ul style={styles.warningList}>
-                  {Object.entries(hotkeyConflicts).map(
-                    ([hotkeyName, info]: [string, any]) =>
-                      info.conflict && (
-                        <li key={hotkeyName}>
-                          <strong>{hotkeyName} ({info.hotkey})</strong>
-                          : Used by system for "{info.system_function}"
-                        </li>
-                      )
-                  )}
-                </ul>
-              </div>
-            )}
-
-            {/* Hotkey List */}
-            <div style={styles.hotkeyList}>
-              {Object.entries(hotkeys).map(([hotkeyName, hotkeyValue]: [string, string]) => (
-                <div key={hotkeyName} style={styles.hotkeyItem}>
-                  <span style={styles.hotkeyName}>
-                    {hotkeyName
-                      .replace(/([A-Z])/g, " $1")
-                      .replace(/^./, (str) => str.toUpperCase())
-                      .trim()}
+            {conflictEntries.length > 0 && (
+              <div className="st-callout warn">
+                <strong>Possible system conflicts:</strong>{" "}
+                {conflictEntries.map(([name, info]: [string, any], i) => (
+                  <span key={name}>
+                    {i > 0 && ", "}
+                    {HOTKEY_LABELS[name] ?? name} ({info.hotkey}) is used for “{info.system_function}”
                   </span>
+                ))}
+              </div>
+            )}
+
+            <div className="st-card">
+              {Object.entries(hotkeys).map(([hotkeyName, hotkeyValue]: [string, string]) => (
+                <div key={hotkeyName} className="st-row">
+                  <div className="st-row-label">{HOTKEY_LABELS[hotkeyName] ?? hotkeyName}</div>
+
                   {editingHotkey === hotkeyName ? (
-                    <div ref={hotkeyCaptureRef} style={styles.hotkeyEditContainer} tabIndex={0} onKeyDown={handleHotkeyCapture}>
-                      <code style={{
-                        ...styles.hotkeyValue,
-                        backgroundColor: capturedHotkey ? "#10b981" : "#fef3c7",
-                        color: capturedHotkey ? "white" : "#333",
-                      }}>
-                        {capturedHotkey || "Press keys..."}
-                      </code>
+                    <div
+                      ref={hotkeyCaptureRef}
+                      className="st-capture-wrap"
+                      tabIndex={0}
+                      onKeyDown={handleHotkeyCapture}
+                    >
+                      {capturedHotkey ? (
+                        <span className="st-capture captured"><Keycaps combo={capturedHotkey} /></span>
+                      ) : (
+                        <span className="st-capture">Press keys…</span>
+                      )}
                       <button
                         type="button"
+                        className="st-btn st-btn-icon confirm"
                         onClick={saveHotkey}
                         disabled={!capturedHotkey}
-                        style={{
-                          ...styles.iconButton,
-                          backgroundColor: capturedHotkey ? "#10b981" : "#d1d5db",
-                        }}
+                        title="Save"
                       >
                         ✓
                       </button>
                       <button
                         type="button"
+                        className="st-btn st-btn-icon"
                         onClick={cancelEditingHotkey}
-                        style={{...styles.iconButton, backgroundColor: "#ef4444"}}
+                        title="Cancel"
                       >
                         ✕
                       </button>
                     </div>
                   ) : (
-                    <div style={styles.hotkeyDisplayContainer}>
-                      <code style={styles.hotkeyValue}>{hotkeyValue}</code>
+                    <div className="st-hotkey-display">
+                      <Keycaps combo={hotkeyValue} />
                       <button
                         type="button"
+                        className="st-btn"
                         onClick={() => startEditingHotkey(hotkeyName)}
-                        style={styles.editButton}
                       >
                         Edit
                       </button>
@@ -636,462 +683,508 @@ function App() {
               ))}
             </div>
 
-            <p style={styles.hint}>
-              💡 Click "Edit" then press your desired key combination to change a hotkey.
-            </p>
+            <p className="st-hint">Click Edit, then press the new key combination.</p>
           </div>
         )}
 
-        {/* Colors Tab */}
+        {/* Colors */}
         {activeTab === "colors" && (
-          <div style={styles.tabContent}>
-            <h2 style={styles.sectionTitle}>Default Tool Colors</h2>
+          <div className="st-page" key="colors">
+            <h1 className="st-page-title">Tool Colors</h1>
 
-            <div style={styles.colorList}>
+            <div className="st-card">
               {Object.entries(currentColorForTool).map(([tool, color]: [string, string]) => (
-                <div key={tool} style={styles.colorItem}>
-                  <div style={styles.colorLabel}>
-                    <span
-                      style={{
-                        ...styles.colorPreview,
-                        backgroundColor: color,
-                      }}
-                    />
+                <div key={tool} className="st-row">
+                  <div className="st-color-name">
+                    <span className="st-tip" style={{ backgroundColor: color }} />
                     <span style={{ textTransform: "capitalize" }}>{tool}</span>
                   </div>
 
-                  <div style={styles.colorPicker}>
-                    {PRESET_COLORS.slice(0, 6).map((presetColor) => (
+                  <div className="st-swatches">
+                    {PRESET_COLORS.slice(0, 7).map((presetColor) => (
                       <button
                         key={presetColor}
                         type="button"
+                        className={`st-swatch${color.toUpperCase() === presetColor.toUpperCase() ? " selected" : ""}`}
+                        style={{ backgroundColor: presetColor }}
                         onClick={() => handleSettingsColorSelect(tool, presetColor)}
-                        style={{
-                          ...styles.presetColorButton,
-                          backgroundColor: presetColor,
-                          border: color === presetColor ? "2px solid #2563eb" : "1px solid #ccc",
-                        }}
-                        title={`Set ${tool} color to ${presetColor}`}
+                        title={presetColor}
                       />
                     ))}
                     <button
                       type="button"
+                      className="st-swatch st-swatch-custom"
                       onClick={() => openSettingsColorPicker(tool)}
-                      style={styles.customColorButton}
-                      title={`Select custom color for ${tool}`}
+                      title="Custom color"
                     />
                   </div>
                 </div>
               ))}
             </div>
-
-            <p style={styles.hint}>
-              💡 Click a preset color or the rainbow button to choose custom colors for each tool.
-            </p>
           </div>
         )}
 
-        {/* Advanced Tab */}
+        {/* Advanced */}
         {activeTab === "advanced" && (
-          <div style={styles.tabContent}>
-            <h2 style={styles.sectionTitle}>Advanced Settings</h2>
+          <div className="st-page" key="advanced">
+            <h1 className="st-page-title">Advanced</h1>
 
-            {/* Arrow Head Style */}
-            <div style={styles.advancedSection}>
-              <h3 style={styles.advancedSectionTitle}>Arrow Head Style</h3>
-              <div style={styles.radioGroup}>
-                {Object.values(ArrowHeadStyle).map((style) => (
-                  <label key={style} style={styles.radioLabel}>
-                    <input
-                      type="radio"
-                      name="arrowHeadStyle"
-                      value={style}
-                      checked={arrowHeadStyle === style}
-                      onChange={() => handleArrowHeadStyleChange(style)}
-                      style={styles.radioInput}
-                    />
-                    <span>
-                      {style === ArrowHeadStyle.FILLED && "Filled (solid triangle)"}
-                      {style === ArrowHeadStyle.OPEN && "Open (outline only)"}
-                      {style === ArrowHeadStyle.DOUBLE_HEADED && "Double-headed (both ends)"}
-                    </span>
-                  </label>
-                ))}
+            <div className="st-card">
+              <div className="st-row">
+                <div>
+                  <div className="st-row-label">Arrow head</div>
+                  <div className="st-row-sub">Style of the arrow tool tip</div>
+                </div>
+                <div className="st-seg">
+                  {Object.values(ArrowHeadStyle).map((style) => (
+                    <button
+                      key={style}
+                      type="button"
+                      className={arrowHeadStyle === style ? "active" : ""}
+                      onClick={() => handleArrowHeadStyleChange(style)}
+                    >
+                      {style === ArrowHeadStyle.FILLED && "Filled"}
+                      {style === ArrowHeadStyle.OPEN && "Open"}
+                      {style === ArrowHeadStyle.DOUBLE_HEADED && "Double"}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
 
-            {/* Import/Export */}
-            <div style={styles.advancedSection}>
-              <h3 style={styles.advancedSectionTitle}>Settings Management</h3>
-              <div style={styles.buttonGroup}>
-                <button
-                  type="button"
-                  onClick={handleExportSettings}
-                  style={styles.actionButton}
-                >
-                  Export Settings
-                </button>
-                <button
-                  type="button"
-                  onClick={handleImportSettings}
-                  style={styles.actionButton}
-                >
-                  Import Settings
+              <div className="st-row">
+                <div>
+                  <div className="st-row-label">Settings file</div>
+                  <div className="st-row-sub">Back up or move your configuration</div>
+                </div>
+                <div className="st-btn-group">
+                  <button type="button" className="st-btn" onClick={handleExportSettings}>Export…</button>
+                  <button type="button" className="st-btn" onClick={handleImportSettings}>Import…</button>
+                </div>
+              </div>
+
+              <div className="st-row">
+                <div>
+                  <div className="st-row-label">Reset</div>
+                  <div className="st-row-sub">Restore every setting to its default</div>
+                </div>
+                <button type="button" className="st-btn st-btn-danger" onClick={handleResetSettings}>
+                  Reset to Defaults
                 </button>
               </div>
-            </div>
-
-            {/* Reset */}
-            <div style={styles.advancedSection}>
-              <h3 style={styles.advancedSectionTitle}>Reset</h3>
-              <button
-                type="button"
-                onClick={handleResetSettings}
-                style={styles.resetButton}
-              >
-                Reset to Defaults
-              </button>
             </div>
           </div>
         )}
-      </div>
-
-      {/* Footer */}
-      <div style={styles.footer}>
-        <span style={styles.footerText}>Changes are saved automatically</span>
-      </div>
+      </main>
 
       {/* Hidden color input */}
       <input
         ref={settingsColorInputRef}
         type="color"
         onChange={handleSettingsCustomColorChange}
-        style={styles.hiddenInput}
-        value={currentColorForTool[editingColorForTool || "arrow"] || "#FF0000"}
+        className="st-hidden-input"
+        value={currentColorForTool[editingColorForTool || "arrow"] || "#FF3B30"}
       />
     </div>
   );
 }
 
-const styles: Record<string, React.CSSProperties> = {
-  container: {
-    display: "flex",
-    flexDirection: "column",
-    height: "100vh",
-    backgroundColor: "#f9fafb",
-    fontFamily: "Inter, system-ui, -apple-system, sans-serif",
-  },
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: "16px 24px",
-    backgroundColor: "white",
-    borderBottom: "1px solid #e5e7eb",
-  },
-  title: {
-    margin: 0,
-    fontSize: "20px",
-    fontWeight: "600",
-    color: "#111827",
-  },
-  closeButton: {
-    background: "none",
-    border: "none",
-    fontSize: "28px",
-    cursor: "pointer",
-    color: "#6b7280",
-    padding: "0",
-    width: "32px",
-    height: "32px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: "4px",
-    transition: "background 0.15s",
-  },
-  tabs: {
-    display: "flex",
-    backgroundColor: "white",
-    borderBottom: "1px solid #e5e7eb",
-    padding: "0 24px",
-  },
-  tab: {
-    padding: "12px 16px",
-    backgroundColor: "transparent",
-    color: "#6b7280",
-    border: "none",
-    borderRadius: "6px 6px 0 0",
-    cursor: "pointer",
-    fontSize: "14px",
-    fontWeight: "500",
-    display: "flex",
-    alignItems: "center",
-    gap: "6px",
-    transition: "all 0.15s",
-    marginBottom: "-1px",
-  },
-  tabActive: {
-    backgroundColor: "#f9fafb",
-    color: "#2563eb",
-    borderBottom: "2px solid #2563eb",
-  },
-  content: {
-    flex: 1,
-    overflow: "auto",
-    padding: "24px",
-  },
-  tabContent: {
-    maxWidth: "600px",
-  },
-  sectionTitle: {
-    fontSize: "18px",
-    fontWeight: "600",
-    color: "#111827",
-    marginBottom: "20px",
-  },
-  settingRow: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "8px",
-    marginBottom: "20px",
-    padding: "16px",
-    backgroundColor: "white",
-    borderRadius: "8px",
-    border: "1px solid #e5e7eb",
-  },
-  label: {
-    fontSize: "14px",
-    fontWeight: "500",
-    color: "#374151",
-  },
-  sliderContainer: {
-    display: "flex",
-    alignItems: "center",
-    gap: "12px",
-  },
-  sliderValue: {
-    fontSize: "13px",
-    fontWeight: "600",
-    color: "#2563eb",
-    minWidth: "50px",
-    textAlign: "right",
-  },
-  slider: {
-    flex: 1,
-    height: "6px",
-    cursor: "pointer",
-  },
-  hint: {
-    fontSize: "13px",
-    color: "#6b7280",
-    fontStyle: "italic",
-    marginTop: "20px",
-  },
-  warningBox: {
-    backgroundColor: "#fef3c7",
-    padding: "16px",
-    borderRadius: "8px",
-    marginBottom: "20px",
-    border: "1px solid #f59e0b",
-  },
-  warningTitle: {
-    fontSize: "14px",
-    fontWeight: "600",
-    margin: "0 0 8px 0",
-    color: "#92400e",
-    display: "flex",
-    alignItems: "center",
-    gap: "8px",
-  },
-  warningText: {
-    fontSize: "13px",
-    margin: "0 0 12px 0",
-    color: "#78350f",
-  },
-  warningList: {
-    margin: 0,
-    paddingLeft: "20px",
-    fontSize: "13px",
-    color: "#78350f",
-  },
-  hotkeyList: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "8px",
-  },
-  hotkeyItem: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: "12px",
-    backgroundColor: "white",
-    borderRadius: "8px",
-    border: "1px solid #e5e7eb",
-  },
-  hotkeyName: {
-    fontWeight: "500",
-    color: "#374151",
-  },
-  hotkeyDisplayContainer: {
-    display: "flex",
-    gap: "8px",
-    alignItems: "center",
-  },
-  hotkeyEditContainer: {
-    display: "flex",
-    gap: "8px",
-    alignItems: "center",
-  },
-  hotkeyValue: {
-    padding: "6px 12px",
-    backgroundColor: "#f3f4f6",
-    borderRadius: "4px",
-    minWidth: "100px",
-    textAlign: "center",
-    display: "inline-block",
-    fontSize: "13px",
-    fontFamily: "monospace",
-  },
-  editButton: {
-    padding: "6px 12px",
-    backgroundColor: "#3b82f6",
-    color: "white",
-    border: "none",
-    borderRadius: "4px",
-    cursor: "pointer",
-    fontSize: "12px",
-    fontWeight: "500",
-  },
-  iconButton: {
-    padding: "6px 10px",
-    color: "white",
-    border: "none",
-    borderRadius: "4px",
-    cursor: "pointer",
-    fontSize: "12px",
-  },
-  colorList: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "12px",
-  },
-  colorItem: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: "12px",
-    backgroundColor: "white",
-    borderRadius: "8px",
-    border: "1px solid #e5e7eb",
-  },
-  colorLabel: {
-    display: "flex",
-    alignItems: "center",
-    gap: "10px",
-    fontWeight: "500",
-    color: "#374151",
-  },
-  colorPreview: {
-    display: "inline-block",
-    width: "24px",
-    height: "24px",
-    border: "1px solid #ccc",
-    borderRadius: "4px",
-  },
-  colorPicker: {
-    display: "flex",
-    gap: "6px",
-    alignItems: "center",
-  },
-  presetColorButton: {
-    width: "28px",
-    height: "28px",
-    padding: "0",
-    borderRadius: "4px",
-    cursor: "pointer",
-    transition: "transform 0.1s",
-  },
-  customColorButton: {
-    width: "28px",
-    height: "28px",
-    padding: "0",
-    backgroundColor: "linear-gradient(135deg, #ff0000 0%, #00ff00 50%, #0000ff 100%)",
-    border: "1px solid #999",
-    borderRadius: "4px",
-    cursor: "pointer",
-  },
-  advancedSection: {
-    marginBottom: "24px",
-    padding: "16px",
-    backgroundColor: "white",
-    borderRadius: "8px",
-    border: "1px solid #e5e7eb",
-  },
-  advancedSectionTitle: {
-    fontSize: "14px",
-    fontWeight: "600",
-    margin: "0 0 12px 0",
-    color: "#374151",
-  },
-  radioGroup: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "10px",
-  },
-  radioLabel: {
-    display: "flex",
-    alignItems: "center",
-    gap: "8px",
-    fontSize: "14px",
-    cursor: "pointer",
-    color: "#374151",
-  },
-  radioInput: {
-    cursor: "pointer",
-  },
-  buttonGroup: {
-    display: "flex",
-    gap: "10px",
-  },
-  actionButton: {
-    padding: "10px 16px",
-    backgroundColor: "#3b82f6",
-    color: "white",
-    border: "none",
-    borderRadius: "6px",
-    cursor: "pointer",
-    fontSize: "14px",
-    fontWeight: "500",
-    transition: "background 0.15s",
-  },
-  resetButton: {
-    padding: "10px 16px",
-    backgroundColor: "#dc2626",
-    color: "white",
-    border: "none",
-    borderRadius: "6px",
-    cursor: "pointer",
-    fontSize: "14px",
-    fontWeight: "500",
-  },
-  footer: {
-    padding: "12px 24px",
-    backgroundColor: "white",
-    borderTop: "1px solid #e5e7eb",
-    textAlign: "center",
-  },
-  footerText: {
-    fontSize: "12px",
-    color: "#6b7280",
-  },
-  hiddenInput: {
-    position: "absolute",
-    width: "0",
-    height: "0",
-    opacity: "0",
-    pointerEvents: "none",
-  },
-};
+const CSS = `
+:root {
+  --bg-sidebar: #161618;
+  --bg-content: #1f1f22;
+  --card: rgba(255, 255, 255, 0.045);
+  --hairline: rgba(255, 255, 255, 0.08);
+  --hairline-faint: rgba(255, 255, 255, 0.055);
+  --text: #f4f4f5;
+  --text-dim: rgba(235, 235, 245, 0.55);
+  --text-faint: rgba(235, 235, 245, 0.32);
+  --accent: #ff453a;
+  --mono: ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  min-height: 0;
+  display: block;
+  background: var(--bg-content);
+  overflow: hidden;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+.st-app {
+  display: flex;
+  height: 100vh;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+  font-size: 13px;
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  cursor: default;
+}
+
+/* ---- Sidebar ---- */
+.st-sidebar {
+  width: 168px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--hairline);
+  padding: 14px 10px 12px;
+}
+
+.st-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 8px 14px;
+}
+
+.st-brand-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 10px rgba(255, 69, 58, 0.7);
+}
+
+.st-brand-name {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+
+.st-nav { display: flex; flex-direction: column; gap: 2px; }
+
+.st-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.st-nav-item svg { flex: none; opacity: 0.85; }
+.st-nav-item:hover { background: rgba(255, 255, 255, 0.05); color: var(--text); }
+.st-nav-item.active { background: var(--accent); color: #fff; }
+.st-nav-item.active svg { opacity: 1; }
+
+.st-sidebar-foot {
+  margin-top: auto;
+  padding: 8px 10px 0;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+/* ---- Content ---- */
+.st-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 22px 26px;
+}
+
+.st-content::-webkit-scrollbar { width: 8px; }
+.st-content::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.14); border-radius: 4px; }
+.st-content::-webkit-scrollbar-track { background: transparent; }
+
+.st-page { animation: st-in 0.18s ease-out; }
+
+@keyframes st-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.st-page-title {
+  margin: 2px 0 14px;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+  color: var(--text);
+}
+
+/* ---- Cards & rows ---- */
+.st-card {
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.st-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+  min-height: 52px;
+}
+
+.st-row + .st-row { border-top: 1px solid var(--hairline-faint); }
+
+.st-row-label { font-weight: 500; }
+.st-row-sub { margin-top: 2px; font-size: 11px; color: var(--text-dim); }
+
+.st-hint { margin: 12px 2px 0; font-size: 11px; color: var(--text-faint); }
+
+/* ---- Sliders ---- */
+.st-slider-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  max-width: 280px;
+  justify-content: flex-end;
+}
+
+.st-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 1;
+  min-width: 110px;
+  height: 4px;
+  padding: 0;
+  border: none;
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+.st-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  border: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5), 0 0 0 0.5px rgba(0, 0, 0, 0.15);
+  transition: transform 0.1s;
+}
+
+.st-slider::-webkit-slider-thumb:active { transform: scale(1.12); }
+
+.st-value {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  background: rgba(255, 255, 255, 0.07);
+  border-radius: 5px;
+  padding: 3px 6px;
+  min-width: 42px;
+  text-align: center;
+  color: var(--text);
+  flex: none;
+}
+
+.st-dot-preview {
+  flex: none;
+  border-radius: 50%;
+  transition: width 0.1s, height 0.1s;
+  box-shadow: 0 0 6px rgba(0, 0, 0, 0.4);
+}
+
+/* ---- Keycaps & hotkeys ---- */
+.st-keys { display: inline-flex; gap: 4px; }
+
+.st-key {
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1;
+  padding: 4px 6px;
+  min-width: 22px;
+  text-align: center;
+  color: var(--text);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.06));
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 5px;
+  box-shadow: 0 1.5px 0 rgba(0, 0, 0, 0.45);
+}
+
+.st-hotkey-display, .st-capture-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.st-capture-wrap { outline: none; }
+
+.st-capture {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  padding: 5px 10px;
+  border: 1px dashed rgba(255, 69, 58, 0.55);
+  border-radius: 6px;
+  min-width: 96px;
+  text-align: center;
+  animation: st-pulse 1.2s ease-in-out infinite;
+}
+
+.st-capture.captured {
+  border-style: solid;
+  border-color: rgba(48, 209, 88, 0.6);
+  animation: none;
+}
+
+@keyframes st-pulse {
+  50% { border-color: rgba(255, 69, 58, 0.2); }
+}
+
+/* ---- Buttons ---- */
+.st-btn {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  padding: 5px 11px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.st-btn:hover { background: rgba(255, 255, 255, 0.11); }
+.st-btn:disabled { opacity: 0.4; cursor: default; }
+
+.st-btn-icon {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+}
+
+.st-btn-icon.confirm:not(:disabled) {
+  background: rgba(48, 209, 88, 0.18);
+  border-color: rgba(48, 209, 88, 0.4);
+  color: #30d158;
+}
+
+.st-btn-danger {
+  color: #ff6b61;
+  border-color: rgba(255, 69, 58, 0.4);
+  background: rgba(255, 69, 58, 0.09);
+}
+
+.st-btn-danger:hover { background: rgba(255, 69, 58, 0.16); }
+
+.st-btn-group { display: flex; gap: 8px; }
+
+/* ---- Callouts ---- */
+.st-callout {
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.45;
+  margin-bottom: 14px;
+}
+
+.st-callout.warn {
+  background: rgba(255, 214, 10, 0.07);
+  border: 1px solid rgba(255, 214, 10, 0.25);
+  color: #f2d35e;
+}
+
+.st-callout.error {
+  background: rgba(255, 69, 58, 0.08);
+  border: 1px solid rgba(255, 69, 58, 0.3);
+  color: #ff9489;
+}
+
+/* ---- Colors tab ---- */
+.st-color-name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 500;
+}
+
+.st-tip {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background-image: linear-gradient(145deg, rgba(255, 255, 255, 0.25), rgba(0, 0, 0, 0.15));
+  background-blend-mode: overlay;
+}
+
+.st-swatches { display: flex; gap: 6px; align-items: center; }
+
+.st-swatch {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+
+.st-swatch:hover { transform: scale(1.15); }
+
+.st-swatch.selected {
+  box-shadow: 0 0 0 2px var(--bg-content), 0 0 0 4px rgba(255, 255, 255, 0.85);
+}
+
+.st-swatch-custom {
+  background: conic-gradient(#ff453a, #ffd60a, #34c759, #0a84ff, #bf5af2, #ff453a);
+}
+
+/* ---- Segmented control ---- */
+.st-seg {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+}
+
+.st-seg button {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-dim);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  padding: 4px 12px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.st-seg button:hover { color: var(--text); }
+
+.st-seg button.active {
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--text);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.st-hidden-input {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+`;
 
 export default App;
