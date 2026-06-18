@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ToolType, Shape, ArrowShape, CircleShape, BoxShape, FreehandShape, HighlighterShape, TextShape, Point, ShapeStyle } from "../types/shapes";
 import { drawShape, redrawShapes, SKETCHY_FONT_STACK } from "../lib/drawing";
 import { loadSettings, Settings, DEFAULT_SETTINGS } from "../lib/storage";
@@ -926,10 +927,12 @@ export default function Overlay() {
         return;
       }
 
-      // Feature #124: Handle Ctrl+Shift+X / Cmd+Shift+X to clear all shapes
+      // Feature #124: Handle Ctrl+Shift+X / Cmd+Shift+X to clear all shapes.
+      // Route through the backend so every monitor's overlay clears, not just
+      // the focused one (each monitor has its own overlay window/state).
       if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === "x") {
         event.preventDefault();
-        latest.current.clearAllShapes();
+        invoke("clear_all_shapes").catch(console.error);
         return;
       }
 
@@ -1171,56 +1174,22 @@ export default function Overlay() {
     loadAppSettings();
   }, []);
 
-  // Feature #9: Initialize monitor on component mount
+  // Feature #8/#9: Bind this overlay to its own monitor.
+  // Each monitor has its own overlay window labelled "overlay_<index>"; the
+  // matching monitor id is "monitor_<index>". This window only ever renders
+  // and tags shapes for its own monitor, so there is no cross-monitor
+  // filtering to do — every overlay's React state is independent.
   useEffect(() => {
-    const initializeMonitor = async () => {
-      try {
-        const monitorId = await invoke<string | null>("get_current_monitor");
-        console.log("Initialized current monitor:", monitorId);
-        setCurrentMonitor(monitorId);
-      } catch (error) {
-        console.error("Failed to get current monitor:", error);
-        setCurrentMonitor(null);
-      }
-    };
-
-    initializeMonitor();
+    try {
+      const label = getCurrentWindow().label; // e.g. "overlay_1"
+      const monitorId = label.replace(/^overlay_/, "monitor_");
+      console.log("Overlay bound to monitor:", monitorId, "(window:", label + ")");
+      setCurrentMonitor(monitorId);
+    } catch (error) {
+      console.error("Failed to resolve overlay monitor from window label:", error);
+      setCurrentMonitor(null);
+    }
   }, []);
-
-  // Feature #9: Listen for monitor-changed event and filter shapes
-  useEffect(() => {
-    const unlistenMonitorChanged = listen<string>("monitor-changed", (event) => {
-      const newMonitorId = event.payload;
-      console.log("[Feature #9] Monitor changed to:", newMonitorId);
-
-      // Update current monitor state
-      setCurrentMonitor(newMonitorId);
-
-      // Feature #120: Collect IDs of shapes that will be removed
-      const shapesBefore = shapesRef.current.length;
-      const removedShapeIds = shapesRef.current
-        .filter(shape => shape.monitorId !== newMonitorId)
-        .map(shape => shape.id);
-
-      // Filter shapes to only show those for this monitor
-      shapesRef.current = shapesRef.current.filter(
-        shape => shape.monitorId === newMonitorId
-      );
-      const shapesAfter = shapesRef.current.length;
-
-      // Feature #120: Clean up opacity tracking for removed shapes
-      cleanupOpacityTracking(removedShapeIds);
-
-      console.log(`[Feature #9] Filtered shapes: ${shapesBefore} -> ${shapesAfter} (removed ${shapesBefore - shapesAfter} shapes from other monitors)`);
-
-      // Redraw with filtered shapes
-      redrawRef.current();
-    });
-
-    return () => {
-      unlistenMonitorChanged.then((fn) => fn()).catch(console.error);
-    };
-  }, [cleanupOpacityTracking]);
 
   return (
     <div

@@ -193,73 +193,165 @@ fn get_default_settings() -> serde_json::Value {
 }
 
 // Overlay commands
-/// Show the overlay window
-/// This makes the overlay visible and brings it to the foreground
-/// Feature #8: Positions overlay on the monitor where the cursor is currently located
-/// Feature #15: Ensures z-index management to stay above other windows
-#[tauri::command]
-fn show_overlay(app: AppHandle) -> Result<(), String> {
-    // Get the overlay window by label
-    let overlay_window = app.get_webview_window("overlay")
-        .ok_or("Overlay window not found")?;
 
-    // Feature #8: Get cursor position and determine which monitor to use
-    let cursor_monitor_info = get_cursor_monitor(app.clone())?;
+/// All per-monitor overlay windows, labelled "overlay_0", "overlay_1", ...
+/// One transparent overlay covers each monitor so annotations work on every
+/// screen simultaneously (instead of moving one window between monitors).
+fn overlay_windows(app: &AppHandle) -> Vec<tauri::WebviewWindow> {
+    app.webview_windows()
+        .into_iter()
+        .filter(|(label, _)| label.starts_with("overlay_"))
+        .map(|(_, w)| w)
+        .collect()
+}
 
-    if let Some(monitor_id) = cursor_monitor_info["monitor_id"].as_str() {
-        if let Some(monitor) = cursor_monitor_info["monitor"].as_object() {
-            let x = monitor["x"].as_i64().unwrap_or(0) as i32;
-            let y = monitor["y"].as_i64().unwrap_or(0) as i32;
-            let width = monitor["width"].as_u64().unwrap_or(1920) as u32;
-            let height = monitor["height"].as_u64().unwrap_or(1080) as u32;
+/// Ensure exactly one overlay window exists per connected monitor, each sized
+/// and positioned to fill its own monitor. Creates missing overlays, re-syncs
+/// existing ones to their monitor's current geometry, and hides any overlay
+/// whose monitor was disconnected. Safe to call repeatedly (startup + every
+/// activation), which also handles monitors being plugged in/out at runtime.
+///
+/// Positions/sizes are set in LOGICAL coordinates (points). macOS reports
+/// monitor geometry in physical pixels (logical * scale_factor); dividing back
+/// by the monitor's own scale factor recovers the global points the window
+/// manager actually expects. Setting physical coordinates instead is what made
+/// the old single-moving-window approach land on the wrong monitor under mixed
+/// DPI — the physical->points conversion used the *source* window's scale.
+fn sync_overlay_windows(app: &AppHandle) {
+    let Some(query_window) = app.get_webview_window("main")
+        .or_else(|| overlay_windows(app).into_iter().next())
+    else {
+        return;
+    };
 
-            // Update state with current monitor
-            let state = app.state::<SharedState>();
-            if let Ok(mut state_guard) = state.try_lock() {
-                state_guard.is_visible = true;
-                state_guard.current_monitor = Some(monitor_id.to_string());
-            }
-
-            // Feature #9: Emit event when monitor changes - frontend needs this to filter shapes
-            app.emit("monitor-changed", monitor_id)
-                .map_err(|e| format!("Failed to emit monitor-changed event: {}", e))?;
-
-            // Feature #8: Position overlay on the correct monitor
-            overlay_window.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y })).map_err(|e| e.to_string())?;
-
-            // Feature #8: Set overlay size to match monitor size
-            overlay_window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width, height })).map_err(|e| e.to_string())?;
-
-            println!("Overlay positioned on monitor {} at ({}, {}), size: {}x{}",
-                monitor_id, x, y, width, height);
+    let monitors = match query_window.available_monitors() {
+        Ok(m) => m,
+        Err(e) => {
+            eprintln!("sync_overlay_windows: failed to enumerate monitors: {}", e);
+            return;
         }
-    } else {
-        // Fallback: just update visibility state
-        if let Ok(mut state_guard) = app.state::<SharedState>().try_lock() {
-            state_guard.is_visible = true;
+    };
+
+    for (i, monitor) in monitors.iter().enumerate() {
+        let label = format!("overlay_{}", i);
+        let scale = monitor.scale_factor();
+        let pos = monitor.position();
+        let size = monitor.size();
+        let lx = pos.x as f64 / scale;
+        let ly = pos.y as f64 / scale;
+        let lw = size.width as f64 / scale;
+        let lh = size.height as f64 / scale;
+
+        if let Some(window) = app.get_webview_window(&label) {
+            // Re-sync an existing overlay to its monitor's current geometry
+            let _ = window.set_position(tauri::Position::Logical(tauri::LogicalPosition { x: lx, y: ly }));
+            let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize { width: lw, height: lh }));
+        } else {
+            match tauri::WebviewWindowBuilder::new(app, &label, tauri::WebviewUrl::App("overlay.html".into()))
+                .title("Annotatr Overlay")
+                .position(lx, ly)
+                .inner_size(lw, lh)
+                .resizable(false)
+                .decorations(false)
+                .transparent(true)
+                .always_on_top(true)
+                .skip_taskbar(true)
+                .shadow(false)
+                .accept_first_mouse(true)
+                .visible_on_all_workspaces(true)
+                .closable(false)
+                .minimizable(false)
+                .maximizable(false)
+                .visible(false)
+                .build()
+            {
+                Ok(window) => {
+                    // The overlay must be click-through from the first frame;
+                    // it only captures the mouse while drawing (see show_overlay)
+                    let _ = window.set_ignore_cursor_events(true);
+                    // Force a hidden initial state — builder visible(false) is
+                    // not always honored for transparent windows on macOS, and
+                    // a phantom-visible overlay would confuse session toggling.
+                    let _ = window.hide();
+                    println!("Created overlay '{}' on monitor {} at logical ({}, {}), size: {}x{}",
+                        label, i, lx, ly, lw, lh);
+                }
+                Err(e) => eprintln!("sync_overlay_windows: failed to create {}: {}", label, e),
+            }
         }
     }
 
-    // Re-enable mouse capture: dismiss_overlay leaves the window in
-    // click-through mode (ignore_cursor_events=true), so every show path
-    // must capture input again or drawing breaks after the first dismiss
-    overlay_window.set_ignore_cursor_events(false).map_err(|e| e.to_string())?;
+    // Hide overlays whose monitor was disconnected (label index >= monitor count)
+    let monitor_count = monitors.len();
+    for (label, window) in app.webview_windows() {
+        if let Some(idx) = label.strip_prefix("overlay_").and_then(|s| s.parse::<usize>().ok()) {
+            if idx >= monitor_count {
+                let _ = window.set_ignore_cursor_events(true);
+                let _ = window.hide();
+            }
+        }
+    }
+}
 
-    // Show the window if it's hidden
-    overlay_window.show().map_err(|e| e.to_string())?;
+/// Show the overlays
+/// This makes every monitor's overlay visible and brings them to the foreground
+/// Feature #8: One overlay per monitor, so drawing works on all screens at once
+/// Feature #15: Ensures z-index management to stay above other windows
+#[tauri::command]
+fn show_overlay(app: AppHandle) -> Result<(), String> {
+    // Ensure one overlay exists per monitor and each is positioned correctly
+    // (also picks up monitors connected since the last activation)
+    sync_overlay_windows(&app);
 
-    // Feature #15: Ensure always-on-top is set BEFORE focusing
-    // This ensures the overlay maintains proper z-index
-    overlay_window.set_always_on_top(true).map_err(|e| e.to_string())?;
+    let overlays = overlay_windows(&app);
+    if overlays.is_empty() {
+        return Err("No overlay windows available".to_string());
+    }
 
-    // Bring window to foreground and focus it
-    overlay_window.set_focus().map_err(|e| e.to_string())?;
+    // Feature #8: Determine the cursor's monitor so we can focus that overlay
+    // (focus drives which overlay receives the Escape key before any click)
+    let cursor_info = get_cursor_monitor(app.clone()).ok();
+    let focus_label = cursor_info
+        .as_ref()
+        .and_then(|info| info["monitor_id"].as_str())
+        .map(|monitor_id| monitor_id.replace("monitor_", "overlay_"));
 
-    // Feature #15: Set window to topmost again after focus to handle window manager changes
-    // This ensures the overlay stays above all other applications even after focus changes
-    overlay_window.set_always_on_top(true).map_err(|e| e.to_string())?;
+    // Update state with current monitor
+    if let Ok(mut state_guard) = app.state::<SharedState>().try_lock() {
+        state_guard.is_visible = true;
+        if let Some(monitor_id) = cursor_info
+            .as_ref()
+            .and_then(|info| info["monitor_id"].as_str())
+        {
+            state_guard.current_monitor = Some(monitor_id.to_string());
+        }
+    }
 
-    println!("Overlay window shown and focused, z-index set to topmost");
+    // Show and arm every overlay so the user can draw on any monitor
+    for overlay_window in &overlays {
+        // Re-enable mouse capture: dismiss leaves the window in click-through
+        // mode (ignore_cursor_events=true), so every show path must capture
+        // input again or drawing breaks after the first dismiss
+        overlay_window.set_ignore_cursor_events(false).map_err(|e| e.to_string())?;
+        overlay_window.show().map_err(|e| e.to_string())?;
+        // Feature #15: Ensure always-on-top is set so the overlay stays topmost
+        overlay_window.set_always_on_top(true).map_err(|e| e.to_string())?;
+    }
+
+    // Bring the cursor's-monitor overlay to the foreground and focus it.
+    // Focus is intentional — that overlay must be key so Escape works before
+    // any click. acceptFirstMouse lets the other overlays draw without focus.
+    let focused = focus_label
+        .as_ref()
+        .and_then(|label| app.get_webview_window(label))
+        .or_else(|| overlays.first().cloned());
+    if let Some(window) = focused {
+        window.set_focus().map_err(|e| e.to_string())?;
+        // Re-assert topmost after focus to handle window manager changes
+        window.set_always_on_top(true).map_err(|e| e.to_string())?;
+    }
+
+    println!("Overlays shown ({} monitor(s)), focused {:?}", overlays.len(), focus_label);
 
     Ok(())
 }
@@ -281,7 +373,7 @@ fn get_current_monitor(app: AppHandle) -> Result<Option<String>, String> {
 fn get_monitor_info(app: AppHandle) -> Result<Vec<serde_json::Value>, String> {
     // Get all available monitors from the primary window
     let primary_window = app.get_webview_window("main")
-        .or_else(|| app.get_webview_window("overlay"))
+        .or_else(|| overlay_windows(&app).into_iter().next())
         .ok_or("No window available for monitor detection")?;
 
     let monitors = primary_window.available_monitors()
@@ -311,26 +403,6 @@ fn get_monitor_info(app: AppHandle) -> Result<Vec<serde_json::Value>, String> {
     Ok(monitor_info)
 }
 
-/// Set the overlay window position on a specific monitor
-#[tauri::command]
-fn set_overlay_position(app: AppHandle, monitor_id: String, x: i32, y: i32) -> Result<(), String> {
-    let overlay_window = app.get_webview_window("overlay")
-        .ok_or("Overlay window not found")?;
-
-    // Update state with current monitor
-    let state = app.state::<SharedState>();
-    if let Ok(mut state_guard) = state.try_lock() {
-        state_guard.current_monitor = Some(monitor_id.clone());
-    }
-
-    // Set window position
-    overlay_window.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y })).map_err(|e| e.to_string())?;
-
-    println!("Overlay positioned at ({}, {}) on monitor {}", x, y, monitor_id);
-
-    Ok(())
-}
-
 /// Feature #8: Get current cursor position and determine which monitor it's on
 /// This is used to position the overlay on the correct monitor when drawing mode is activated
 #[tauri::command]
@@ -339,7 +411,7 @@ fn get_cursor_monitor(app: AppHandle) -> Result<serde_json::Value, String> {
 
     // Get the primary window to access monitor APIs
     let primary_window = app.get_webview_window("main")
-        .or_else(|| app.get_webview_window("overlay"))
+        .or_else(|| overlay_windows(&app).into_iter().next())
         .ok_or("No window available")?;
 
     // Get cursor position using Tauri's cursor position API
@@ -984,12 +1056,18 @@ fn activate_tool_hotkey(app: AppHandle, tool: String) -> Result<(), String> {
 fn toggle_session(app: &AppHandle) -> Result<bool, String> {
     let panel = app.get_webview_window("mini-panel")
         .ok_or("Mini panel window not found")?;
-    let overlay_visible = app.get_webview_window("overlay")
-        .and_then(|w| w.is_visible().ok())
-        .unwrap_or(false);
+    // Use the authoritative session flag for "is a drawing overlay active",
+    // not a per-window is_visible() poll: freshly-created hidden overlay
+    // windows don't reliably report invisible on macOS, which would make the
+    // first toggle take the hide branch and the toolbar would never appear.
+    let overlay_active = if let Ok(state_guard) = app.state::<SharedState>().try_lock() {
+        state_guard.is_visible
+    } else {
+        false
+    };
     let panel_visible = panel.is_visible().unwrap_or(false);
 
-    if overlay_visible || panel_visible {
+    if overlay_active || panel_visible {
         // -> Idle
         dismiss_overlay_internal(app, false)?;
         let _ = panel.hide();
@@ -1017,10 +1095,6 @@ fn quit_app(app: AppHandle) {
 /// When `return_focus` is true (Escape during drawing), activation is handed
 /// back to the previously frontmost app and the toolbar is kept visible.
 fn dismiss_overlay_internal(app: &AppHandle, return_focus: bool) -> Result<(), String> {
-    // Get the overlay window by label
-    let overlay_window = app.get_webview_window("overlay")
-        .ok_or("Overlay window not found")?;
-
     // Update state to mark overlay as not visible
     let state = app.state::<SharedState>();
     if let Ok(mut state_guard) = state.try_lock() {
@@ -1029,11 +1103,11 @@ fn dismiss_overlay_internal(app: &AppHandle, return_focus: bool) -> Result<(), S
         state_guard.drawing_mode = false;
     }
 
-    // Hide the overlay window
-    overlay_window.hide().map_err(|e| e.to_string())?;
-
-    // Disable mouse capture (return to pass-through mode)
-    overlay_window.set_ignore_cursor_events(true).map_err(|e| e.to_string())?;
+    // Hide every monitor's overlay and return them to click-through mode
+    for overlay_window in overlay_windows(app) {
+        overlay_window.hide().map_err(|e| e.to_string())?;
+        overlay_window.set_ignore_cursor_events(true).map_err(|e| e.to_string())?;
+    }
 
     // Feature #20: Emit event to clear drawing state and shapes
     app.emit("overlay-dismissed", ())
@@ -1078,26 +1152,17 @@ fn dismiss_overlay(app: AppHandle) -> Result<(), String> {
 /// This handles cases where other applications might steal focus or z-index
 #[tauri::command]
 fn ensure_on_top(app: AppHandle) -> Result<(), String> {
-    let overlay_window = app.get_webview_window("overlay")
-        .ok_or("Overlay window not found")?;
-
-    // Only proceed if overlay is visible
-    if !overlay_window.is_visible().map_err(|e| e.to_string())? {
-        return Ok(());
+    // Re-assert always-on-top for every visible overlay to maintain z-index
+    for overlay_window in overlay_windows(&app) {
+        if overlay_window.is_visible().unwrap_or(false) {
+            let _ = overlay_window.set_always_on_top(true);
+        }
     }
 
-    // Re-assert always-on-top property to maintain z-index
-    overlay_window.set_always_on_top(true).map_err(|e| e.to_string())?;
-
-    // Bring to front without stealing focus from other apps unnecessarily
-    overlay_window.set_always_on_top(true).map_err(|e| e.to_string())?;
-
-    // Re-asserting the overlay's always-on-top level can lift it back up to
+    // Re-asserting the overlays' always-on-top level can lift them back up to
     // the toolbar's level; keep the toolbar above so its buttons stay
     // clickable while drawing (this runs on a 5s timer + on focus changes).
     raise_toolbar_above_overlay(&app);
-
-    println!("Overlay z-index re-asserted to stay on top");
 
     Ok(())
 }
@@ -1117,7 +1182,7 @@ fn save_mini_panel_position(app: AppHandle, x: i32, y: i32, monitor_id: Option<S
     } else {
         // Auto-detect monitor from position
         let primary_window = app.get_webview_window("main")
-            .or_else(|| app.get_webview_window("overlay"))
+            .or_else(|| overlay_windows(&app).into_iter().next())
             .ok_or("No window available for monitor detection")?;
 
         let monitors = primary_window.available_monitors()
@@ -1265,11 +1330,11 @@ pub fn run() {
                 }
             }
 
-            // The overlay must be click-through from the very first frame;
-            // window configs only control visibility, not cursor events
-            if let Some(overlay) = app.get_webview_window("overlay") {
-                let _ = overlay.set_ignore_cursor_events(true);
-            }
+            // Create one transparent overlay per monitor up front so drawing
+            // works on every screen. Each is built click-through; show_overlay
+            // arms them for input. Re-runs on every activation to track
+            // monitors plugged in/out at runtime.
+            sync_overlay_windows(app.handle());
 
             // Toolbar must outrank the overlay so it stays clickable
             // while drawing
@@ -1349,7 +1414,6 @@ pub fn run() {
             get_current_monitor,
             get_monitor_info,
             get_cursor_monitor,
-            set_overlay_position,
             set_drawing_mode,
             clear_all_shapes,
             register_hotkeys,

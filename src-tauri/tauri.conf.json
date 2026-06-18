@@ -29,26 +29,6 @@
         "visible": false
       },
       {
-        "label": "overlay",
-        "title": "Annotatr Overlay",
-        "url": "overlay.html",
-        "width": 1920,
-        "height": 1080,
-        "resizable": false,
-        "fullscreen": false,
-        "decorations": false,
-        "transparent": true,
-        "alwaysOnTop": true,
-        "skipTaskbar": true,
-        "visible": false,
-        "shadow": false,
-        "acceptFirstMouse": true,
-        "visibleOnAllWorkspaces": true,
-        "closable": false,
-        "minimizable": false,
-        "maximizable": false
-      },
-      {
         "label": "mini-panel",
         "title": "Annotatr",
         "url": "mini-panel.html",
