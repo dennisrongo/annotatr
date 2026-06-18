@@ -35,6 +35,9 @@ export interface Settings {
   };
   fontSize: number;
   fadeDuration: number;
+  // When true, shapes stay on screen at full opacity until manually cleared
+  // (X button / clear-all / undo) instead of auto-fading after fadeDuration.
+  persistShapes: boolean;
   // Feature #126: Panel transparency (0.0 = fully transparent, 1.0 = fully opaque)
   panelTransparency: number;
   // Feature #133: Panel collapsed state (true = show only tool icons, false = show full panel)
@@ -74,6 +77,8 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   fontSize: 14,
   fadeDuration: 10,
+  // Default to auto-fade so existing behavior is unchanged
+  persistShapes: false,
   // Feature #126: Panel transparency default (0.95 = mostly opaque)
   panelTransparency: 0.95,
   // Feature #133: Panel collapsed default (false = show full panel)
@@ -345,6 +350,12 @@ function validateImportedSettings(imported: unknown): Settings {
   if (typeof settings.fadeDuration !== 'number' ||
       settings.fadeDuration < 1 || settings.fadeDuration > 60) {
     throw new Error('Invalid settings: fadeDuration must be between 1 and 60');
+  }
+
+  // Validate persist-shapes flag if present (keep drawings on screen)
+  if (settings.persistShapes !== undefined &&
+      typeof settings.persistShapes !== 'boolean') {
+    throw new Error('Invalid settings: persistShapes must be a boolean');
   }
 
   // Feature #126: Validate panel transparency (0.0 to 1.0)

@@ -235,12 +235,24 @@ export default function Overlay() {
    */
   const ensureFadeLoop = useCallback(() => {
     if (fadeIntervalRef.current !== null) return;
+    // "Keep on screen" mode: shapes never fade, so there is nothing to animate.
+    if (settingsRef.current?.persistShapes) return;
 
     fadeIntervalRef.current = setInterval(() => {
       if (shapesRef.current.length === 0) {
         clearInterval(fadeIntervalRef.current!);
         fadeIntervalRef.current = null;
         shapeOpacitiesRef.current = {};
+        return;
+      }
+
+      // Defensive: if the user flips to "keep on screen" while the loop is
+      // mid-flight, hold everything at full opacity and stop the loop.
+      if (settingsRef.current?.persistShapes) {
+        clearInterval(fadeIntervalRef.current!);
+        fadeIntervalRef.current = null;
+        shapeOpacitiesRef.current = {};
+        if (!isDrawingRef.current) redrawRef.current();
         return;
       }
 
@@ -274,6 +286,34 @@ export default function Overlay() {
       }
     }, 50); // 20fps for smooth fade animation
   }, [getFadeOpacity]);
+
+  /**
+   * React the moment the "keep on screen" toggle flips so shapes already on
+   * screen obey the new mode without waiting for the next shape to be drawn.
+   */
+  const prevPersistRef = useRef<boolean | undefined>(undefined);
+  useEffect(() => {
+    const persist = settings?.persistShapes ?? false;
+    const prev = prevPersistRef.current;
+    prevPersistRef.current = persist;
+    if (prev === undefined || prev === persist) return;
+
+    if (persist) {
+      // Turned ON: stop fading and restore every shape to full opacity.
+      if (fadeIntervalRef.current !== null) {
+        clearInterval(fadeIntervalRef.current);
+        fadeIntervalRef.current = null;
+      }
+      shapeOpacitiesRef.current = {};
+      redrawAllShapes();
+    } else {
+      // Turned OFF: give the held shapes a fresh fade timer so they ease out
+      // from now rather than vanishing instantly for being long-expired.
+      const now = Date.now();
+      shapesRef.current.forEach((shape) => { shape.createdAt = now; });
+      if (shapesRef.current.length > 0) ensureFadeLoop();
+    }
+  }, [settings?.persistShapes, ensureFadeLoop, redrawAllShapes]);
 
   /**
    * Feature #123: Undo the most recently created shape

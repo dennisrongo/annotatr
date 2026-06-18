@@ -82,10 +82,11 @@ function Keycaps({ combo }: { combo: string }) {
 
 /** Range slider with an accent-filled track */
 function Slider({
-  min, max, step, value, onChange,
+  min, max, step, value, onChange, disabled = false,
 }: {
   min: number; max: number; step: number; value: number;
   onChange: (value: number) => void;
+  disabled?: boolean;
 }) {
   const pct = ((value - min) / (max - min)) * 100;
   return (
@@ -96,9 +97,11 @@ function Slider({
       max={max}
       step={step}
       value={value}
+      disabled={disabled}
       onChange={(e) => onChange(parseInt(e.target.value, 10))}
       style={{
         background: `linear-gradient(to right, var(--accent) ${pct}%, var(--track) ${pct}%)`,
+        ...(disabled ? { opacity: 0.4, cursor: "not-allowed" } : null),
       }}
     />
   );
@@ -238,6 +241,7 @@ function App() {
   const [lineThickness, setLineThickness] = useState(DEFAULT_SETTINGS.lineThickness.arrow);
   const [fontSize, setFontSize] = useState(DEFAULT_SETTINGS.fontSize);
   const [fadeDuration, setFadeDuration] = useState(DEFAULT_SETTINGS.fadeDuration);
+  const [persistShapes, setPersistShapes] = useState(DEFAULT_SETTINGS.persistShapes);
   const [panelTransparency, setPanelTransparency] = useState(DEFAULT_SETTINGS.panelTransparency);
   const [arrowHeadStyle, setArrowHeadStyle] = useState<ArrowHeadStyle>(DEFAULT_SETTINGS.arrowHeadStyle);
   const [shapeStyle, setShapeStyle] = useState<ShapeStyle>(DEFAULT_SETTINGS.shapeStyle);
@@ -286,6 +290,7 @@ function App() {
 
         setFontSize(settings.fontSize);
         setFadeDuration(settings.fadeDuration);
+        setPersistShapes(settings.persistShapes);
         setPanelTransparency(settings.panelTransparency);
         setArrowHeadStyle(settings.arrowHeadStyle);
         setShapeStyle(settings.shapeStyle);
@@ -347,6 +352,18 @@ function App() {
       await saveSettings({ fadeDuration: value });
     } catch (error) {
       console.error("Failed to save fade duration:", error);
+    }
+  };
+
+  /**
+   * Toggle whether drawings auto-fade or stay on screen until cleared.
+   */
+  const handlePersistShapesChange = async (persist: boolean) => {
+    setPersistShapes(persist);
+    try {
+      await saveSettings({ persistShapes: persist });
+    } catch (error) {
+      console.error("Failed to save persist-shapes setting:", error);
     }
   };
 
@@ -570,6 +587,7 @@ function App() {
       setLineThickness(thickness);
       setFontSize(reloadedSettings.fontSize);
       setFadeDuration(reloadedSettings.fadeDuration);
+      setPersistShapes(reloadedSettings.persistShapes);
       setPanelTransparency(reloadedSettings.panelTransparency);
       setArrowHeadStyle(reloadedSettings.arrowHeadStyle);
       setShapeStyle(reloadedSettings.shapeStyle);
@@ -624,6 +642,7 @@ function App() {
           setLineThickness(thickness);
           setFontSize(imported.fontSize);
           setFadeDuration(imported.fadeDuration);
+          setPersistShapes(imported.persistShapes);
           setPanelTransparency(imported.panelTransparency);
           setArrowHeadStyle(imported.arrowHeadStyle);
           setShapeStyle(imported.shapeStyle);
@@ -764,11 +783,36 @@ function App() {
             <div className="st-card">
               <div className="st-row">
                 <div>
+                  <div className="st-row-label">Drawings</div>
+                  <div className="st-row-sub">Fade out automatically, or stay until you clear them</div>
+                </div>
+                <div className="st-seg">
+                  <button
+                    type="button"
+                    className={!persistShapes ? "active" : ""}
+                    onClick={() => handlePersistShapesChange(false)}
+                  >
+                    Auto-fade
+                  </button>
+                  <button
+                    type="button"
+                    className={persistShapes ? "active" : ""}
+                    onClick={() => handlePersistShapesChange(true)}
+                  >
+                    Keep on screen
+                  </button>
+                </div>
+              </div>
+
+              <div className="st-row">
+                <div>
                   <div className="st-row-label">Fade duration</div>
-                  <div className="st-row-sub">How long shapes stay on screen</div>
+                  <div className="st-row-sub">
+                    {persistShapes ? "Disabled while drawings are kept on screen" : "How long shapes stay on screen"}
+                  </div>
                 </div>
                 <div className="st-slider-wrap">
-                  <Slider min={1} max={60} step={1} value={fadeDuration} onChange={handleFadeDurationChange} />
+                  <Slider min={1} max={60} step={1} value={fadeDuration} onChange={handleFadeDurationChange} disabled={persistShapes} />
                   <span className="st-value">{fadeDuration}s</span>
                 </div>
               </div>
