@@ -531,6 +531,28 @@ export default function Overlay() {
   }, [generateShapeId, settings, defaultFontSize, currentMonitor, getToolColor, customFadeDuration]);
 
   /**
+   * Commit typed text as a shape on the overlay.
+   * Shared by Enter, blur, and "click elsewhere" so text is never lost.
+   * Returns true if a shape was created (non-empty text).
+   */
+  const commitText = useCallback((position: Point, text: string): boolean => {
+    if (!text.trim()) return false;
+
+    const newTextShape = createTextShape(position, text);
+    shapesRef.current.push(newTextShape);
+    ensureFadeLoop();
+    console.log("Created text shape:", newTextShape);
+
+    // Feature #128: Reset custom fade duration after shape is created
+    if (customFadeDuration !== null) {
+      setCustomFadeDuration(null);
+    }
+
+    redrawAllShapes();
+    return true;
+  }, [createTextShape, ensureFadeLoop, customFadeDuration, redrawAllShapes]);
+
+  /**
    * Handle mouse down - start drawing OR select shape in edit mode
    * Feature #125: In edit mode, clicking on a shape selects it for editing
    */
@@ -570,12 +592,21 @@ export default function Overlay() {
 
     // For text tool, show inline input at click location
     if (currentTool === ToolType.TEXT) {
+      // Commit any in-progress text first so relocating the caret keeps it
+      // (the blur that follows would otherwise see a reset, empty value).
+      if (textInputVisible) {
+        commitText(textInputPosition, textInputValue);
+      }
       setTextInputPosition({ x: startX, y: startY });
       setTextInputValue("");
       setTextInputVisible(true);
-      // Focus the input after it's rendered
+      // Focus the input after it's rendered, resetting any auto-grown height
       setTimeout(() => {
-        textInputRef.current?.focus();
+        const el = textInputRef.current;
+        if (el) {
+          el.style.height = "auto";
+          el.focus();
+        }
       }, 0);
       return;
     }
@@ -601,7 +632,7 @@ export default function Overlay() {
     });
 
     console.log(`Started drawing ${currentTool} at (${startX}, ${startY})`);
-  }, [isDrawingMode, currentTool, isEditMode, selectedShape, redrawAllShapes]);
+  }, [isDrawingMode, currentTool, isEditMode, selectedShape, redrawAllShapes, textInputVisible, textInputValue, textInputPosition, commitText]);
 
   /**
    * Handle mouse move - update preview
@@ -684,26 +715,10 @@ export default function Overlay() {
    * Handle text input submission
    */
   const handleTextInputSubmit = useCallback(() => {
-    if (!textInputValue.trim()) {
-      setTextInputVisible(false);
-      return;
-    }
-
-    const newTextShape = createTextShape(textInputPosition, textInputValue);
-    shapesRef.current.push(newTextShape);
-    ensureFadeLoop();
-    console.log("Created text shape:", newTextShape);
-
-    // Feature #128: Reset custom fade duration after shape is created
-    if (customFadeDuration !== null) {
-      console.log(`[Feature #128] Resetting custom fade duration after text shape creation`);
-      setCustomFadeDuration(null);
-    }
-
+    commitText(textInputPosition, textInputValue);
     setTextInputVisible(false);
     setTextInputValue("");
-    redrawAllShapes();
-  }, [textInputValue, textInputPosition, createTextShape, redrawAllShapes, customFadeDuration, ensureFadeLoop]);
+  }, [commitText, textInputPosition, textInputValue]);
 
   /**
    * Handle text input keydown
@@ -1234,7 +1249,14 @@ export default function Overlay() {
         <textarea
           ref={textInputRef}
           value={textInputValue}
-          onChange={(e) => setTextInputValue(e.target.value)}
+          rows={1}
+          onChange={(e) => {
+            setTextInputValue(e.target.value);
+            // Auto-grow height so the field never shows a scrollbar
+            const el = e.currentTarget;
+            el.style.height = "auto";
+            el.style.height = `${el.scrollHeight}px`;
+          }}
           onKeyDown={handleTextInputKeyDown}
           onBlur={handleTextInputSubmit}
           style={{
@@ -1245,20 +1267,21 @@ export default function Overlay() {
             fontSize: settings ? `${Math.round(settings.fontSize * 1.7)}px` : "24px",
             // Match the canvas font so the input previews the final text
             fontFamily: settings?.shapeStyle === ShapeStyle.SKETCHY ? SKETCHY_FONT_STACK : "sans-serif",
-            padding: "4px 8px",
-            // Feature #31: Use text color from settings for border and text
-            border: `2px solid ${settings?.colors.text || "#FF0000"}`,
-            borderRadius: "4px",
+            padding: 0,
+            // Transparent, borderless field so the input previews the final
+            // on-canvas text 1:1 (no white box, no frame)
+            border: "none",
+            borderRadius: 0,
             outline: "none",
-            backgroundColor: "rgba(255, 255, 255, 0.9)",
+            backgroundColor: "transparent",
+            // Feature #31: Use text color from settings for text and caret
             color: settings?.colors.text || "#FF0000",
+            caretColor: settings?.colors.text || "#FF0000",
             minWidth: "200px",
-            minHeight: "60px",
             zIndex: 10000,
-            resize: "both",
-            overflow: "auto",
+            resize: "none",
+            overflow: "hidden",
           }}
-          placeholder="Type multi-line text and press Enter to submit..."
         />
       )}
 
