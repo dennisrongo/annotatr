@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useId } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getVersion } from "@tauri-apps/api/app";
 import { open as openExternal } from "@tauri-apps/plugin-shell";
@@ -309,6 +310,22 @@ function App() {
       }
     };
     loadAllSettings();
+  }, []);
+
+  // Keep tool colors in sync with the toolbar. The toolbar's color swatch
+  // saves to the same per-tool keys, and every save emits "settings_updated"
+  // from Rust — so reloading colors here mirrors a toolbar change live into
+  // this window (the reverse direction already works: the toolbar listens for
+  // the same event). Reloading is idempotent when this window is the source.
+  useEffect(() => {
+    const unlisten = listen("settings_updated", () => {
+      loadSettings()
+        .then((settings) => setCurrentColorForTool(settings.colors))
+        .catch((error) => console.error("Failed to refresh colors:", error));
+    });
+    return () => {
+      unlisten.then((fn) => fn()).catch(console.error);
+    };
   }, []);
 
   /**
