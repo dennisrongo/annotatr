@@ -4,7 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getVersion } from "@tauri-apps/api/app";
 import { open as openExternal } from "@tauri-apps/plugin-shell";
-import { loadSettings, saveSettings, DEFAULT_SETTINGS, exportSettings, importSettings, resetSettings } from "./lib/storage";
+import { loadSettings, saveSettings, DEFAULT_SETTINGS, exportSettings, importSettings, resetSettings, ToolbarSize } from "./lib/storage";
 import { ArrowHeadStyle, ShapeStyle } from "./types/shapes";
 import { UpdateBanner, UpdateCheckRow } from "./components/UpdateBanner";
 
@@ -244,6 +244,7 @@ function App() {
   const [fadeDuration, setFadeDuration] = useState(DEFAULT_SETTINGS.fadeDuration);
   const [persistShapes, setPersistShapes] = useState(DEFAULT_SETTINGS.persistShapes);
   const [panelTransparency, setPanelTransparency] = useState(DEFAULT_SETTINGS.panelTransparency);
+  const [toolbarSize, setToolbarSize] = useState<ToolbarSize>(DEFAULT_SETTINGS.toolbarSize);
   const [arrowHeadStyle, setArrowHeadStyle] = useState<ArrowHeadStyle>(DEFAULT_SETTINGS.arrowHeadStyle);
   const [shapeStyle, setShapeStyle] = useState<ShapeStyle>(DEFAULT_SETTINGS.shapeStyle);
 
@@ -293,6 +294,7 @@ function App() {
         setFadeDuration(settings.fadeDuration);
         setPersistShapes(settings.persistShapes);
         setPanelTransparency(settings.panelTransparency);
+        setToolbarSize(settings.toolbarSize);
         setArrowHeadStyle(settings.arrowHeadStyle);
         setShapeStyle(settings.shapeStyle);
         setHotkeys(settings.hotkeys);
@@ -393,6 +395,19 @@ function App() {
       await saveSettings({ panelTransparency: value });
     } catch (error) {
       console.error("Failed to save panel transparency:", error);
+    }
+  };
+
+  /**
+   * Handle toolbar size change. Saving emits "settings_updated", which the
+   * toolbar window listens for — it rescales and resizes itself to match.
+   */
+  const handleToolbarSizeChange = async (size: ToolbarSize) => {
+    setToolbarSize(size);
+    try {
+      await saveSettings({ toolbarSize: size });
+    } catch (error) {
+      console.error("Failed to save toolbar size:", error);
     }
   };
 
@@ -606,6 +621,7 @@ function App() {
       setFadeDuration(reloadedSettings.fadeDuration);
       setPersistShapes(reloadedSettings.persistShapes);
       setPanelTransparency(reloadedSettings.panelTransparency);
+      setToolbarSize(reloadedSettings.toolbarSize);
       setArrowHeadStyle(reloadedSettings.arrowHeadStyle);
       setShapeStyle(reloadedSettings.shapeStyle);
       setHotkeys(reloadedSettings.hotkeys);
@@ -661,6 +677,7 @@ function App() {
           setFadeDuration(imported.fadeDuration);
           setPersistShapes(imported.persistShapes);
           setPanelTransparency(imported.panelTransparency);
+          setToolbarSize(imported.toolbarSize);
           setArrowHeadStyle(imported.arrowHeadStyle);
           setShapeStyle(imported.shapeStyle);
           setHotkeys(imported.hotkeys);
@@ -831,6 +848,36 @@ function App() {
                 <div className="st-slider-wrap">
                   <Slider min={1} max={60} step={1} value={fadeDuration} onChange={handleFadeDurationChange} disabled={persistShapes} />
                   <span className="st-value">{fadeDuration}s</span>
+                </div>
+              </div>
+
+              <div className="st-row">
+                <div>
+                  <div className="st-row-label">Toolbar size</div>
+                  <div className="st-row-sub">Scale of the floating tool strip</div>
+                </div>
+                <div className="st-seg">
+                  <button
+                    type="button"
+                    className={toolbarSize === "small" ? "active" : ""}
+                    onClick={() => handleToolbarSizeChange("small")}
+                  >
+                    Small
+                  </button>
+                  <button
+                    type="button"
+                    className={toolbarSize === "medium" ? "active" : ""}
+                    onClick={() => handleToolbarSizeChange("medium")}
+                  >
+                    Medium
+                  </button>
+                  <button
+                    type="button"
+                    className={toolbarSize === "large" ? "active" : ""}
+                    onClick={() => handleToolbarSizeChange("large")}
+                  >
+                    Large
+                  </button>
                 </div>
               </div>
 

@@ -1,9 +1,19 @@
 import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 import { ToolType } from "../types/shapes";
-import { loadSettings, saveSettings, DEFAULT_SETTINGS, Settings } from "../lib/storage";
+import { loadSettings, saveSettings, DEFAULT_SETTINGS, Settings, ToolbarSize } from "../lib/storage";
+
+/** Scale factor per toolbar-size preset. "small" is the original 1:1 size. */
+const TOOLBAR_SCALE: Record<ToolbarSize, number> = {
+  small: 1,
+  medium: 1.3,
+  large: 1.6,
+};
+
+/** Padding around the strip inside the window (tb-root padding, both sides). */
+const TOOLBAR_PADDING = 12;
 
 /**
  * Compact horizontal toolbar (floating strip).
@@ -113,7 +123,10 @@ export default function Toolbar() {
   const [activeTool, setActiveTool] = useState<ToolType | null>(null);
   const [colors, setColors] = useState<Settings["colors"]>(DEFAULT_SETTINGS.colors);
   const [panelOpacity, setPanelOpacity] = useState(DEFAULT_SETTINGS.panelTransparency);
+  const [toolbarSize, setToolbarSize] = useState<ToolbarSize>(DEFAULT_SETTINGS.toolbarSize);
   const colorInputRef = useRef<HTMLInputElement>(null);
+  // The strip's natural (unscaled) box — measured to size the window to fit
+  const stripRef = useRef<HTMLDivElement>(null);
   const activeToolRef = useRef<ToolType | null>(null);
   activeToolRef.current = activeTool;
   // True while the user is dragging the strip. Rust also moves this window
@@ -130,6 +143,7 @@ export default function Toolbar() {
         .then((settings) => {
           setColors(settings.colors);
           setPanelOpacity(settings.panelTransparency);
+          setToolbarSize(settings.toolbarSize);
         })
         .catch((error) => console.error("Failed to load settings:", error));
     };
@@ -184,6 +198,23 @@ export default function Toolbar() {
     };
   }, []);
 
+  const scale = TOOLBAR_SCALE[toolbarSize] ?? 1;
+
+  // Resize the toolbar window to fit the scaled strip. offsetWidth/Height are
+  // the strip's natural (pre-transform) box, so the math is independent of the
+  // current window size — measure, multiply by the scale, add the root padding.
+  useEffect(() => {
+    const strip = stripRef.current;
+    // Guard against a not-yet-laid-out strip (offsetWidth 0 would collapse the
+    // window to just the padding)
+    if (!strip || strip.offsetWidth === 0) return;
+    const width = Math.ceil(strip.offsetWidth * scale + TOOLBAR_PADDING);
+    const height = Math.ceil(strip.offsetHeight * scale + TOOLBAR_PADDING);
+    getCurrentWindow()
+      .setSize(new LogicalSize(width, height))
+      .catch((error) => console.error("Failed to resize toolbar:", error));
+  }, [scale]);
+
   const selectTool = (tool: ToolType) => {
     invoke("activate_tool_hotkey", { tool })
       .catch((error) => console.error("Failed to activate tool:", error));
@@ -211,12 +242,20 @@ export default function Toolbar() {
       <style>{CSS}</style>
 
       <div
+        ref={stripRef}
         className="tb-strip"
         data-tauri-drag-region
         // The opacity setting fades the entire strip together — background,
         // icons, dividers, and color swatch — so the whole toolbar (not just
-        // its background) gets quieter as transparency drops
-        style={{ opacity: panelOpacity, backgroundColor: "rgba(28, 28, 30, 0.94)" }}
+        // its background) gets quieter as transparency drops. The transform
+        // scales the whole strip up for the medium/large size presets; the
+        // window is resized to match (see the resize effect above).
+        style={{
+          opacity: panelOpacity,
+          backgroundColor: "rgba(28, 28, 30, 0.94)",
+          transform: `scale(${scale})`,
+          transformOrigin: "center",
+        }}
       >
         <span className="tb-grip" data-tauri-drag-region title="Drag to move">
           {ICON_GRIP}

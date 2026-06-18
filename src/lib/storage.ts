@@ -6,6 +6,9 @@
 import { invoke } from '@tauri-apps/api/core';
 import { ArrowHeadStyle, ShapeStyle } from '../types/shapes';
 
+/** Floating toolbar size preset. "small" matches the original fixed size. */
+export type ToolbarSize = 'small' | 'medium' | 'large';
+
 export interface Settings {
   hotkeys: {
     toggleDrawingMode: string;
@@ -40,6 +43,8 @@ export interface Settings {
   persistShapes: boolean;
   // Feature #126: Panel transparency (0.0 = fully transparent, 1.0 = fully opaque)
   panelTransparency: number;
+  // Floating toolbar size preset ("small" = original size, the default)
+  toolbarSize: ToolbarSize;
   // Feature #133: Panel collapsed state (true = show only tool icons, false = show full panel)
   panelCollapsed: boolean;
   // Feature #131: Arrow head style customization
@@ -81,6 +86,8 @@ export const DEFAULT_SETTINGS: Settings = {
   persistShapes: false,
   // Feature #126: Panel transparency default (0.95 = mostly opaque)
   panelTransparency: 0.95,
+  // Toolbar size default ("small" = original compact strip)
+  toolbarSize: 'small',
   // Feature #133: Panel collapsed default (false = show full panel)
   panelCollapsed: false,
   // Feature #131: Arrow head style default (filled triangle)
@@ -370,6 +377,12 @@ function validateImportedSettings(imported: unknown): Settings {
   if (settings.shapeStyle !== undefined &&
       !Object.values(ShapeStyle).includes(settings.shapeStyle as ShapeStyle)) {
     throw new Error('Invalid settings: shapeStyle must be "classic" or "sketchy"');
+  }
+
+  // Validate toolbar size if present
+  if (settings.toolbarSize !== undefined &&
+      !['small', 'medium', 'large'].includes(settings.toolbarSize as string)) {
+    throw new Error('Invalid settings: toolbarSize must be "small", "medium", or "large"');
   }
 
   // Merge with defaults to ensure all keys exist
