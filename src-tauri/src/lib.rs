@@ -1247,6 +1247,46 @@ pub fn run() {
             // Hotkeys must work from launch, before any webview mounts
             register_hotkeys_from_store(app.handle());
 
+            // Menu bar (status bar) icon: as a background Accessory app with
+            // no Dock icon, the tray is the primary way to reach the app
+            // without the global hotkey. Each item reuses the same command the
+            // toolbar/hotkeys already call.
+            {
+                use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
+                use tauri::tray::TrayIconBuilder;
+
+                let h = app.handle();
+                let settings_i = MenuItem::with_id(h, "tray_settings", "Settings…", true, None::<&str>)?;
+                let toolbar_i = MenuItem::with_id(h, "tray_toolbar", "Show Toolbar", true, None::<&str>)?;
+                let sep = PredefinedMenuItem::separator(h)?;
+                let quit_i = MenuItem::with_id(h, "tray_quit", "Quit Annotatr", true, None::<&str>)?;
+                let menu = Menu::with_items(h, &[&settings_i, &toolbar_i, &sep, &quit_i])?;
+
+                let mut builder = TrayIconBuilder::with_id("main-tray")
+                    .menu(&menu)
+                    .tooltip("Annotatr")
+                    .on_menu_event(|app, event| match event.id.as_ref() {
+                        "tray_settings" => {
+                            if let Err(e) = show_main_window(app.clone()) {
+                                eprintln!("Tray: show settings failed: {}", e);
+                            }
+                        }
+                        "tray_toolbar" => {
+                            if let Err(e) = show_toolbar(app) {
+                                eprintln!("Tray: show toolbar failed: {}", e);
+                            }
+                        }
+                        "tray_quit" => quit_app(app.clone()),
+                        _ => {}
+                    });
+                // Reuse the embedded app icon; swap for a monochrome template
+                // PNG later if a more native menu-bar glyph is wanted.
+                if let Some(icon) = app.default_window_icon() {
+                    builder = builder.icon(icon.clone());
+                }
+                builder.build(h)?;
+            }
+
             Ok(())
         })
         .on_window_event(|window, event| {
