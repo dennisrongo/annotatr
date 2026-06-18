@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { ToolType, Shape, ArrowShape, CircleShape, BoxShape, FreehandShape, HighlighterShape, TextShape, Point, ShapeStyle } from "../types/shapes";
+import { ToolType, Shape, ArrowShape, LineShape, CircleShape, BoxShape, DiamondShape, FreehandShape, HighlighterShape, TextShape, Point, ShapeStyle } from "../types/shapes";
 import { drawShape, redrawShapes, SKETCHY_FONT_STACK } from "../lib/drawing";
 import { loadSettings, Settings, DEFAULT_SETTINGS } from "../lib/storage";
 import { findShapeAtPoint, updateShapeProperty, drawSelectionIndicator } from "../lib/shapeEditing";
@@ -57,7 +57,9 @@ export default function Overlay() {
   // Feature #125: Shape editing mode
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedShape, setSelectedShape] = useState<Shape | null>(null);
-  const [editPanelVisible, setEditPanelVisible] = useState(false);
+  // Active drag (move) in selection mode. Kept in a ref so dragging mutates
+  // shapes/redraws without triggering a re-render on every mousemove.
+  const dragRef = useRef<{ shapeId: string; lastX: number; lastY: number } | null>(null);
 
   // Default drawing settings (fallbacks until settings load)
   const defaultColor = "#FF0000";
@@ -71,11 +73,14 @@ export default function Overlay() {
     // Map tool type to color setting key
     const toolColorKey: Record<ToolType, keyof Settings['colors']> = {
       [ToolType.ARROW]: 'arrow',
+      [ToolType.LINE]: 'line',
       [ToolType.CIRCLE]: 'circle',
       [ToolType.BOX]: 'box',
+      [ToolType.DIAMOND]: 'diamond',
       [ToolType.FREEHAND]: 'freehand',
       [ToolType.HIGHLIGHTER]: 'highlighter',
       [ToolType.TEXT]: 'text',
+      [ToolType.SELECT]: 'arrow', // Select never draws; fallback key, unused
     };
 
     const colorKey = toolColorKey[tool];
@@ -89,15 +94,23 @@ export default function Overlay() {
     // Map tool type to line thickness setting key
     const toolThicknessKey: Record<ToolType, keyof Settings['lineThickness']> = {
       [ToolType.ARROW]: 'arrow',
+      [ToolType.LINE]: 'line',
       [ToolType.CIRCLE]: 'circle',
       [ToolType.BOX]: 'box',
+      [ToolType.DIAMOND]: 'diamond',
       [ToolType.FREEHAND]: 'freehand',
       [ToolType.HIGHLIGHTER]: 'highlighter',
       [ToolType.TEXT]: 'text',
+      [ToolType.SELECT]: 'arrow', // Select never draws; fallback key, unused
     };
 
     const thicknessKey = toolThicknessKey[tool];
-    return settings.lineThickness[thicknessKey] || defaultLineThickness;
+    // The Settings slider sets one global thickness for every tool (stored
+    // per-tool, with `arrow` as the representative the slider reads). Settings
+    // saved before line/diamond existed have no key for them, so fall back to
+    // the global (arrow) value rather than the hardcoded default.
+    const lt = settings.lineThickness;
+    return lt[thicknessKey] ?? lt.arrow ?? defaultLineThickness;
   }, [settings, defaultLineThickness]);
 
   // Feature #73: Auto-fade system - track shape opacities for smooth fade-out.
@@ -132,16 +145,22 @@ export default function Overlay() {
     switch (tool) {
       case ToolType.ARROW:
         return "crosshair"; // Precision cursor for arrow drawing
+      case ToolType.LINE:
+        return "crosshair"; // Precision cursor for line drawing
       case ToolType.CIRCLE:
         return "crosshair"; // Precision cursor for circle drawing
       case ToolType.BOX:
         return "crosshair"; // Precision cursor for box drawing
+      case ToolType.DIAMOND:
+        return "crosshair"; // Precision cursor for diamond drawing
       case ToolType.FREEHAND:
         return "crosshair"; // Standard drawing cursor for freehand
       case ToolType.HIGHLIGHTER:
         return "crosshair"; // Standard drawing cursor for highlighter
       case ToolType.TEXT:
         return "text"; // Text cursor (I-beam) for text input
+      case ToolType.SELECT:
+        return "default"; // Selection mode uses the move cursor (set at container level)
       default:
         return "crosshair";
     }
@@ -208,10 +227,12 @@ export default function Overlay() {
     const { ctx } = context;
     redrawShapes(ctx, shapesRef.current, shapeOpacitiesRef.current, getShapeStyle());
 
-    // Feature #125: Draw selection indicator if the selected shape still
-    // exists (it may have been removed by fade-out, clear, or undo)
-    if (selectedShape && isEditMode && shapesRef.current.some(s => s.id === selectedShape.id)) {
-      drawSelectionIndicator(ctx, selectedShape);
+    // Feature #125: Draw selection indicator around the live shape (looked up
+    // by id so it tracks the shape exactly mid-drag, before selectedShape
+    // state catches up). The shape may be gone via fade-out, clear, or undo.
+    if (selectedShape && isEditMode) {
+      const live = shapesRef.current.find(s => s.id === selectedShape.id);
+      if (live) drawSelectionIndicator(ctx, live);
     }
   }, [getCanvasContext, selectedShape, isEditMode, getShapeStyle]);
   redrawRef.current = redrawAllShapes;
@@ -404,6 +425,34 @@ export default function Overlay() {
   }, [generateShapeId, currentMonitor, getToolColor, getToolLineThickness, customFadeDuration, settings]);
 
   /**
+   * Create line shape from drawing state (a straight line, no arrow head)
+   */
+  const createLineShape = useCallback((
+    startX: number,
+    startY: number,
+    endX: number,
+    endY: number
+  ): LineShape => {
+    const shape: LineShape = {
+      id: generateShapeId(),
+      tool: ToolType.LINE,
+      startPoint: { x: startX, y: startY },
+      endPoint: { x: endX, y: endY },
+      color: getToolColor(ToolType.LINE),
+      lineThickness: getToolLineThickness(ToolType.LINE),
+      createdAt: Date.now(),
+      monitorId: currentMonitor || "default",
+      roughSeed: sketchSeedRef.current,
+    };
+
+    if (customFadeDuration !== null) {
+      shape.customFadeDuration = customFadeDuration;
+    }
+
+    return shape;
+  }, [generateShapeId, currentMonitor, getToolColor, getToolLineThickness, customFadeDuration]);
+
+  /**
    * Create circle shape from drawing state
    * Feature #9: Includes monitorId for per-monitor shape confinement
    * Feature #128: Includes customFadeDuration if set
@@ -476,6 +525,35 @@ export default function Overlay() {
     if (customFadeDuration !== null) {
       shape.customFadeDuration = customFadeDuration;
       console.log(`[Feature #128] Applied custom fade duration: ${customFadeDuration}s to box shape`);
+    }
+
+    return shape;
+  }, [generateShapeId, currentMonitor, getToolColor, getToolLineThickness, customFadeDuration]);
+
+  /**
+   * Create diamond shape from drawing state.
+   * Stores the drag bounding box; the rhombus vertices are computed at draw time.
+   */
+  const createDiamondShape = useCallback((
+    startX: number,
+    startY: number,
+    currentX: number,
+    currentY: number
+  ): DiamondShape => {
+    const shape: DiamondShape = {
+      id: generateShapeId(),
+      tool: ToolType.DIAMOND,
+      startPoint: { x: startX, y: startY },
+      endPoint: { x: currentX, y: currentY },
+      color: getToolColor(ToolType.DIAMOND),
+      lineThickness: getToolLineThickness(ToolType.DIAMOND),
+      createdAt: Date.now(),
+      monitorId: currentMonitor || "default",
+      roughSeed: sketchSeedRef.current,
+    };
+
+    if (customFadeDuration !== null) {
+      shape.customFadeDuration = customFadeDuration;
     }
 
     return shape;
@@ -604,21 +682,24 @@ export default function Overlay() {
     const clickX = event.clientX - rect.left;
     const clickY = event.clientY - rect.top;
 
-    // Feature #125: If in edit mode, try to select a shape
-    if (isEditMode) {
+    // Feature #125: In selection mode (Select tool or Ctrl+E edit mode), try
+    // to select a shape — and begin a drag so it can be moved.
+    if (isEditMode || currentTool === ToolType.SELECT) {
       const hitResult = findShapeAtPoint(shapesRef.current, { x: clickX, y: clickY });
 
       if (hitResult.hit && hitResult.shape) {
         console.log(`[Feature #125] Selected shape: ${hitResult.shape.tool} (${hitResult.shape.id})`);
         setSelectedShape(hitResult.shape);
-        setEditPanelVisible(true);
+        // Start a potential drag from this point (no move happens until the
+        // cursor actually moves, so a plain click just selects)
+        dragRef.current = { shapeId: hitResult.shape.id, lastX: clickX, lastY: clickY };
         redrawAllShapes();
       } else {
         // Clicked on empty space - deselect
+        dragRef.current = null;
         if (selectedShape) {
           console.log("[Feature #125] Deselected shape");
           setSelectedShape(null);
-          setEditPanelVisible(false);
           redrawAllShapes();
         }
       }
@@ -680,6 +761,28 @@ export default function Overlay() {
    * Feature #132: Show alignment guides during drawing
    */
   const handleMouseMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    // Selection mode: drag the held shape to move it
+    if ((isEditMode || currentTool === ToolType.SELECT) && dragRef.current) {
+      const rect = canvasRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const x = event.clientX - rect.left;
+      const y = event.clientY - rect.top;
+      const dx = x - dragRef.current.lastX;
+      const dy = y - dragRef.current.lastY;
+      if (dx !== 0 || dy !== 0) {
+        const idx = shapesRef.current.findIndex(s => s.id === dragRef.current!.shapeId);
+        if (idx !== -1) {
+          const moved = updateShapeProperty(shapesRef.current[idx], "startPoint", { dx, dy }) as Shape;
+          shapesRef.current[idx] = moved;
+          dragRef.current.lastX = x;
+          dragRef.current.lastY = y;
+          setSelectedShape(moved);
+          redrawAllShapes();
+        }
+      }
+      return;
+    }
+
     if (!drawingState.isDrawing || !currentTool) return;
 
     const rect = canvasRef.current?.getBoundingClientRect();
@@ -739,18 +842,24 @@ export default function Overlay() {
       case ToolType.ARROW:
         previewShape = createArrowShape(drawingState.startX, drawingState.startY, currentX, currentY);
         break;
+      case ToolType.LINE:
+        previewShape = createLineShape(drawingState.startX, drawingState.startY, currentX, currentY);
+        break;
       case ToolType.CIRCLE:
         previewShape = createCircleShape(drawingState.startX, drawingState.startY, currentX, currentY);
         break;
       case ToolType.BOX:
         previewShape = createBoxShape(drawingState.startX, drawingState.startY, currentX, currentY);
         break;
+      case ToolType.DIAMOND:
+        previewShape = createDiamondShape(drawingState.startX, drawingState.startY, currentX, currentY);
+        break;
       default:
         return;
     }
 
     drawShape(ctx, previewShape, undefined, getShapeStyle());
-  }, [drawingState.isDrawing, drawingState.startX, drawingState.startY, drawingState.freehandPoints, currentTool, getCanvasContext, createArrowShape, createCircleShape, createBoxShape, createFreehandShape, createHighlighterShape, getShapeStyle]);
+  }, [drawingState.isDrawing, drawingState.startX, drawingState.startY, drawingState.freehandPoints, currentTool, isEditMode, getCanvasContext, createArrowShape, createLineShape, createCircleShape, createBoxShape, createDiamondShape, createFreehandShape, createHighlighterShape, getShapeStyle, redrawAllShapes]);
 
   /**
    * Handle text input submission
@@ -783,6 +892,12 @@ export default function Overlay() {
    * Handle mouse up - complete shape
    */
   const handleMouseUp = useCallback(() => {
+    // End any in-progress shape drag (selection mode). Runs before the
+    // drawing guard below, which returns early when not drawing.
+    if (dragRef.current) {
+      dragRef.current = null;
+    }
+
     if (!drawingState.isDrawing || !currentTool) return;
 
     const { startX, startY, currentX, currentY, freehandPoints } = drawingState;
@@ -830,11 +945,17 @@ export default function Overlay() {
       case ToolType.ARROW:
         newShape = createArrowShape(startX, startY, currentX, currentY);
         break;
+      case ToolType.LINE:
+        newShape = createLineShape(startX, startY, currentX, currentY);
+        break;
       case ToolType.CIRCLE:
         newShape = createCircleShape(startX, startY, currentX, currentY);
         break;
       case ToolType.BOX:
         newShape = createBoxShape(startX, startY, currentX, currentY);
+        break;
+      case ToolType.DIAMOND:
+        newShape = createDiamondShape(startX, startY, currentX, currentY);
         break;
       default:
         return;
@@ -868,7 +989,7 @@ export default function Overlay() {
 
     // Redraw all shapes
     redrawAllShapes();
-  }, [drawingState, currentTool, createArrowShape, createCircleShape, createBoxShape, createFreehandShape, createHighlighterShape, redrawAllShapes, customFadeDuration, ensureFadeLoop]);
+  }, [drawingState, currentTool, createArrowShape, createLineShape, createCircleShape, createBoxShape, createDiamondShape, createFreehandShape, createHighlighterShape, redrawAllShapes, customFadeDuration, ensureFadeLoop]);
 
   // Latest-value snapshot so the mount-once listeners below always read
   // fresh state without tearing down and resubscribing — resubscribe gaps
@@ -944,10 +1065,28 @@ export default function Overlay() {
           // Clear selection when exiting edit mode
           if (!newMode) {
             setSelectedShape(null);
-            setEditPanelVisible(false);
           }
           return newMode;
         });
+        return;
+      }
+
+      // Feature #125: Delete the selected shape with Delete/Backspace (the
+      // text-input guard above already prevents this while typing text).
+      if (
+        (event.key === "Delete" || event.key === "Backspace") &&
+        latest.current.isEditMode &&
+        latest.current.selectedShape
+      ) {
+        event.preventDefault();
+        const sel = latest.current.selectedShape;
+        const idx = shapesRef.current.findIndex(s => s.id === sel.id);
+        if (idx !== -1) {
+          shapesRef.current.splice(idx, 1);
+          latest.current.cleanupOpacityTracking(sel.id);
+        }
+        setSelectedShape(null);
+        latest.current.redrawAllShapes();
         return;
       }
 
@@ -967,7 +1106,6 @@ export default function Overlay() {
         if (latest.current.isEditMode && latest.current.selectedShape) {
           console.log("Escape key pressed - deselecting shape");
           setSelectedShape(null);
-          setEditPanelVisible(false);
           latest.current.redrawAllShapes();
           return;
         }
@@ -1000,6 +1138,10 @@ export default function Overlay() {
         // Clear drawing state when drawing mode is deactivated
         resetDrawingState();
         setCurrentTool(null);
+        // Also leave selection/move mode so a fresh activation starts clean
+        setIsEditMode(false);
+        setSelectedShape(null);
+        dragRef.current = null;
       }
     });
 
@@ -1008,8 +1150,19 @@ export default function Overlay() {
       console.log("Tool selected:", event.payload);
       const tool = event.payload as ToolType;
 
-      if (Object.values(ToolType).includes(tool)) {
-        setCurrentTool(tool);
+      if (!Object.values(ToolType).includes(tool)) return;
+
+      setCurrentTool(tool);
+
+      if (tool === ToolType.SELECT) {
+        // The Select tool enters selection/move mode (same mode as Ctrl+E)
+        setIsEditMode(true);
+      } else {
+        // Switching to a drawing tool leaves selection mode and drops any
+        // current selection/drag.
+        setIsEditMode(false);
+        setSelectedShape(null);
+        dragRef.current = null;
       }
     });
 
@@ -1041,7 +1194,6 @@ export default function Overlay() {
       setCurrentTool(null);
       setIsEditMode(false);
       setSelectedShape(null);
-      setEditPanelVisible(false);
       setTextInputVisible(false);
       setTextInputValue("");
 
@@ -1202,8 +1354,11 @@ export default function Overlay() {
         pointerEvents: "auto",
         backgroundColor: "transparent",
         zIndex: 9999,
-        // Feature #16 & #107: Change cursor based on drawing mode and selected tool
-        cursor: getToolCursor(currentTool, isDrawingMode),
+        // Feature #16 & #107: Change cursor based on drawing mode and selected tool.
+        // In selection/move mode show the move cursor instead.
+        cursor: (isEditMode || currentTool === ToolType.SELECT)
+          ? "move"
+          : getToolCursor(currentTool, isDrawingMode),
       }}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
@@ -1221,35 +1376,6 @@ export default function Overlay() {
           height: "100%",
         }}
       />
-
-      {/* Feature #125: Edit mode indicator */}
-      {isEditMode && (
-        <div
-          style={{
-            position: "absolute",
-            top: 20,
-            left: currentTool ? 200 : 20, // Position next to tool indicator if present
-            padding: "12px 16px",
-            backgroundColor: "#00BFFF",
-            color: "white",
-            borderRadius: "8px",
-            fontSize: "16px",
-            fontWeight: "bold",
-            pointerEvents: "none",
-            boxShadow: "0 4px 6px rgba(0, 0, 0, 0.3)",
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-            border: "2px solid rgba(255, 255, 255, 0.3)",
-          }}
-        >
-          <span style={{ fontSize: "24px" }}>✎</span>
-          <span>Edit Mode</span>
-          <span style={{ fontSize: "12px", marginLeft: "8px", opacity: 0.9 }}>
-            • Click shape to edit • Ctrl+E to exit
-          </span>
-        </div>
-      )}
 
       {/* Text input field (shown when text tool is used) */}
       {/* Feature #30 & #31: Uses font size and color from settings */}
@@ -1292,160 +1418,6 @@ export default function Overlay() {
             overflow: "hidden",
           }}
         />
-      )}
-
-      {/* Feature #125: Edit panel for selected shape */}
-      {editPanelVisible && selectedShape && (
-        <div
-          style={{
-            position: "absolute",
-            bottom: 60,
-            left: 20,
-            padding: "16px",
-            backgroundColor: "rgba(40, 40, 40, 0.95)",
-            color: "white",
-            borderRadius: "12px",
-            fontSize: "14px",
-            boxShadow: "0 4px 20px rgba(0, 0, 0, 0.5)",
-            zIndex: 10002,
-            minWidth: "280px",
-            border: "2px solid #00BFFF",
-          }}
-        >
-          <div style={{ marginBottom: "12px", fontWeight: "bold", fontSize: "16px" }}>
-            Edit {selectedShape.tool} shape
-          </div>
-
-          {/* Color picker */}
-          <div style={{ marginBottom: "12px" }}>
-            <label style={{ display: "block", marginBottom: "4px", fontSize: "12px", opacity: 0.8 }}>
-              Color:
-            </label>
-            <input
-              type="color"
-              value={selectedShape.color}
-              onChange={(e) => {
-                const newColor = e.target.value;
-                const shapeIndex = shapesRef.current.findIndex(s => s.id === selectedShape.id);
-                if (shapeIndex !== -1) {
-                  shapesRef.current[shapeIndex] = updateShapeProperty(selectedShape, "color", newColor) as Shape;
-                  setSelectedShape(shapesRef.current[shapeIndex]);
-                  redrawAllShapes();
-                }
-              }}
-              style={{
-                width: "100%",
-                height: "36px",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            />
-          </div>
-
-          {/* Line thickness slider */}
-          <div style={{ marginBottom: "12px" }}>
-            <label style={{ display: "block", marginBottom: "4px", fontSize: "12px", opacity: 0.8 }}>
-              Line Thickness: {selectedShape.lineThickness}px
-            </label>
-            <input
-              type="range"
-              min="2"
-              max="50"
-              value={selectedShape.lineThickness}
-              onChange={(e) => {
-                const newThickness = parseInt(e.target.value);
-                const shapeIndex = shapesRef.current.findIndex(s => s.id === selectedShape.id);
-                if (shapeIndex !== -1) {
-                  shapesRef.current[shapeIndex] = updateShapeProperty(selectedShape, "lineThickness", newThickness) as Shape;
-                  setSelectedShape(shapesRef.current[shapeIndex]);
-                  redrawAllShapes();
-                }
-              }}
-              style={{
-                width: "100%",
-                cursor: "pointer",
-              }}
-            />
-          </div>
-
-          {/* Font size (for text shapes) */}
-          {selectedShape.tool === ToolType.TEXT && (
-            <div style={{ marginBottom: "12px" }}>
-              <label style={{ display: "block", marginBottom: "4px", fontSize: "12px", opacity: 0.8 }}>
-                Font Size: {(selectedShape as TextShape).fontSize}px
-              </label>
-              <input
-                type="range"
-                min="12"
-                max="72"
-                value={(selectedShape as TextShape).fontSize}
-                onChange={(e) => {
-                  const newFontSize = parseInt(e.target.value);
-                  const shapeIndex = shapesRef.current.findIndex(s => s.id === selectedShape.id);
-                  if (shapeIndex !== -1) {
-                    shapesRef.current[shapeIndex] = updateShapeProperty(selectedShape, "fontSize", newFontSize) as Shape;
-                    setSelectedShape(shapesRef.current[shapeIndex]);
-                    redrawAllShapes();
-                  }
-                }}
-                style={{
-                  width: "100%",
-                  cursor: "pointer",
-                }}
-              />
-            </div>
-          )}
-
-          {/* Action buttons */}
-          <div style={{ display: "flex", gap: "8px", marginTop: "16px" }}>
-            <button
-              onClick={() => {
-                setSelectedShape(null);
-                setEditPanelVisible(false);
-                redrawAllShapes();
-              }}
-              style={{
-                flex: 1,
-                padding: "8px 16px",
-                backgroundColor: "#666",
-                color: "white",
-                border: "none",
-                borderRadius: "6px",
-                cursor: "pointer",
-                fontSize: "14px",
-              }}
-            >
-              Done
-            </button>
-            <button
-              onClick={() => {
-                // The shape may already be gone (faded out, cleared, undone);
-                // close the panel either way
-                const shapeIndex = shapesRef.current.findIndex(s => s.id === selectedShape.id);
-                if (shapeIndex !== -1) {
-                  shapesRef.current.splice(shapeIndex, 1);
-                  cleanupOpacityTracking(selectedShape.id);
-                }
-                setSelectedShape(null);
-                setEditPanelVisible(false);
-                redrawAllShapes();
-              }}
-              style={{
-                flex: 1,
-                padding: "8px 16px",
-                backgroundColor: "#ef4444",
-                color: "white",
-                border: "none",
-                borderRadius: "6px",
-                cursor: "pointer",
-                fontSize: "14px",
-              }}
-            >
-              Delete
-            </button>
-          </div>
-        </div>
       )}
     </div>
   );

@@ -3,7 +3,7 @@
  */
 
 import rough from "roughjs";
-import { Shape, ArrowShape, CircleShape, BoxShape, FreehandShape, HighlighterShape, TextShape, ArrowHeadStyle, ShapeStyle } from "../types/shapes";
+import { Shape, ArrowShape, LineShape, CircleShape, BoxShape, DiamondShape, FreehandShape, HighlighterShape, TextShape, ArrowHeadStyle, ShapeStyle } from "../types/shapes";
 
 type RoughCanvas = ReturnType<typeof rough.canvas>;
 
@@ -212,6 +212,77 @@ export function drawArrow(
 }
 
 /**
+ * Draw a straight line shape on the canvas (an arrow without the head)
+ */
+export function drawLine(
+  ctx: CanvasRenderingContext2D,
+  shape: LineShape,
+  style: ShapeStyle = ShapeStyle.CLASSIC
+): void {
+  const { startPoint, endPoint, color, lineThickness } = shape;
+
+  if (style === ShapeStyle.SKETCHY) {
+    getRoughCanvas(ctx).line(startPoint.x, startPoint.y, endPoint.x, endPoint.y, sketchOptions(shape));
+    return;
+  }
+
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lineThickness;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  ctx.beginPath();
+  ctx.moveTo(startPoint.x, startPoint.y);
+  ctx.lineTo(endPoint.x, endPoint.y);
+  ctx.stroke();
+}
+
+/**
+ * Draw a diamond/rhombus shape on the canvas.
+ * The vertices are the midpoints of the bounding box edges (top, right,
+ * bottom, left), matching Excalidraw's diamond.
+ */
+export function drawDiamond(
+  ctx: CanvasRenderingContext2D,
+  shape: DiamondShape,
+  style: ShapeStyle = ShapeStyle.CLASSIC
+): void {
+  const { startPoint, endPoint, color, lineThickness } = shape;
+
+  // Normalize the bounding box so dragging in any direction works
+  const minX = Math.min(startPoint.x, endPoint.x);
+  const maxX = Math.max(startPoint.x, endPoint.x);
+  const minY = Math.min(startPoint.y, endPoint.y);
+  const maxY = Math.max(startPoint.y, endPoint.y);
+  const midX = (minX + maxX) / 2;
+  const midY = (minY + maxY) / 2;
+
+  // Vertices: top, right, bottom, left
+  const top: [number, number] = [midX, minY];
+  const right: [number, number] = [maxX, midY];
+  const bottom: [number, number] = [midX, maxY];
+  const left: [number, number] = [minX, midY];
+
+  if (style === ShapeStyle.SKETCHY) {
+    getRoughCanvas(ctx).polygon([top, right, bottom, left], sketchOptions(shape));
+    return;
+  }
+
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lineThickness;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  ctx.beginPath();
+  ctx.moveTo(top[0], top[1]);
+  ctx.lineTo(right[0], right[1]);
+  ctx.lineTo(bottom[0], bottom[1]);
+  ctx.lineTo(left[0], left[1]);
+  ctx.closePath();
+  ctx.stroke();
+}
+
+/**
  * Draw a circle/ellipse shape on the canvas
  */
 export function drawCircle(
@@ -379,11 +450,17 @@ export function drawShape(
     case "arrow":
       drawArrow(ctx, shape as ArrowShape, style);
       break;
+    case "line":
+      drawLine(ctx, shape as LineShape, style);
+      break;
     case "circle":
       drawCircle(ctx, shape as CircleShape, style);
       break;
     case "box":
       drawBox(ctx, shape as BoxShape, style);
+      break;
+    case "diamond":
+      drawDiamond(ctx, shape as DiamondShape, style);
       break;
     case "freehand":
       drawFreehand(ctx, shape as FreehandShape, style);

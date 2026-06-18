@@ -47,7 +47,7 @@ type SharedHotkeyRegistry = Arc<Mutex<HotkeyRegistry>>;
 enum HotkeyAction {
     /// Settings key "toggleDrawingMode": toggle the toolbar/session on or off
     ToggleToolbar,
-    /// Activate a drawing tool ("arrow", "circle", "box", "freehand", "highlighter", "text")
+    /// Activate a drawing tool ("arrow", "line", "circle", "box", "diamond", "freehand", "highlighter", "text")
     Tool(String),
 }
 
@@ -162,24 +162,30 @@ fn get_default_settings() -> serde_json::Value {
         "hotkeys": {
             "toggleDrawingMode": "Ctrl+Shift+D",
             "arrowTool": "Ctrl+Shift+A",
+            "lineTool": "Ctrl+Shift+L",
             "circleTool": "Ctrl+Shift+C",
             "boxTool": "Ctrl+Shift+B",
+            "diamondTool": "Ctrl+Shift+G",
             "freehandTool": "Ctrl+Shift+F",
             "highlighterTool": "Ctrl+Shift+H",
             "textTool": "Ctrl+Shift+T"
         },
         "colors": {
             "arrow": "#FF0000",
+            "line": "#FF0000",
             "circle": "#FF0000",
             "box": "#FF0000",
+            "diamond": "#FF0000",
             "freehand": "#FF0000",
             "highlighter": "#FFFF00",
             "text": "#FF0000"
         },
         "lineThickness": {
             "arrow": 12,
+            "line": 12,
             "circle": 12,
             "box": 12,
+            "diamond": 12,
             "freehand": 12,
             "highlighter": 12,
             "text": 12
@@ -754,8 +760,10 @@ fn parse_key_code(s: &str) -> Result<tauri_plugin_global_shortcut::Code, String>
 fn convert_hotkey_tool_name(hotkey_key: &str) -> String {
     match hotkey_key {
         "arrowTool" => "arrow".to_string(),
+        "lineTool" => "line".to_string(),
         "circleTool" => "circle".to_string(),
         "boxTool" => "box".to_string(),
+        "diamondTool" => "diamond".to_string(),
         "freehandTool" => "freehand".to_string(),
         "highlighterTool" => "highlighter".to_string(),
         "textTool" => "text".to_string(),

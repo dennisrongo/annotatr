@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
@@ -47,9 +47,19 @@ function Icon({ children, size = 18 }: { children: React.ReactNode; size?: numbe
 
 const TOOLS: Array<{ tool: ToolType; icon: React.ReactNode; label: string }> = [
   {
+    tool: ToolType.SELECT,
+    label: "Select / Move",
+    icon: <Icon><path d="M5 3 L5 15 L8.2 11.8 L10.3 16.5 L12 15.8 L9.9 11.2 L14 11 Z" /></Icon>,
+  },
+  {
     tool: ToolType.ARROW,
     label: "Arrow",
     icon: <Icon><path d="M4 14L14 4M14 4H8M14 4v6" /></Icon>,
+  },
+  {
+    tool: ToolType.LINE,
+    label: "Line",
+    icon: <Icon><path d="M4 14L14 4" /></Icon>,
   },
   {
     tool: ToolType.CIRCLE,
@@ -60,6 +70,11 @@ const TOOLS: Array<{ tool: ToolType; icon: React.ReactNode; label: string }> = [
     tool: ToolType.BOX,
     label: "Box",
     icon: <Icon><rect x="3" y="4" width="12" height="10" rx="2" /></Icon>,
+  },
+  {
+    tool: ToolType.DIAMOND,
+    label: "Diamond",
+    icon: <Icon><path d="M9 3l6 6-6 6-6-6z" /></Icon>,
   },
   {
     tool: ToolType.FREEHAND,
@@ -199,32 +214,64 @@ export default function Toolbar() {
   }, []);
 
   const scale = TOOLBAR_SCALE[toolbarSize] ?? 1;
+  // Read the latest scale inside the ResizeObserver without resubscribing it.
+  const scaleRef = useRef(scale);
+  scaleRef.current = scale;
 
   // Resize the toolbar window to fit the scaled strip. offsetWidth/Height are
   // the strip's natural (pre-transform) box, so the math is independent of the
   // current window size — measure, multiply by the scale, add the root padding.
-  useEffect(() => {
+  const fitWindowToStrip = useCallback(() => {
     const strip = stripRef.current;
     // Guard against a not-yet-laid-out strip (offsetWidth 0 would collapse the
     // window to just the padding)
     if (!strip || strip.offsetWidth === 0) return;
-    const width = Math.ceil(strip.offsetWidth * scale + TOOLBAR_PADDING);
-    const height = Math.ceil(strip.offsetHeight * scale + TOOLBAR_PADDING);
+    const s = scaleRef.current;
+    // scrollWidth reports the full content width even if the strip is currently
+    // narrower than its contents (e.g. window still too small), so we never
+    // under-measure and leave the window clipped.
+    const naturalWidth = Math.max(strip.offsetWidth, strip.scrollWidth);
+    const naturalHeight = Math.max(strip.offsetHeight, strip.scrollHeight);
+    const width = Math.ceil(naturalWidth * s + TOOLBAR_PADDING);
+    const height = Math.ceil(naturalHeight * s + TOOLBAR_PADDING);
     getCurrentWindow()
       .setSize(new LogicalSize(width, height))
       .catch((error) => console.error("Failed to resize toolbar:", error));
-  }, [scale]);
+  }, []);
+
+  // Re-fit whenever the strip's natural size changes (more/fewer tool buttons,
+  // first layout, font loads). A plain [scale] effect missed content growth at
+  // the default size, where scale never changes — so buttons got clipped.
+  useEffect(() => {
+    const strip = stripRef.current;
+    if (!strip) return;
+    const observer = new ResizeObserver(() => fitWindowToStrip());
+    observer.observe(strip);
+    return () => observer.disconnect();
+  }, [fitWindowToStrip]);
+
+  // Changing the size preset rescales the strip without changing its unscaled
+  // layout box, so the observer won't fire — re-fit explicitly on scale change.
+  useEffect(() => {
+    fitWindowToStrip();
+  }, [scale, fitWindowToStrip]);
 
   const selectTool = (tool: ToolType) => {
     invoke("activate_tool_hotkey", { tool })
       .catch((error) => console.error("Failed to activate tool:", error));
   };
 
-  const swatchTool = activeTool ?? ToolType.ARROW;
+  // The Select tool has no color of its own — fall back to the arrow swatch.
+  const swatchTool: keyof Settings["colors"] =
+    activeTool && activeTool !== ToolType.SELECT
+      ? (activeTool as keyof Settings["colors"])
+      : "arrow";
   const swatchColor = colors[swatchTool] ?? DEFAULT_SETTINGS.colors.arrow;
 
   const changeColor = (color: string) => {
-    const tool = activeToolRef.current ?? ToolType.ARROW;
+    const active = activeToolRef.current;
+    const tool: keyof Settings["colors"] =
+      active && active !== ToolType.SELECT ? (active as keyof Settings["colors"]) : "arrow";
     const updated = { ...colors, [tool]: color };
     setColors(updated);
     saveSettings({ colors: updated })
@@ -255,6 +302,10 @@ export default function Toolbar() {
           backgroundColor: "rgba(28, 28, 30, 0.94)",
           transform: `scale(${scale})`,
           transformOrigin: "center",
+          // Never shrink to the (possibly too-narrow) window: keep the strip at
+          // its natural content width so its buttons aren't clipped and so the
+          // window-fit measurement below reflects the real width.
+          flexShrink: 0,
         }}
       >
         <span className="tb-grip" data-tauri-drag-region title="Drag to move">

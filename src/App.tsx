@@ -44,8 +44,10 @@ const TAB_TINT: Record<TabId, string> = {
 const HOTKEY_LABELS: Record<string, string> = {
   toggleDrawingMode: "Toggle Toolbar",
   arrowTool: "Arrow",
+  lineTool: "Line",
   circleTool: "Circle",
   boxTool: "Box",
+  diamondTool: "Diamond",
   freehandTool: "Freehand",
   highlighterTool: "Highlighter",
   textTool: "Text",
@@ -338,8 +340,10 @@ function App() {
     try {
       const thicknessObj = {
         arrow: value,
+        line: value,
         circle: value,
         box: value,
+        diamond: value,
         freehand: value,
         highlighter: value,
         text: value,

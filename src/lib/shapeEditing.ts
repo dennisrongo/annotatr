@@ -3,7 +3,7 @@
  * This module provides functionality for selecting and editing existing shapes
  */
 
-import { Shape, ArrowShape, CircleShape, BoxShape, FreehandShape, HighlighterShape, TextShape, Point, ToolType } from "../types/shapes";
+import { Shape, ArrowShape, LineShape, CircleShape, BoxShape, DiamondShape, FreehandShape, HighlighterShape, TextShape, Point, ToolType } from "../types/shapes";
 
 /**
  * Hit detection tolerance in pixels
@@ -53,10 +53,14 @@ function testShapeHit(shape: Shape, point: Point): HitResult {
   switch (shape.tool) {
     case ToolType.ARROW:
       return testArrowHit(shape as ArrowShape, point);
+    case ToolType.LINE:
+      return testLineHit(shape as LineShape, point);
     case ToolType.CIRCLE:
       return testCircleHit(shape as CircleShape, point);
     case ToolType.BOX:
       return testBoxHit(shape as BoxShape, point);
+    case ToolType.DIAMOND:
+      return testDiamondHit(shape as DiamondShape, point);
     case ToolType.FREEHAND:
       return testFreehandHit(shape as FreehandShape, point);
     case ToolType.HIGHLIGHTER:
@@ -101,6 +105,59 @@ function testArrowHit(shape: ArrowShape, point: Point): HitResult {
     if (headDistance <= tolerance * 1.5) {
       return { hit: true, shape, distance: headDistance };
     }
+  }
+
+  return { hit: false, shape: null };
+}
+
+/**
+ * Test if a point hits a straight line shape
+ */
+function testLineHit(shape: LineShape, point: Point): HitResult {
+  const { startPoint, endPoint, lineThickness } = shape;
+  const tolerance = Math.max(HIT_TOLERANCE, lineThickness / 2);
+
+  const distance = pointToLineDistance(point, startPoint, endPoint);
+  if (distance <= tolerance) {
+    return { hit: true, shape, distance };
+  }
+
+  return { hit: false, shape: null };
+}
+
+/**
+ * Test if a point hits a diamond/rhombus shape (near any of its four edges)
+ */
+function testDiamondHit(shape: DiamondShape, point: Point): HitResult {
+  const { startPoint, endPoint, lineThickness } = shape;
+  const tolerance = Math.max(HIT_TOLERANCE, lineThickness / 2);
+
+  const minX = Math.min(startPoint.x, endPoint.x);
+  const maxX = Math.max(startPoint.x, endPoint.x);
+  const minY = Math.min(startPoint.y, endPoint.y);
+  const maxY = Math.max(startPoint.y, endPoint.y);
+  const midX = (minX + maxX) / 2;
+  const midY = (minY + maxY) / 2;
+
+  const top: Point = { x: midX, y: minY };
+  const right: Point = { x: maxX, y: midY };
+  const bottom: Point = { x: midX, y: maxY };
+  const left: Point = { x: minX, y: midY };
+
+  const edges: [Point, Point][] = [
+    [top, right],
+    [right, bottom],
+    [bottom, left],
+    [left, top],
+  ];
+
+  let best = Infinity;
+  for (const [a, b] of edges) {
+    best = Math.min(best, pointToLineDistance(point, a, b));
+  }
+
+  if (best <= tolerance) {
+    return { hit: true, shape, distance: best };
   }
 
   return { hit: false, shape: null };
@@ -332,15 +389,20 @@ export function updateShapeProperty(shape: Shape, property: string, value: any):
           x: p.x + delta.dx,
           y: p.y + delta.dy,
         }));
-      } else if (shape.tool === ToolType.ARROW || shape.tool === ToolType.BOX) {
-        // For arrow/box with startPoint/endPoint
-        const pointShape = shape as ArrowShape | BoxShape;
+      } else if (
+        shape.tool === ToolType.ARROW ||
+        shape.tool === ToolType.LINE ||
+        shape.tool === ToolType.BOX ||
+        shape.tool === ToolType.DIAMOND
+      ) {
+        // Shapes defined by a startPoint/endPoint bounding box
+        const pointShape = shape as ArrowShape | LineShape | BoxShape | DiamondShape;
         const delta = value as { dx: number; dy: number };
-        (newShape as ArrowShape | BoxShape).startPoint = {
+        (newShape as ArrowShape | LineShape | BoxShape | DiamondShape).startPoint = {
           x: pointShape.startPoint.x + delta.dx,
           y: pointShape.startPoint.y + delta.dy,
         };
-        (newShape as ArrowShape | BoxShape).endPoint = {
+        (newShape as ArrowShape | LineShape | BoxShape | DiamondShape).endPoint = {
           x: pointShape.endPoint.x + delta.dx,
           y: pointShape.endPoint.y + delta.dy,
         };
@@ -379,13 +441,15 @@ export function drawSelectionIndicator(ctx: CanvasRenderingContext2D, shape: Sha
   ctx.setLineDash([5, 5]); // Dashed line
 
   switch (shape.tool) {
-    case ToolType.ARROW: {
-      const arrow = shape as ArrowShape;
-      // Draw selection box around arrow
-      const minX = Math.min(arrow.startPoint.x, arrow.endPoint.x) - 10;
-      const maxX = Math.max(arrow.startPoint.x, arrow.endPoint.x) + 10;
-      const minY = Math.min(arrow.startPoint.y, arrow.endPoint.y) - 10;
-      const maxY = Math.max(arrow.startPoint.y, arrow.endPoint.y) + 10;
+    case ToolType.ARROW:
+    case ToolType.LINE:
+    case ToolType.DIAMOND: {
+      const seg = shape as ArrowShape | LineShape | DiamondShape;
+      // Draw selection box around the shape's bounding box
+      const minX = Math.min(seg.startPoint.x, seg.endPoint.x) - 10;
+      const maxX = Math.max(seg.startPoint.x, seg.endPoint.x) + 10;
+      const minY = Math.min(seg.startPoint.y, seg.endPoint.y) - 10;
+      const maxY = Math.max(seg.startPoint.y, seg.endPoint.y) + 10;
       ctx.strokeRect(minX, minY, maxX - minX, maxY - minY);
       break;
     }

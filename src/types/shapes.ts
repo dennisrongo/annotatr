@@ -4,11 +4,16 @@
 
 export enum ToolType {
   ARROW = "arrow",
+  LINE = "line",
   CIRCLE = "circle",
   BOX = "box",
+  DIAMOND = "diamond",
   FREEHAND = "freehand",
   HIGHLIGHTER = "highlighter",
   TEXT = "text",
+  // Not a drawing tool: activates selection/move mode (click a shape to
+  // select, drag to move, edit its properties). See Overlay edit mode.
+  SELECT = "select",
 }
 
 /**
@@ -53,6 +58,12 @@ export interface ArrowShape extends BaseShape {
   arrowHeadStyle?: ArrowHeadStyle; // Feature #131: Arrow head style customization
 }
 
+export interface LineShape extends BaseShape {
+  tool: ToolType.LINE;
+  startPoint: Point;
+  endPoint: Point;
+}
+
 export interface CircleShape extends BaseShape {
   tool: ToolType.CIRCLE;
   center: Point;
@@ -67,6 +78,14 @@ export interface BoxShape extends BaseShape {
   endPoint: Point;
   width: number;
   height: number;
+}
+
+export interface DiamondShape extends BaseShape {
+  tool: ToolType.DIAMOND;
+  // Bounding box (same as the box tool); the four rhombus vertices are the
+  // midpoints of each edge, computed at draw time.
+  startPoint: Point;
+  endPoint: Point;
 }
 
 export interface FreehandShape extends BaseShape {
@@ -87,7 +106,7 @@ export interface TextShape extends BaseShape {
   fontSize: number;
 }
 
-export type Shape = ArrowShape | CircleShape | BoxShape | FreehandShape | HighlighterShape | TextShape;
+export type Shape = ArrowShape | LineShape | CircleShape | BoxShape | DiamondShape | FreehandShape | HighlighterShape | TextShape;
 
 export interface DrawingState {
   isDrawing: boolean;

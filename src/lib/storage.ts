@@ -13,16 +13,20 @@ export interface Settings {
   hotkeys: {
     toggleDrawingMode: string;
     arrowTool: string;
+    lineTool: string;
     circleTool: string;
     boxTool: string;
+    diamondTool: string;
     freehandTool: string;
     highlighterTool: string;
     textTool: string;
   };
   colors: {
     arrow: string;
+    line: string;
     circle: string;
     box: string;
+    diamond: string;
     freehand: string;
     highlighter: string;
     text: string;
@@ -30,8 +34,10 @@ export interface Settings {
   // Feature #106: Per-tool line thickness settings
   lineThickness: {
     arrow: number;
+    line: number;
     circle: number;
     box: number;
+    diamond: number;
     freehand: number;
     highlighter: number;
     text: number; // Not used for text but included for consistency
@@ -57,16 +63,20 @@ export const DEFAULT_SETTINGS: Settings = {
   hotkeys: {
     toggleDrawingMode: 'Ctrl+Shift+D',
     arrowTool: 'Ctrl+Shift+A',
+    lineTool: 'Ctrl+Shift+L',
     circleTool: 'Ctrl+Shift+C',
     boxTool: 'Ctrl+Shift+B',
+    diamondTool: 'Ctrl+Shift+G',
     freehandTool: 'Ctrl+Shift+F',
     highlighterTool: 'Ctrl+Shift+H',
     textTool: 'Ctrl+Shift+T',
   },
   colors: {
     arrow: '#FF0000',
+    line: '#FF0000',
     circle: '#FF0000',
     box: '#FF0000',
+    diamond: '#FF0000',
     freehand: '#FF0000',
     highlighter: '#FFFF00',
     text: '#FF0000',
@@ -74,8 +84,10 @@ export const DEFAULT_SETTINGS: Settings = {
   // Feature #106: Per-tool line thickness defaults
   lineThickness: {
     arrow: 12,
+    line: 12,
     circle: 12,
     box: 12,
+    diamond: 12,
     freehand: 12,
     highlighter: 12,
     text: 12, // Not used for text but included for consistency
@@ -137,10 +149,30 @@ export async function loadSettings(): Promise<Settings> {
     const stored = await invoke<Record<string, unknown>>('load_settings');
     console.log('[Storage] Loaded settings:', stored);
 
-    // Merge with defaults to ensure all keys exist
+    const storedSettings = (stored ?? {}) as Partial<Settings>;
+
+    // The line-thickness slider in Settings is a single global control stored
+    // per-tool, with `arrow` as the representative it reads. Backfill tools the
+    // user has no saved value for (e.g. line/diamond, added in a newer build)
+    // from that global so they match the configured thickness instead of
+    // snapping to the static default.
+    const globalThickness =
+      storedSettings.lineThickness?.arrow ?? DEFAULT_SETTINGS.lineThickness.arrow;
+    const lineThickness = { ...DEFAULT_SETTINGS.lineThickness };
+    (Object.keys(lineThickness) as (keyof Settings['lineThickness'])[]).forEach((key) => {
+      lineThickness[key] = storedSettings.lineThickness?.[key] ?? globalThickness;
+    });
+
+    // Deep-merge the nested maps so keys added in newer versions (e.g. the
+    // line/diamond tools) are always present, even for settings saved by an
+    // older build. A shallow spread would replace the whole object and drop the
+    // new tools from the Colors/Shortcuts tabs.
     return {
       ...DEFAULT_SETTINGS,
-      ...(stored as unknown as Settings),
+      ...storedSettings,
+      hotkeys: { ...DEFAULT_SETTINGS.hotkeys, ...storedSettings.hotkeys },
+      colors: { ...DEFAULT_SETTINGS.colors, ...storedSettings.colors },
+      lineThickness,
     };
   } catch (error) {
     console.error('[Storage] Failed to load settings:', error);
