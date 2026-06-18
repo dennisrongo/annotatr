@@ -1175,6 +1175,8 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_store::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, shortcut, event| {
@@ -1279,10 +1281,19 @@ pub fn run() {
                         "tray_quit" => quit_app(app.clone()),
                         _ => {}
                     });
-                // Reuse the embedded app icon; swap for a monochrome template
-                // PNG later if a more native menu-bar glyph is wanted.
-                if let Some(icon) = app.default_window_icon() {
-                    builder = builder.icon(icon.clone());
+                // Monochrome template glyph: a transparent-background PNG that
+                // macOS tints to match the menu bar (light/dark), instead of the
+                // full-color app icon which shows an out-of-place blue square.
+                match tauri::image::Image::from_bytes(include_bytes!("../icons/menubar-template.png")) {
+                    Ok(tray_icon) => {
+                        builder = builder.icon(tray_icon).icon_as_template(true);
+                    }
+                    Err(e) => {
+                        eprintln!("Tray: template icon failed ({e}); falling back to app icon");
+                        if let Some(icon) = app.default_window_icon() {
+                            builder = builder.icon(icon.clone());
+                        }
+                    }
                 }
                 builder.build(h)?;
             }

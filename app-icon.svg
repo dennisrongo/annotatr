@@ -1,25 +1,55 @@
-<svg width="512" height="512" xmlns="http://www.w3.org/2000/svg">
-  <!-- Background -->
-  <rect width="512" height="512" fill="#3b82f6" rx="64"/>
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- system-blue squircle face -->
+    <linearGradient id="face" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3aa0ff"/>
+      <stop offset="0.5" stop-color="#0a84ff"/>
+      <stop offset="1" stop-color="#0060df"/>
+    </linearGradient>
+    <!-- top sheen -->
+    <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.30"/>
+      <stop offset="0.42" stop-color="#ffffff" stop-opacity="0.05"/>
+      <stop offset="0.6" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <!-- marker body shading -->
+    <linearGradient id="pen" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#e7ecf3"/>
+    </linearGradient>
+    <linearGradient id="redstroke" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ff6a60"/>
+      <stop offset="1" stop-color="#ff3b30"/>
+    </linearGradient>
+    <!-- soft drop shadow for the marker -->
+    <filter id="ds" x="-25%" y="-25%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="16" stdDeviation="22" flood-color="#002a66" flood-opacity="0.35"/>
+    </filter>
+    <clipPath id="clip">
+      <rect x="104" y="104" width="816" height="816" rx="188" ry="188"/>
+    </clipPath>
+  </defs>
 
-  <!-- Pencil/Annotation tool icon -->
-  <g transform="translate(128, 128)">
-    <!-- Pencil body -->
-    <rect x="80" y="40" width="64" height="200" fill="#ffffff" rx="8" transform="rotate(45 112 140)"/>
+  <!-- base squircle -->
+  <rect x="104" y="104" width="816" height="816" rx="188" ry="188" fill="url(#face)"/>
+  <g clip-path="url(#clip)">
+    <rect x="104" y="104" width="816" height="816" fill="url(#sheen)"/>
+    <!-- faint annotation marks behind, to read as "screen markup" -->
+    <circle cx="700" cy="338" r="84" fill="none" stroke="#ffffff" stroke-opacity="0.15" stroke-width="22"/>
+    <path d="M286 706 q70 -34 150 -10" fill="none" stroke="#ffffff" stroke-opacity="0.13" stroke-width="22" stroke-linecap="round"/>
+  </g>
 
-    <!-- Pencil tip -->
-    <polygon points="112,220 95,255 129,255" fill="#fbbf24" transform="rotate(45 112 140)"/>
+  <!-- the red annotation stroke being drawn from the nib -->
+  <path d="M300 730 C 410 716, 520 708, 668 612"
+        fill="none" stroke="url(#redstroke)" stroke-width="42" stroke-linecap="round"/>
 
-    <!-- Pencil eraser -->
-    <rect x="96" y="30" width="32" height="20" fill="#ef4444" rx="4" transform="rotate(45 112 140)"/>
-
-    <!-- Annotation marks (small circles and arrows) -->
-    <circle cx="40" cy="40" r="12" fill="#10b981" opacity="0.9"/>
-    <circle cx="200" cy="180" r="12" fill="#10b981" opacity="0.9"/>
-    <circle cx="180" cy="40" r="10" fill="#f59e0b" opacity="0.9"/>
-    <circle cx="60" cy="180" r="10" fill="#f59e0b" opacity="0.9"/>
-
-    <!-- Small arrow -->
-    <path d="M 220 60 L 200 80 L 210 80 L 210 100 L 230 100 L 230 80 L 240 80 Z" fill="#8b5cf6" opacity="0.9"/>
+  <!-- marker / pen, angled across the face -->
+  <g filter="url(#ds)" transform="rotate(-39 512 470)">
+    <rect x="450" y="206" width="126" height="408" rx="42" fill="url(#pen)"/>
+    <rect x="450" y="206" width="126" height="62" rx="42" fill="#cdd6e2" opacity="0.5"/>
+    <rect x="450" y="562" width="126" height="30" fill="#0a84ff" opacity="0.9"/>
+    <!-- nib -->
+    <path d="M450 592 h126 l-45 88 a26 26 0 0 1 -36 0 z" fill="#1d1d1f"/>
+    <path d="M489 658 h48 l-12 22 a14 14 0 0 1 -24 0 z" fill="#ff3b30"/>
   </g>
 </svg>

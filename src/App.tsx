@@ -1,9 +1,11 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useId } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getVersion } from "@tauri-apps/api/app";
 import { open as openExternal } from "@tauri-apps/plugin-shell";
 import { loadSettings, saveSettings, DEFAULT_SETTINGS, exportSettings, importSettings, resetSettings } from "./lib/storage";
 import { ArrowHeadStyle, ShapeStyle } from "./types/shapes";
+import { UpdateBanner, UpdateCheckRow } from "./components/UpdateBanner";
 
 /** macOS gets vibrancy + an overlay title bar; other platforms keep opaque chrome */
 const IS_MAC = typeof navigator !== "undefined" && navigator.platform.toUpperCase().includes("MAC");
@@ -25,6 +27,17 @@ const PRESET_COLORS = [
 ];
 
 type TabId = "general" | "shortcuts" | "colors" | "advanced" | "about";
+
+type Appearance = "auto" | "light" | "dark";
+
+/** System Settings-style colored tile behind each sidebar glyph */
+const TAB_TINT: Record<TabId, string> = {
+  general: "#0a84ff",
+  shortcuts: "#5e5ce6",
+  colors: "#ff375f",
+  advanced: "#8e8e93",
+  about: "#34c759",
+};
 
 /** Human-readable names for hotkey actions */
 const HOTKEY_LABELS: Record<string, string> = {
@@ -85,9 +98,65 @@ function Slider({
       value={value}
       onChange={(e) => onChange(parseInt(e.target.value, 10))}
       style={{
-        background: `linear-gradient(to right, var(--accent) ${pct}%, rgba(255,255,255,0.12) ${pct}%)`,
+        background: `linear-gradient(to right, var(--accent) ${pct}%, var(--track) ${pct}%)`,
       }}
     />
+  );
+}
+
+/** The Annotatr app icon (mirrors app-icon.svg / the bundled icon.icns).
+    IDs are namespaced per instance so multiple renders don't collide. */
+function AppIcon({ size = 56 }: { size?: number }) {
+  const u = useId().replace(/[:]/g, "");
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 1024 1024"
+      aria-hidden="true"
+      style={{ display: "block", flex: "none", pointerEvents: "none" }}
+    >
+      <defs>
+        <linearGradient id={`${u}face`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#3aa0ff" />
+          <stop offset="0.5" stopColor="#0a84ff" />
+          <stop offset="1" stopColor="#0060df" />
+        </linearGradient>
+        <linearGradient id={`${u}sheen`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#ffffff" stopOpacity="0.30" />
+          <stop offset="0.42" stopColor="#ffffff" stopOpacity="0.05" />
+          <stop offset="0.6" stopColor="#ffffff" stopOpacity="0" />
+        </linearGradient>
+        <linearGradient id={`${u}pen`} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#ffffff" />
+          <stop offset="1" stopColor="#e7ecf3" />
+        </linearGradient>
+        <linearGradient id={`${u}red`} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stopColor="#ff6a60" />
+          <stop offset="1" stopColor="#ff3b30" />
+        </linearGradient>
+        <filter id={`${u}ds`} x="-25%" y="-25%" width="150%" height="150%">
+          <feDropShadow dx="0" dy="16" stdDeviation="22" floodColor="#002a66" floodOpacity="0.35" />
+        </filter>
+        <clipPath id={`${u}clip`}>
+          <rect x="104" y="104" width="816" height="816" rx="188" ry="188" />
+        </clipPath>
+      </defs>
+      <rect x="104" y="104" width="816" height="816" rx="188" ry="188" fill={`url(#${u}face)`} />
+      <g clipPath={`url(#${u}clip)`}>
+        <rect x="104" y="104" width="816" height="816" fill={`url(#${u}sheen)`} />
+        <circle cx="700" cy="338" r="84" fill="none" stroke="#ffffff" strokeOpacity="0.15" strokeWidth="22" />
+        <path d="M286 706 q70 -34 150 -10" fill="none" stroke="#ffffff" strokeOpacity="0.13" strokeWidth="22" strokeLinecap="round" />
+      </g>
+      <path d="M300 730 C 410 716, 520 708, 668 612" fill="none" stroke={`url(#${u}red)`} strokeWidth="42" strokeLinecap="round" />
+      <g filter={`url(#${u}ds)`} transform="rotate(-39 512 470)">
+        <rect x="450" y="206" width="126" height="408" rx="42" fill={`url(#${u}pen)`} />
+        <rect x="450" y="206" width="126" height="62" rx="42" fill="#cdd6e2" opacity="0.5" />
+        <rect x="450" y="562" width="126" height="30" fill="#0a84ff" opacity="0.9" />
+        <path d="M450 592 h126 l-45 88 a26 26 0 0 1 -36 0 z" fill="#1d1d1f" />
+        <path d="M489 658 h48 l-12 22 a14 14 0 0 1 -24 0 z" fill="#ff3b30" />
+      </g>
+    </svg>
   );
 }
 
@@ -136,6 +205,34 @@ const TABS: Array<{ id: TabId; label: string }> = [
 function App() {
   // Active tab state
   const [activeTab, setActiveTab] = useState<TabId>("general");
+
+  // Appearance: follow the system or force a look. The data-theme attribute
+  // drives the webview palette; setTheme syncs the native NSVisualEffectView.
+  const [appearance, setAppearance] = useState<Appearance>(() => {
+    try { return (localStorage.getItem("annotatr-appearance") as Appearance) || "auto"; }
+    catch { return "auto"; }
+  });
+  const [systemDark, setSystemDark] = useState<boolean>(() => {
+    try { return window.matchMedia("(prefers-color-scheme: dark)").matches; } catch { return true; }
+  });
+  const effectiveTheme = appearance === "auto" ? (systemDark ? "dark" : "light") : appearance;
+
+  const applyNativeTheme = (a: Appearance) => {
+    getCurrentWindow().setTheme(a === "auto" ? null : a).catch(() => { /* no perm / non-mac */ });
+  };
+  useEffect(() => { applyNativeTheme(appearance); }, []);
+  useEffect(() => {
+    let mq: MediaQueryList;
+    try { mq = window.matchMedia("(prefers-color-scheme: dark)"); } catch { return; }
+    const onChange = (e: MediaQueryListEvent) => setSystemDark(e.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+  const changeAppearance = (a: Appearance) => {
+    setAppearance(a);
+    try { localStorage.setItem("annotatr-appearance", a); } catch { /* ignore */ }
+    applyNativeTheme(a);
+  };
 
   // Settings state
   const [lineThickness, setLineThickness] = useState(DEFAULT_SETTINGS.lineThickness.arrow);
@@ -553,7 +650,7 @@ function App() {
   const conflictEntries = Object.entries(hotkeyConflicts).filter(([, info]: [string, any]) => info.conflict);
 
   return (
-    <div className={`st-app${IS_MAC ? " mac" : ""}`}>
+    <div className={`st-app${IS_MAC ? " mac" : ""}`} data-theme={effectiveTheme}>
       <style>{CSS}</style>
 
       {/* With the overlay title bar the window has no chrome to grab, so the
@@ -563,7 +660,7 @@ function App() {
       {/* Sidebar navigation (background drags the window, like System Settings) */}
       <aside className="st-sidebar" data-tauri-drag-region>
         <div className="st-brand" data-tauri-drag-region>
-          <span className="st-brand-dot" />
+          <AppIcon size={22} />
           <span className="st-brand-name">Annotatr</span>
         </div>
 
@@ -575,7 +672,7 @@ function App() {
               className={`st-nav-item${activeTab === tab.id ? " active" : ""}`}
               onClick={() => setActiveTab(tab.id)}
             >
-              {ICONS[tab.id]}
+              <span className="st-nav-tile" style={{ background: TAB_TINT[tab.id] }}>{ICONS[tab.id]}</span>
               <span>{tab.label}</span>
             </button>
           ))}
@@ -586,12 +683,26 @@ function App() {
 
       {/* Content pane */}
       <main className="st-content">
+        <UpdateBanner />
         {/* Drawing (General) */}
         {activeTab === "general" && (
           <div className="st-page" key="general">
             <h1 className="st-page-title">Drawing</h1>
 
+            <div className="st-group-title">Appearance</div>
             <div className="st-card">
+              <div className="st-row">
+                <div>
+                  <div className="st-row-label">Theme</div>
+                  <div className="st-row-sub">Match the system, or force a light or dark look</div>
+                </div>
+                <div className="st-seg">
+                  <button type="button" className={appearance === "auto" ? "active" : ""} onClick={() => changeAppearance("auto")}>Auto</button>
+                  <button type="button" className={appearance === "light" ? "active" : ""} onClick={() => changeAppearance("light")}>Light</button>
+                  <button type="button" className={appearance === "dark" ? "active" : ""} onClick={() => changeAppearance("dark")}>Dark</button>
+                </div>
+              </div>
+
               <div className="st-row">
                 <div>
                   <div className="st-row-label">Shape style</div>
@@ -614,7 +725,10 @@ function App() {
                   </button>
                 </div>
               </div>
+            </div>
 
+            <div className="st-group-title">Strokes &amp; text</div>
+            <div className="st-card">
               <div className="st-row">
                 <div>
                   <div className="st-row-label">Line thickness</div>
@@ -644,7 +758,10 @@ function App() {
                   <span className="st-value">{fontSize}pt</span>
                 </div>
               </div>
+            </div>
 
+            <div className="st-group-title">On-screen behavior</div>
+            <div className="st-card">
               <div className="st-row">
                 <div>
                   <div className="st-row-label">Fade duration</div>
@@ -868,7 +985,7 @@ function App() {
 
             <div className="st-card">
               <div className="st-about-hero">
-                <span className="st-about-mark" />
+                <AppIcon size={56} />
                 <div>
                   <div className="st-about-name">Annotatr</div>
                   <div className="st-about-tagline">Screen annotation for recordings</div>
@@ -879,6 +996,8 @@ function App() {
                 <div className="st-row-label">Version</div>
                 <span className="st-value">{appVersion || "—"}</span>
               </div>
+
+              <UpdateCheckRow />
 
               <div className="st-row">
                 <div>
@@ -910,19 +1029,62 @@ function App() {
 }
 
 const CSS = `
-:root {
-  --bg-sidebar: #161618;
-  --sidebar-tint: rgba(22, 22, 26, 0.52);
-  --bg-content: #1f1f22;
-  --card: rgba(255, 255, 255, 0.045);
-  --hairline: rgba(255, 255, 255, 0.08);
-  --hairline-faint: rgba(255, 255, 255, 0.055);
-  --text: #f4f4f5;
-  --text-dim: rgba(235, 235, 245, 0.55);
+:root { --mono: ui-monospace, "SF Mono", Menlo, monospace; }
+
+/* Light is the System Settings default; dark mirrors macOS dark mode. The
+   data-theme attribute is set from the Appearance control (Auto/Light/Dark). */
+.st-app[data-theme="light"] {
+  --bg-sidebar: #e9e9ec;
+  --sidebar-tint: rgba(244, 244, 247, 0.62);
+  --bg-content: #f5f5f7;
+  --card: #ffffff;
+  --hairline: rgba(0, 0, 0, 0.10);
+  --hairline-faint: rgba(60, 60, 67, 0.13);
+  --text: #1d1d1f;
+  --text-dim: rgba(60, 60, 67, 0.6);
+  --text-faint: rgba(60, 60, 67, 0.42);
+  --accent: #007aff;
+  --blue: #007aff;
+  --danger: #ff3b30;
+  --hover: rgba(0, 0, 0, 0.05);
+  --track: rgba(120, 120, 128, 0.22);
+  --value-bg: rgba(0, 0, 0, 0.05);
+  --seg-bg: rgba(118, 118, 128, 0.12);
+  --seg-thumb: #ffffff;
+  --btn-bg: #ffffff;
+  --btn-border: rgba(0, 0, 0, 0.13);
+  --btn-hover: #f0f0f2;
+  --key-bg: #ffffff;
+  --key-border: rgba(0, 0, 0, 0.14);
+  --key-shadow: rgba(0, 0, 0, 0.14);
+  --scroll: rgba(0, 0, 0, 0.2);
+}
+
+.st-app[data-theme="dark"] {
+  --bg-sidebar: #1c1c1e;
+  --sidebar-tint: rgba(30, 30, 32, 0.55);
+  --bg-content: #1e1e1e;
+  --card: #2c2c2e;
+  --hairline: rgba(255, 255, 255, 0.1);
+  --hairline-faint: rgba(255, 255, 255, 0.07);
+  --text: #f5f5f7;
+  --text-dim: rgba(235, 235, 245, 0.6);
   --text-faint: rgba(235, 235, 245, 0.32);
-  --accent: #ff453a;
+  --accent: #0a84ff;
   --blue: #0a84ff;
-  --mono: ui-monospace, "SF Mono", Menlo, monospace;
+  --danger: #ff453a;
+  --hover: rgba(255, 255, 255, 0.06);
+  --track: rgba(120, 120, 128, 0.34);
+  --value-bg: rgba(255, 255, 255, 0.08);
+  --seg-bg: rgba(120, 120, 128, 0.24);
+  --seg-thumb: #636366;
+  --btn-bg: #3a3a3c;
+  --btn-border: rgba(255, 255, 255, 0.12);
+  --btn-hover: #48484a;
+  --key-bg: #2c2c2e;
+  --key-border: rgba(255, 255, 255, 0.14);
+  --key-shadow: rgba(0, 0, 0, 0.5);
+  --scroll: rgba(255, 255, 255, 0.16);
 }
 
 html, body, #root {
@@ -989,11 +1151,11 @@ html, body, #root {
 }
 
 .st-brand-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 10px rgba(255, 69, 58, 0.7);
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  background: linear-gradient(160deg, #0a84ff, #0060df);
+  box-shadow: 0 1px 3px rgba(10, 132, 255, 0.5), inset 0 0.5px 0 rgba(255, 255, 255, 0.4);
 }
 
 .st-brand-name {
@@ -1021,10 +1183,35 @@ html, body, #root {
   transition: background 0.12s, color 0.12s;
 }
 
-.st-nav-item svg { flex: none; opacity: 0.85; }
-.st-nav-item:hover { background: rgba(255, 255, 255, 0.05); color: var(--text); }
+.st-nav-item svg { flex: none; opacity: 1; }
+.st-nav-item:hover { background: var(--hover); color: var(--text); }
 .st-nav-item.active { background: var(--accent); color: #fff; }
 .st-nav-item.active svg { opacity: 1; }
+
+/* System Settings-style colored glyph tile */
+.st-nav-tile {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+}
+.st-nav-tile svg { width: 14px; height: 14px; opacity: 1; }
+.st-nav-item.active .st-nav-tile { background: rgba(255, 255, 255, 0.25) !important; }
+
+/* Grouped section headers */
+.st-group-title {
+  margin: 18px 4px 7px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.st-page > .st-group-title:first-of-type { margin-top: 0; }
 
 .st-sidebar-foot {
   margin-top: auto;
@@ -1049,7 +1236,7 @@ html, body, #root {
 }
 
 .st-content::-webkit-scrollbar { width: 8px; }
-.st-content::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.14); border-radius: 4px; }
+.st-content::-webkit-scrollbar-thumb { background: var(--scroll); border-radius: 4px; }
 .st-content::-webkit-scrollbar-track { background: transparent; }
 
 .st-page { animation: st-in 0.18s ease-out; }
@@ -1131,7 +1318,7 @@ html, body, #root {
   font-family: var(--mono);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
-  background: rgba(255, 255, 255, 0.07);
+  background: var(--value-bg);
   border-radius: 5px;
   padding: 3px 6px;
   min-width: 42px;
@@ -1177,10 +1364,10 @@ html, body, #root {
   min-width: 22px;
   text-align: center;
   color: var(--text);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.06));
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: var(--key-bg);
+  border: 1px solid var(--key-border);
   border-radius: 5px;
-  box-shadow: 0 1.5px 0 rgba(0, 0, 0, 0.45);
+  box-shadow: 0 1px 0 var(--key-shadow);
 }
 
 .st-hotkey-display, .st-capture-wrap {
@@ -1196,7 +1383,7 @@ html, body, #root {
   font-size: 11px;
   color: var(--text-dim);
   padding: 5px 10px;
-  border: 1px dashed rgba(255, 69, 58, 0.55);
+  border: 1px dashed color-mix(in srgb, var(--accent) 55%, transparent);
   border-radius: 6px;
   min-width: 96px;
   text-align: center;
@@ -1210,7 +1397,7 @@ html, body, #root {
 }
 
 @keyframes st-pulse {
-  50% { border-color: rgba(255, 69, 58, 0.2); }
+  50% { border-color: color-mix(in srgb, var(--accent) 20%, transparent); }
 }
 
 /* ---- Buttons ---- */
@@ -1219,16 +1406,17 @@ html, body, #root {
   font-size: 12px;
   font-weight: 500;
   color: var(--text);
-  background: rgba(255, 255, 255, 0.07);
-  border: 1px solid var(--hairline);
+  background: var(--btn-bg);
+  border: 1px solid var(--btn-border);
   border-radius: 6px;
   padding: 5px 11px;
   cursor: pointer;
   transition: background 0.12s;
+  box-shadow: 0 0.5px 1px rgba(0, 0, 0, 0.05);
 }
 
-.st-btn:hover { background: rgba(255, 255, 255, 0.11); }
-.st-btn:active { background: rgba(255, 255, 255, 0.16); }
+.st-btn:hover { background: var(--btn-hover); }
+.st-btn:active { filter: brightness(0.96); }
 .st-btn:disabled { opacity: 0.4; cursor: default; }
 
 .st-btn-icon {
@@ -1248,14 +1436,21 @@ html, body, #root {
 }
 
 .st-btn-danger {
-  color: #ff6b61;
-  border-color: rgba(255, 69, 58, 0.4);
-  background: rgba(255, 69, 58, 0.09);
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 40%, transparent);
+  background: color-mix(in srgb, var(--danger) 9%, var(--btn-bg));
 }
 
-.st-btn-danger:hover { background: rgba(255, 69, 58, 0.16); }
+.st-btn-danger:hover { background: color-mix(in srgb, var(--danger) 16%, var(--btn-bg)); }
 
 .st-btn-group { display: flex; gap: 8px; }
+
+/* ---- Updater ---- */
+.st-update-banner { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 14px; padding: 9px 13px; border-radius: 9px; background: color-mix(in srgb, var(--accent) 12%, var(--card)); border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent); color: var(--text); font-size: 12px; font-weight: 500; animation: st-in 0.2s ease; }
+.st-update-banner.err { background: color-mix(in srgb, var(--danger) 12%, var(--card)); border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
+.st-update-btn { appearance: none; border: none; background: var(--accent); color: #fff; font-family: inherit; font-size: 12px; font-weight: 600; padding: 6px 13px; border-radius: 7px; cursor: pointer; flex: none; transition: filter 0.15s; }
+.st-update-btn:hover:not(:disabled) { filter: brightness(1.07); }
+.st-update-btn:disabled { opacity: 0.55; cursor: progress; }
 
 /* ---- Callouts ---- */
 .st-callout {
@@ -1321,9 +1516,9 @@ html, body, #root {
 .st-seg {
   display: inline-flex;
   gap: 2px;
-  padding: 3px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid var(--hairline);
+  padding: 2px;
+  background: var(--seg-bg);
+  border: none;
   border-radius: 8px;
 }
 
@@ -1331,7 +1526,7 @@ html, body, #root {
   font: inherit;
   font-size: 12px;
   font-weight: 500;
-  color: var(--text-dim);
+  color: var(--text);
   background: transparent;
   border: none;
   border-radius: 6px;
@@ -1340,12 +1535,12 @@ html, body, #root {
   transition: background 0.12s, color 0.12s;
 }
 
-.st-seg button:hover { color: var(--text); }
+.st-seg button:hover:not(.active) { background: color-mix(in srgb, var(--text) 8%, transparent); }
 
 .st-seg button.active {
-  background: rgba(255, 255, 255, 0.16);
+  background: var(--seg-thumb);
   color: var(--text);
-  box-shadow: 0 1px 2.5px rgba(0, 0, 0, 0.35), inset 0 0.5px 0 rgba(255, 255, 255, 0.12);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
 }
 
 .st-hidden-input {
@@ -1366,12 +1561,12 @@ html, body, #root {
 }
 
 .st-about-mark {
-  width: 34px;
-  height: 34px;
+  width: 38px;
+  height: 38px;
   flex: none;
-  border-radius: 50%;
-  background: radial-gradient(circle at 32% 30%, #ff6b61, var(--accent) 65%);
-  box-shadow: 0 0 16px rgba(255, 69, 58, 0.55);
+  border-radius: 9px;
+  background: linear-gradient(160deg, #0a84ff, #0060df);
+  box-shadow: 0 2px 8px rgba(10, 132, 255, 0.45), inset 0 0.5px 0 rgba(255, 255, 255, 0.4);
 }
 
 .st-about-name {

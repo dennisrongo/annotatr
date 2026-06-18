@@ -26,7 +26,6 @@
         "titleBarStyle": "Overlay",
         "hiddenTitle": true,
         "transparent": true,
-        "theme": "Dark",
         "visible": false
       },
       {
@@ -77,6 +76,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -86,16 +86,17 @@
     ],
     "publisher": "Annotatr",
     "copyright": "Copyright © 2025 Annotatr",
-    "category": "Graphics",
+    "category": "Graphics and Design",
     "shortDescription": "Screen annotation tool for recordings",
     "longDescription": "A cross-platform screen annotation overlay tool that lets users draw arrows, circles, boxes, freehand drawings, highlights, and text on their screen in real-time while recording with any screen capture software.",
     "macOS": {
       "frameworks": [],
-      "minimumSystemVersion": "10.13",
+      "minimumSystemVersion": "10.15",
       "exceptionDomain": "",
       "signingIdentity": null,
       "providerShortName": null,
-      "entitlements": null
+      "entitlements": "entitlements.plist",
+      "hardenedRuntime": true
     },
     "windows": {
       "certificateThumbprint": null,
@@ -111,5 +112,12 @@
       }
     }
   },
-  "plugins": {}
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDMxMzEzMzdBNUM2NDI1QUQKUldTdEpXUmNlak14TVdUS05sZkIrbkdpQ1JaV01Cbzl6dC90bzhWcG1xR0FQc3JtV0xCWmxFUjAK",
+      "endpoints": [
+        "https://github.com/dennisrongo/annotatr/releases/latest/download/latest.json"
+      ]
+    }
+  }
 }

@@ -27,5 +27,8 @@ dist-ssr
 src-tauri/target
 src-tauri/Cargo.lock
 
+# Release credentials (signing identity + notarization secrets) — never commit
+.env.release
+
 # Claude Code
 .claude/settings.local.json

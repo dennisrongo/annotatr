@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!--
+    Hardened-runtime entitlements for the Developer ID (non-sandboxed) build.
+
+    Annotatr is NOT sandboxed and is distributed via Developer ID + notarization,
+    not the Mac App Store (it uses macOSPrivateApi for the transparent overlay,
+    which the App Store forbids).
+
+    It needs no capability entitlements: it does not capture the screen (it only
+    draws an always-on-top overlay), its global hotkeys use Carbon
+    RegisterEventHotKey (no Input Monitoring entitlement), and WKWebView runs its
+    JavaScript in a separate system process.
+
+    allow-jit is declared defensively for the in-process JS bridge
+    (withGlobalTauri) and is notarization-safe. Add more entries only if
+    notarization specifically rejects the binary.
+  -->
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+</dict>
+</plist>
