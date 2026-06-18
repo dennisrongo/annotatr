@@ -776,7 +776,7 @@ function App() {
               <div className="st-row">
                 <div>
                   <div className="st-row-label">Toolbar opacity</div>
-                  <div className="st-row-sub">Background of the floating strip</div>
+                  <div className="st-row-sub">The whole floating strip — background and icons</div>
                 </div>
                 <div className="st-slider-wrap">
                   <span className="st-strip-preview" title="Toolbar preview">
@@ -788,9 +788,10 @@ function App() {
                         alignItems: "center",
                         justifyContent: "center",
                         gap: 3,
-                        // Mirrors the toolbar: opacity dims the background only,
-                        // the icons (dots here) stay visible
-                        backgroundColor: `rgba(28, 28, 30, ${(0.94 * panelTransparency).toFixed(3)})`,
+                        // Mirrors the toolbar: opacity fades the whole strip —
+                        // background and icons (dots here) — together
+                        opacity: panelTransparency,
+                        backgroundColor: "rgba(28, 28, 30, 0.94)",
                       }}
                     >
                       <span className="st-strip-preview-dot" />

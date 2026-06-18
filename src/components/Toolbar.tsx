@@ -213,9 +213,10 @@ export default function Toolbar() {
       <div
         className="tb-strip"
         data-tauri-drag-region
-        // The opacity setting dims only the strip background; icons and
-        // dividers stay legible at every level
-        style={{ backgroundColor: `rgba(28, 28, 30, ${(0.94 * panelOpacity).toFixed(3)})` }}
+        // The opacity setting fades the entire strip together — background,
+        // icons, dividers, and color swatch — so the whole toolbar (not just
+        // its background) gets quieter as transparency drops
+        style={{ opacity: panelOpacity, backgroundColor: "rgba(28, 28, 30, 0.94)" }}
       >
         <span className="tb-grip" data-tauri-drag-region title="Drag to move">
           {ICON_GRIP}

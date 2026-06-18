@@ -931,6 +931,15 @@ fn activate_tool(app: &AppHandle, tool: String) -> Result<(), String> {
     // plain tool names pass through unchanged
     let tool_type = convert_hotkey_tool_name(&tool);
 
+    // Drawing and the Settings window are mutually exclusive: hide Settings
+    // before showing the overlay, otherwise the captured (always-on-top)
+    // overlay would draw over it instead of letting it be used.
+    if let Some(main) = app.get_webview_window("main") {
+        if main.is_visible().unwrap_or(false) {
+            let _ = main.hide();
+        }
+    }
+
     // Keep the toolbar visible alongside the overlay so the user can switch tools
     show_toolbar(app)?;
 
@@ -938,6 +947,14 @@ fn activate_tool(app: &AppHandle, tool: String) -> Result<(), String> {
     // monitor, re-enable mouse capture, show, raise, focus. Focus is
     // intentional — the overlay must be key so Escape works before any click.
     show_overlay(app.clone())?;
+
+    // show_overlay shows + focuses the overlay and re-asserts its floating
+    // always-on-top level *last*, which can leave the overlay sitting at or
+    // above the toolbar and swallowing clicks aimed at the tool buttons (the
+    // user then has to press Escape before they can switch tools). Re-raise
+    // the toolbar to the modal-panel level AFTER the overlay so it ends up
+    // topmost and stays clickable mid-drawing.
+    raise_toolbar_above_overlay(app);
 
     if let Ok(mut state_guard) = app.state::<SharedState>().try_lock() {
         state_guard.is_visible = true;
@@ -1075,6 +1092,11 @@ fn ensure_on_top(app: AppHandle) -> Result<(), String> {
     // Bring to front without stealing focus from other apps unnecessarily
     overlay_window.set_always_on_top(true).map_err(|e| e.to_string())?;
 
+    // Re-asserting the overlay's always-on-top level can lift it back up to
+    // the toolbar's level; keep the toolbar above so its buttons stay
+    // clickable while drawing (this runs on a 5s timer + on focus changes).
+    raise_toolbar_above_overlay(&app);
+
     println!("Overlay z-index re-asserted to stay on top");
 
     Ok(())
@@ -1139,6 +1161,13 @@ fn save_mini_panel_position(app: AppHandle, x: i32, y: i32, monitor_id: Option<S
 /// Used to open the Settings window from the Mini Panel
 #[tauri::command]
 fn show_main_window(app: AppHandle) -> Result<(), String> {
+    // End any active drawing session first: the always-on-top overlay would
+    // otherwise capture clicks (and draw) over the Settings window, making it
+    // impossible to change settings. return_focus=false so this only hides the
+    // overlay — it must not hand activation away from the window we're about
+    // to focus, and it leaves the toolbar visible.
+    let _ = dismiss_overlay_internal(&app, false);
+
     let main_window = app.get_webview_window("main")
         .ok_or("Main window not found")?;
     main_window.show().map_err(|e| e.to_string())?;
