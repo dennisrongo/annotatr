@@ -1,7 +1,7 @@
 {
   "version": "0.2.1",
   "notes": "Annotatr 0.2.1",
-  "pub_date": "2026-06-19T21:19:44Z",
+  "pub_date": "2026-06-19T21:54:27Z",
   "platforms": {
     "darwin-aarch64": {
       "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTdEpXUmNlak14TWY1SnZBYVVYY2I5UlU5WWJiVjVaaXFNc21RaVdDblE5Mm9vZTNDT2t3TTU1VzY3YUI2ZGVCZDdaVThxQWJEVlhwNXN1bDY1WWFxTzROSW1oKzhMemdZPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgxOTAzOTgzCWZpbGU6QW5ub3RhdHIuYXBwLnRhci5negpVS01aVjRMVmxHVGRSbVZISlFYVXp3dUQ4c2JUV0h6ZHQya3VIN2JFVlZLSjdUTW1zV3J0aTR4a0V2S29QVnk3OHNIZUpGMnZLeTBVK3ArRlNqemJEQT09Cg==",
@@ -10,6 +10,10 @@
     "darwin-x86_64": {
       "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTdEpXUmNlak14TWY1SnZBYVVYY2I5UlU5WWJiVjVaaXFNc21RaVdDblE5Mm9vZTNDT2t3TTU1VzY3YUI2ZGVCZDdaVThxQWJEVlhwNXN1bDY1WWFxTzROSW1oKzhMemdZPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgxOTAzOTgzCWZpbGU6QW5ub3RhdHIuYXBwLnRhci5negpVS01aVjRMVmxHVGRSbVZISlFYVXp3dUQ4c2JUV0h6ZHQya3VIN2JFVlZLSjdUTW1zV3J0aTR4a0V2S29QVnk3OHNIZUpGMnZLeTBVK3ArRlNqemJEQT09Cg==",
       "url": "https://github.com/dennisrongo/annotatr/releases/download/v0.2.1/Annotatr.app.tar.gz"
+    },
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTdEpXUmNlak14TVlYR080T1h4MjJQQTdTZWN1c3RUSzQxNWs1V2h4bjdHa3liWGdkRXlBUCsyZVlLcXdHL0tpamZUaUJ5NFI1NHl5MVlHZmc3SnRoYzBHY0J2ekJWN3c0PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgxOTA2MDY3CWZpbGU6QW5ub3RhdHJfMC4yLjFfeDY0LXNldHVwLm5zaXMuemlwClFwWllEeTNRdXcvOE81aENhRVZkYmE3bnhpemc5YTV4OVVEWTBtUFYyOStQSTlkT2JGaFVJcDdzaTJBN3pMYmhaUVlYK09CYXdHREJENE4wM3hpakN3PT0K",
+      "url": "https://github.com/dennisrongo/annotatr/releases/download/v0.2.1/Annotatr_0.2.1_x64-setup.nsis.zip"
     }
   }
 }
