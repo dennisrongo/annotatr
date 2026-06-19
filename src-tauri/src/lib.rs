@@ -982,7 +982,41 @@ fn raise_toolbar_above_overlay(app: &AppHandle) {
     }
 }
 
-#[cfg(not(target_os = "macos"))]
+/// Keep the toolbar above the overlay on Windows. Both windows are
+/// HWND_TOPMOST, and the overlay — shown + focused last — ends up at the top of
+/// the topmost band, full-screen and capturing the mouse, so its z-order
+/// swallows clicks aimed at the tool buttons (the user then has to press Escape,
+/// which wipes the drawings, before switching tools). Re-insert the toolbar at
+/// the top of the topmost band so its buttons stay clickable mid-drawing.
+/// SWP_NOACTIVATE keeps keyboard focus on the overlay (so Escape still works)
+/// and on the app being demoed — mirroring the macOS NSModalPanelWindowLevel fix.
+#[cfg(target_os = "windows")]
+fn raise_toolbar_above_overlay(app: &AppHandle) {
+    use windows::Win32::UI::WindowsAndMessaging::{
+        SetWindowPos, HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
+    };
+    if let Some(panel) = app.get_webview_window("mini-panel") {
+        let panel_for_closure = panel.clone();
+        // SetWindowPos is safest on the thread that owns the window
+        let _ = panel.run_on_main_thread(move || {
+            if let Ok(hwnd) = panel_for_closure.hwnd() {
+                unsafe {
+                    let _ = SetWindowPos(
+                        hwnd,
+                        Some(HWND_TOPMOST),
+                        0,
+                        0,
+                        0,
+                        0,
+                        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+                    );
+                }
+            }
+        });
+    }
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 fn raise_toolbar_above_overlay(_app: &AppHandle) {}
 
 /// Show the toolbar without activating the app: tao's set_visible(true) is
