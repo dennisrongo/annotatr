@@ -108,29 +108,29 @@ fi
 
 # Version is the source of truth in tauri.conf.json.
 VERSION="$(grep -m1 '"version"' src-tauri/tauri.conf.json | sed -E 's/.*"version" *: *"([^"]+)".*/\1/')"
-MANIFEST="$BUNDLE_DIR/latest.json"
+
+# Tracked, cross-machine source of truth (committed to git). We MERGE our darwin
+# entries in rather than overwrite, so a later Windows build (scripts/release-win.ps1)
+# can add windows-x86_64 to the same version without clobbering these — and vice
+# versa. scripts/merge-manifest.mjs is the single, version-aware merge point:
+# same version keeps the other platform's entries, a new version starts fresh.
+MANIFEST="updater/latest.json"
 
 # GitHub rewrites spaces in asset names to dots; "Annotatr" has none, but keep robust.
 ASSET_NAME="$(basename "$TARBALL" | tr ' ' '.')"
-SIG="$(cat "$SIG_FILE")"
 URL="https://github.com/$REPO/releases/download/v$VERSION/$ASSET_NAME"
-PUB_DATE="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
 # The updater resolves by running arch (darwin-aarch64 / darwin-x86_64) and
 # ignores "darwin-universal". A universal payload satisfies both, so both keys
 # point at the same tarball + signature.
-cat > "$MANIFEST" <<JSON
-{
-  "version": "$VERSION",
-  "notes": "$APP_NAME $VERSION",
-  "pub_date": "$PUB_DATE",
-  "platforms": {
-    "darwin-aarch64": { "signature": "$SIG", "url": "$URL" },
-    "darwin-x86_64":  { "signature": "$SIG", "url": "$URL" }
-  }
-}
-JSON
-echo "▸ Wrote updater manifest: $MANIFEST (v$VERSION)"
+node scripts/merge-manifest.mjs \
+  --manifest "$MANIFEST" \
+  --version "$VERSION" \
+  --platforms "darwin-aarch64,darwin-x86_64" \
+  --sig-file "$SIG_FILE" \
+  --url "$URL"
+echo "▸ Merged darwin entries into updater manifest: $MANIFEST (v$VERSION)"
+echo "  Commit + push this file so the Windows build merges into the same version."
 
 echo ""
 echo "Artifacts:"

@@ -1,8 +1,10 @@
-# Releasing Annotatr (macOS)
+# Releasing Annotatr (macOS + Windows)
 
 How to produce a **signed + notarized + auto-updating** universal build of
 Annotatr that installs cleanly on any Mac — no Gatekeeper "damaged / unidentified
 developer" warnings — and that existing installs update to automatically.
+macOS leads the release (sections 1–5); the Windows installer **follows** into the
+same GitHub release ([section 6](#6-releasing-the-windows-app)).
 
 > Annotatr is distributed as a **direct download (DMG)**, signed with a
 > **Developer ID Application** certificate and **notarized** by Apple. It is
@@ -109,7 +111,14 @@ To ship a new version:
    is the value shown in-app and written into `latest.json`). It MUST be strictly
    greater than the published version. Commit.
 2. Run **`./scripts/release-mac.sh --publish`**.
-3. Confirm the endpoint serves the new version:
+3. Commit the manifest the script merged the mac signatures into — this is the
+   cross-machine source of truth the Windows build reads:
+   ```bash
+   git add updater/latest.json
+   git commit -m "vX.Y.Z: add darwin updater signatures"
+   git push origin main
+   ```
+4. Confirm the endpoint serves the new version:
    ```bash
    curl -sL https://github.com/dennisrongo/annotatr/releases/latest/download/latest.json \
      | python3 -c "import sys,json;d=json.load(sys.stdin);print(d['version'],list(d['platforms']))"
@@ -121,6 +130,69 @@ build, the Settings window shows the **"Update & restart"** banner (and the
 
 > The repo must stay **public** — release assets 404 for the unauthenticated
 > updater and for DMG downloads otherwise.
+
+> **macOS leads, Windows follows.** The macOS flow above owns the version bump
+> and creates the GitHub release. `updater/latest.json` is tracked in git so a
+> Windows build can merge its `windows-x86_64` signature into the *same* version
+> and release — see [Releasing the Windows app](#6-releasing-the-windows-app).
+
+---
+
+## 6. Releasing the Windows app
+
+The Windows side **follows** an existing macOS release — it never bumps the
+version and never creates the release. On a **Windows machine** it builds the
+NSIS `.exe`, signs the auto-update payload with the *same* updater key, and
+merges `windows-x86_64` into the one `latest.json` the Mac published. Driven by
+`scripts/release-win.ps1`; orchestrated by the `/release-windows` skill.
+
+### One-time prerequisites (Windows machine)
+
+| Need | How |
+| --- | --- |
+| Node + npm | `winget install OpenJS.NodeJS.LTS` |
+| Rust with the **MSVC** toolchain | https://rustup.rs, plus VS Build Tools ("Desktop development with C++") |
+| GitHub CLI, authenticated | `winget install GitHub.cli` then `gh auth login` |
+| **The same updater key as macOS** | Copy `~/.tauri/annotatr-updater.key` from the Mac. Set `TAURI_SIGNING_PRIVATE_KEY` (path or base64 contents) + `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` in `.env.release`. You do **not** need the `APPLE_*` vars on Windows. |
+
+> The `.exe` is **not** Authenticode-signed in this setup, so Windows SmartScreen
+> warns "unknown publisher" on first install. The in-app auto-updater still works
+> (it uses the Tauri updater signature, not Authenticode).
+
+### Steps
+
+```powershell
+.\scripts\release-win.ps1 -Preflight   # readiness checklist only (builds nothing)
+git pull origin main                    # get the mac version bump + darwin signatures
+.\scripts\release-win.ps1 -Publish      # build NSIS, merge windows-x86_64, upload into vX.Y.Z
+git add updater/latest.json
+git commit -m "vX.Y.Z: add windows-x86_64 updater signature"
+git push origin main
+```
+
+`release-win.ps1`:
+- reads the version from `tauri.conf.json` (set by macOS — never bumped here);
+- refuses to run unless the `vX.Y.Z` release already exists and `updater/latest.json`
+  is at that version with the mac's `darwin-*` signatures;
+- builds the NSIS installer + signs the `.nsis.zip` updater payload;
+- **merges** `windows-x86_64` into `updater/latest.json` via
+  `scripts/merge-manifest.mjs` (the darwin entries are preserved);
+- with `-Publish`, uploads the `.exe` + `.nsis.zip` + `.sig` + `latest.json` into
+  the existing release with `gh release upload --clobber` — which never edits the
+  release notes the Mac wrote.
+
+Confirm all three platforms are live:
+```bash
+curl -sL https://github.com/dennisrongo/annotatr/releases/latest/download/latest.json \
+  | python3 -c "import sys,json;d=json.load(sys.stdin);print(d['version'],sorted(d['platforms']))"
+```
+Expect `['darwin-aarch64','darwin-x86_64','windows-x86_64']`.
+
+> **One manifest, merged not overwritten.** There is one `latest.json` per
+> release. Each platform signs with the *same* updater key and splices its entry
+> in via `merge-manifest.mjs` (same version → keep the others). Overwriting it
+> from scratch would drop the other platform's signature and break its
+> auto-updates — which is exactly what the merge helper prevents.
 
 ---
 

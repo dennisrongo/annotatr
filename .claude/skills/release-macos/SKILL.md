@@ -25,8 +25,14 @@ Do **not** trigger for a local dev build (`npm run tauri:dev`, `cargo build`) �
    Then confirm all three match (`grep`). `src-tauri/Cargo.lock` is gitignored and updates automatically on the next build — don't hand-edit it.
 3. **Typecheck:** `npm run build`. Fix any error before continuing.
 4. **Commit + push:** stage, verify no secret is staged (`git diff --cached --name-only | grep -iE '\.env\.release$|\.key$|\.p8$'` must be empty), commit the bump, `git push origin main`.
-5. **Build + publish:** `./scripts/release-mac.sh --publish`. This builds universal (Intel + ARM), signs with Developer ID + hardened runtime, notarizes + staples, writes `latest.json` with per-arch keys, and creates/uploads the GitHub release. Requires `.env.release` (Apple creds + `TAURI_SIGNING_PRIVATE_KEY`); the first signing of a session may need keychain "Always Allow".
-6. **Verify externally** that the public endpoint serves the new version:
+5. **Build + publish:** `./scripts/release-mac.sh --publish`. This builds universal (Intel + ARM), signs with Developer ID + hardened runtime, notarizes + staples, **merges** the `darwin-aarch64` + `darwin-x86_64` entries into the tracked `updater/latest.json` (via `scripts/merge-manifest.mjs`, so a later Windows build can add `windows-x86_64` without clobbering these), and creates/uploads the GitHub release. Requires `.env.release` (Apple creds + `TAURI_SIGNING_PRIVATE_KEY`); the first signing of a session may need keychain "Always Allow".
+6. **Commit the manifest:** the script wrote the mac signatures into `updater/latest.json`. Commit + push it so the Windows build merges into the same version:
+   ```bash
+   git add updater/latest.json
+   git commit -m "v<VERSION>: add darwin updater signatures"
+   git push origin main
+   ```
+7. **Verify externally** that the public endpoint serves the new version:
    ```bash
    curl -sL https://github.com/dennisrongo/annotatr/releases/latest/download/latest.json \
      | python3 -c "import sys,json;d=json.load(sys.stdin);print(d['version'],list(d['platforms']))"
@@ -34,7 +40,7 @@ Do **not** trigger for a local dev build (`npm run tauri:dev`, `cargo build`) �
      https://github.com/dennisrongo/annotatr/releases/download/v<VERSION>/Annotatr.app.tar.gz
    ```
    Expect the new version, both `darwin-aarch64` + `darwin-x86_64` keys, and HTTP 200.
-7. **Report:** release URL, notarization status, endpoint check, and that installed builds will catch the update on next launch.
+8. **Report:** release URL, notarization status, endpoint check, and that installed builds will catch the update on next launch. If a Windows build is wanted for this version, it follows via **`/release-windows`** (merges `windows-x86_64` into the same release).
 
 See `docs/RELEASE.md` for the full runbook and `scripts/release-mac.sh` for the build itself.
 
@@ -63,11 +69,14 @@ See `docs/RELEASE.md` for the full runbook and `scripts/release-mac.sh` for the 
 - ❌ Committing `.env.release` or the updater private key (`~/.tauri/annotatr-updater.key`), or echoing their contents.
 - ❌ Re-publishing the same version (or a lower one) — installed apps won't update. Always bump first.
 - ❌ Bumping only some of the version files — a mismatch means a confusing in-app version or a manifest that doesn't match the binary.
-- ✅ Bump everywhere → typecheck → commit → `--publish` → verify the live endpoint.
+- ❌ Hand-writing `latest.json` from scratch — go through `scripts/merge-manifest.mjs` (the script does). A from-scratch darwin-only manifest would wipe a `windows-x86_64` entry a Windows build added for the same version.
+- ❌ Forgetting to commit `updater/latest.json` — the Windows build pulls it to learn the mac signatures; a stale committed manifest makes Windows merge against the wrong version.
+- ✅ Bump everywhere → typecheck → commit → `--publish` → commit `updater/latest.json` → verify the live endpoint.
 
 ## Notes
 
-- **Back up `~/.tauri/annotatr-updater.key`.** It signs the update payload; losing it means no existing install can ever auto-update again (each would need a manual reinstall).
+- **Back up `~/.tauri/annotatr-updater.key`.** It signs the update payload; losing it means no existing install can ever auto-update again (each would need a manual reinstall). The Windows machine needs a copy of this same key.
+- **macOS leads, Windows follows.** This skill owns the version bump and creates the release. `updater/latest.json` is tracked in git as the cross-machine source of truth; the Windows build (`/release-windows`) merges `windows-x86_64` into the same version + release without touching the notes.
 - Notarization is not cached — each release re-submits to Apple and waits for "Accepted".
 - Run the script without `--publish` to do the full build + manifest locally without touching GitHub (useful for a dry run).
 - Adapted from the agent-status `release-macos` skill.
