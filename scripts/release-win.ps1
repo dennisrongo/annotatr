@@ -330,8 +330,11 @@ try {
 }
 
 $NsisDir = 'src-tauri/target/release/bundle/nsis'
-$Exe = Get-ChildItem "$NsisDir/*_x64-setup.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
-if (-not $Exe) { Die "No NSIS installer under $NsisDir (expected *_x64-setup.exe)." }
+# Match THIS version's installer explicitly. A stale exe from a prior version may
+# still sit in the bundle dir, and a bare *_x64-setup.exe glob sorts alphabetically
+# (0.2.1 before 0.3.0) — picking the wrong, older payload to sign and upload.
+$Exe = Get-ChildItem "$NsisDir/*_${Version}_x64-setup.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+if (-not $Exe) { Die "No NSIS installer for v$Version under $NsisDir (expected *_${Version}_x64-setup.exe)." }
 
 # --- Build the updater payload (.nsis.zip) and sign it ourselves -------------
 # tauri-bundler names the payload <installer>.nsis.zip; the updater extracts it
@@ -341,7 +344,18 @@ if (-not $Exe) { Die "No NSIS installer under $NsisDir (expected *_x64-setup.exe
 $ZipPath = ($Exe.FullName -replace '\.exe$', '.nsis.zip')
 Remove-Item -LiteralPath $ZipPath -ErrorAction SilentlyContinue
 Remove-Item -LiteralPath "$ZipPath.sig" -ErrorAction SilentlyContinue
-Compress-Archive -LiteralPath $Exe.FullName -DestinationPath $ZipPath -Force
+# The payload MUST be a STORED (uncompressed) zip. The tauri-plugin-updater zip
+# reader is compiled without the deflate feature, so a DEFLATE entry fails on the
+# client with "unsupported Zip archive: Compression method not supported" -- which
+# is exactly what tauri-bundler avoids by storing the installer uncompressed.
+# PowerShell's Compress-Archive can't produce a STORED zip (on PS 5.1 / .NET
+# Framework, even -CompressionLevel NoCompression tags entries as DEFLATE), so we
+# use Windows' bundled bsdtar, which can force method 0. (The .exe is already
+# LZMA-compressed by NSIS, so storing it costs ~nothing.)
+$Bsdtar = Join-Path $env:SystemRoot 'System32\tar.exe'
+if (-not (Test-Path -LiteralPath $Bsdtar)) { Die "Windows bsdtar not found at $Bsdtar - required to build a STORED updater zip the client can extract." }
+& $Bsdtar -a -cf $ZipPath --options zip:compression=store -C $Exe.DirectoryName $Exe.Name
+Assert-LastExit 'bsdtar (stored zip)'
 
 $SignKey = $env:TAURI_SIGNING_PRIVATE_KEY
 $SignPw  = $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD; if ($null -eq $SignPw) { $SignPw = '' }
