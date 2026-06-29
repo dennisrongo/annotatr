@@ -267,11 +267,37 @@ function testHighlighterHit(shape: HighlighterShape, point: Point): HitResult {
 }
 
 /**
+ * Measure a text shape's on-canvas bounding box.
+ * Mirrors drawText(): `position` is the TOP-LEFT of the text (canvas
+ * textBaseline="top"), lines advance at fontSize*1.2, width is the widest line.
+ * Kept in sync with drawText in drawing.ts — the hit box and the selection box
+ * must wrap the exact pixels the text occupies, or clicking/selecting is off.
+ */
+function measureTextBox(
+  ctx: CanvasRenderingContext2D,
+  shape: TextShape
+): { x: number; y: number; width: number; height: number } {
+  const { position, text, fontSize } = shape;
+  ctx.font = `${fontSize}px sans-serif`;
+  const lineHeight = fontSize * 1.2; // matches drawText's line spacing
+  const lines = text.split("\n");
+  let width = 0;
+  for (const line of lines) {
+    width = Math.max(width, ctx.measureText(line).width);
+  }
+  return {
+    x: position.x,
+    y: position.y, // top of the text — text is drawn downward from here
+    width,
+    height: Math.max(lineHeight, lines.length * lineHeight),
+  };
+}
+
+/**
  * Test if a point hits a text shape
  * Uses canvas text measurement to determine hit area
  */
 function testTextHit(shape: TextShape, point: Point): HitResult {
-  const { position, text, fontSize } = shape;
   const tolerance = HIT_TOLERANCE;
 
   // Create a temporary canvas to measure text
@@ -279,17 +305,11 @@ function testTextHit(shape: TextShape, point: Point): HitResult {
   const ctx = canvas.getContext("2d");
   if (!ctx) return { hit: false, shape: null };
 
-  ctx.font = `${fontSize}px sans-serif`;
-  const metrics = ctx.measureText(text);
-
-  // Estimate text bounds (rough approximation)
-  const textWidth = metrics.width;
-  const textHeight = fontSize; // Approximate height
-
-  const minX = position.x;
-  const maxX = position.x + textWidth;
-  const minY = position.y - textHeight;
-  const maxY = position.y;
+  const box = measureTextBox(ctx, shape);
+  const minX = box.x;
+  const maxX = box.x + box.width;
+  const minY = box.y;
+  const maxY = box.y + box.height;
 
   // Check if point is within or near the text bounds
   const nearText =
@@ -495,12 +515,11 @@ export function drawSelectionIndicator(ctx: CanvasRenderingContext2D, shape: Sha
     }
     case ToolType.TEXT: {
       const text = shape as TextShape;
-      // Estimate text bounds and draw selection rectangle
-      ctx.font = `${text.fontSize}px sans-serif`;
-      const metrics = ctx.measureText(text.text);
-      const width = metrics.width + 10;
-      const height = text.fontSize + 10;
-      ctx.strokeRect(text.position.x - 5, text.position.y - height, width, height);
+      // Wrap the text's actual on-canvas bounds (top-left origin, matches
+      // drawText) so the dashed box sits around the glyphs, not a line-height
+      // above them. 5px padding on every side.
+      const box = measureTextBox(ctx, text);
+      ctx.strokeRect(box.x - 5, box.y - 5, box.width + 10, box.height + 10);
       break;
     }
   }

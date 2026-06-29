@@ -47,6 +47,14 @@ export default function Overlay() {
   const [textInputPosition, setTextInputPosition] = useState<Point>({ x: 0, y: 0 });
   const [textInputValue, setTextInputValue] = useState("");
   const textInputRef = useRef<HTMLTextAreaElement>(null);
+  // Guards the text commit against firing twice for one input. A click to
+  // place a new text block (or to click elsewhere) triggers BOTH the explicit
+  // mousedown commit AND the textarea's blur commit. The native order is
+  // mousedown -> blur, but both read React state that is mid-transition, so the
+  // blur path can commit a second shape at the *click* location (the text then
+  // appears to "shift" to where you clicked). The first commit flips this to
+  // true; the second is suppressed. It resets when a new text input opens.
+  const textCommittedRef = useRef(false);
 
   // Feature #30 & #31: Settings state for font size and colors
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -656,6 +664,11 @@ export default function Overlay() {
    */
   const commitText = useCallback((position: Point, text: string): boolean => {
     if (!text.trim()) return false;
+    // A click to relocate/place a text block fires both the explicit mousedown
+    // commit and the textarea blur. Suppress the second so the text isn't
+    // re-committed at the click location (which made the block appear to jump).
+    if (textCommittedRef.current) return false;
+    textCommittedRef.current = true;
 
     const newTextShape = createTextShape(position, text);
     shapesRef.current.push(newTextShape);
@@ -714,11 +727,14 @@ export default function Overlay() {
 
     // For text tool, show inline input at click location
     if (currentTool === ToolType.TEXT) {
-      // Commit any in-progress text first so relocating the caret keeps it
-      // (the blur that follows would otherwise see a reset, empty value).
+      // Commit any in-progress text first so relocating the caret keeps it.
+      // commitText is guarded so the trailing blur (mousedown -> blur order)
+      // won't re-commit the same block at the new click location.
       if (textInputVisible) {
         commitText(textInputPosition, textInputValue);
       }
+      // Reset the commit guard for the new text block about to open
+      textCommittedRef.current = false;
       setTextInputPosition({ x: startX, y: startY });
       setTextInputValue("");
       setTextInputVisible(true);
@@ -868,6 +884,8 @@ export default function Overlay() {
     commitText(textInputPosition, textInputValue);
     setTextInputVisible(false);
     setTextInputValue("");
+    // Allow the next text block to commit again
+    textCommittedRef.current = false;
   }, [commitText, textInputPosition, textInputValue]);
 
   /**
@@ -884,6 +902,7 @@ export default function Overlay() {
       event.preventDefault();
       setTextInputVisible(false);
       setTextInputValue("");
+      textCommittedRef.current = false;
     }
     // Shift+Enter allows default behavior (new line)
   }, [handleTextInputSubmit]);
@@ -1196,6 +1215,7 @@ export default function Overlay() {
       setSelectedShape(null);
       setTextInputVisible(false);
       setTextInputValue("");
+      textCommittedRef.current = false;
 
       // Clear canvas
       const canvas = canvasRef.current;
@@ -1380,45 +1400,63 @@ export default function Overlay() {
       {/* Text input field (shown when text tool is used) */}
       {/* Feature #30 & #31: Uses font size and color from settings */}
       {/* Feature #129: Multi-line text support with textarea */}
-      {textInputVisible && (
-        <textarea
-          ref={textInputRef}
-          value={textInputValue}
-          rows={1}
-          onChange={(e) => {
-            setTextInputValue(e.target.value);
-            // Auto-grow height so the field never shows a scrollbar
-            const el = e.currentTarget;
-            el.style.height = "auto";
-            el.style.height = `${el.scrollHeight}px`;
-          }}
-          onKeyDown={handleTextInputKeyDown}
-          onBlur={handleTextInputSubmit}
-          style={{
-            position: "absolute",
-            left: textInputPosition.x,
-            top: textInputPosition.y,
-            // Feature #30: Use font size from settings
-            fontSize: settings ? `${Math.round(settings.fontSize * 1.7)}px` : "24px",
-            // Match the canvas font so the input previews the final text
-            fontFamily: settings?.shapeStyle === ShapeStyle.SKETCHY ? SKETCHY_FONT_STACK : "sans-serif",
-            padding: 0,
-            // Transparent, borderless field so the input previews the final
-            // on-canvas text 1:1 (no white box, no frame)
-            border: "none",
-            borderRadius: 0,
-            outline: "none",
-            backgroundColor: "transparent",
-            // Feature #31: Use text color from settings for text and caret
-            color: settings?.colors.text || "#FF0000",
-            caretColor: settings?.colors.text || "#FF0000",
-            minWidth: "200px",
-            zIndex: 10000,
-            resize: "none",
-            overflow: "hidden",
-          }}
-        />
-      )}
+      {textInputVisible && (() => {
+        // Compute the exact font metrics the committed canvas shape will use
+        // (see createTextShape / drawText) so the live textarea lines up with
+        // the on-canvas text pixel-for-pixel. The previous version relied on
+        // the textarea's default line-height ("normal"), whose half-leading
+        // pushed the glyphs ~0.1*fontSize below position.y while canvas's
+        // textBaseline="top" anchors the em-box AT position.y — so on commit
+        // the text jumped up by that half-leading.
+        const fontSizePx = settings ? Math.round(settings.fontSize * 1.7) : defaultFontSize;
+        const lineHeightPx = Math.round(fontSizePx * 1.2); // matches drawText
+        // Half-leading = (lineHeight - fontSize) / 2. The textarea places the
+        // em-box top this far inside its line box, so nudge the field up by it
+        // to align the textarea's glyphs with canvas's top-baseline origin.
+        const halfLeading = (lineHeightPx - fontSizePx) / 2;
+        return (
+          <textarea
+            ref={textInputRef}
+            value={textInputValue}
+            rows={1}
+            onChange={(e) => {
+              setTextInputValue(e.target.value);
+              // Auto-grow height so the field never shows a scrollbar
+              const el = e.currentTarget;
+              el.style.height = "auto";
+              el.style.height = `${el.scrollHeight}px`;
+            }}
+            onKeyDown={handleTextInputKeyDown}
+            onBlur={handleTextInputSubmit}
+            style={{
+              position: "absolute",
+              left: textInputPosition.x,
+              top: textInputPosition.y - halfLeading,
+              // Feature #30: Use font size from settings
+              fontSize: `${fontSizePx}px`,
+              // Match the canvas line spacing exactly (drawText: fontSize*1.2)
+              lineHeight: `${lineHeightPx}px`,
+              // Match the canvas font so the input previews the final text
+              fontFamily: settings?.shapeStyle === ShapeStyle.SKETCHY ? SKETCHY_FONT_STACK : "sans-serif",
+              padding: 0,
+              margin: 0,
+              // Transparent, borderless field so the input previews the final
+              // on-canvas text 1:1 (no white box, no frame)
+              border: "none",
+              borderRadius: 0,
+              outline: "none",
+              backgroundColor: "transparent",
+              // Feature #31: Use text color from settings for text and caret
+              color: settings?.colors.text || "#FF0000",
+              caretColor: settings?.colors.text || "#FF0000",
+              minWidth: "200px",
+              zIndex: 10000,
+              resize: "none",
+              overflow: "hidden",
+            }}
+          />
+        );
+      })()}
     </div>
   );
 }
