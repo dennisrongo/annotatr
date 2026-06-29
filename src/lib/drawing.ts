@@ -399,8 +399,58 @@ export function drawHighlighter(
 }
 
 /**
- * Draw a text shape on the canvas
+ * The font stack a text shape is rendered with, given the shape style.
+ * Centralized so drawText, the textarea, and the selection/hit geometry all
+ * resolve to the SAME font — otherwise their metrics drift and the committed
+ * text lands a few pixels off from where it was typed.
  */
+export function textFontFamily(style: ShapeStyle = ShapeStyle.CLASSIC): string {
+  return style === ShapeStyle.SKETCHY ? SKETCHY_FONT_STACK : "sans-serif";
+}
+
+/**
+ * The VISIBLE (glyph) bounding box of a TextShape — where the ink actually is,
+ * excluding the half-leading the line height adds above the first line and
+ * below the last. The selection border and hit box wrap THIS so the border has
+ * even spacing on every side instead of extra gap top/bottom from the leading.
+ *
+ * `position` is the top-left of the first LINE box; the glyphs sit half-leading
+ * inside it. Real font metrics (TextMetrics.fontBoundingBoxAscent/Descent) are
+ * used so the box matches the actual glyphs — drawText, the textarea, and the
+ * selection/hit geometry all derive from the same baseline math, which keeps a
+ * text block put when committed and wraps its border precisely.
+ */
+export function measureTextBox(
+  ctx: CanvasRenderingContext2D,
+  shape: TextShape,
+  style: ShapeStyle = ShapeStyle.CLASSIC
+): { x: number; y: number; width: number; height: number } {
+  const { position, text, fontSize } = shape;
+  ctx.font = `${fontSize}px ${textFontFamily(style)}`;
+  const lineHeight = fontSize * 1.2;
+  const lines = text.length ? text.split("\n") : [""];
+
+  let width = 0;
+  for (const line of lines) {
+    width = Math.max(width, ctx.measureText(line).width);
+  }
+
+  // Real font metrics (same probe drawText uses) so the vertical extent is the
+  // actual glyph area, not the fontSize approximation.
+  const probe = ctx.measureText("Mg");
+  const fontBoxHeight = probe.fontBoundingBoxAscent + probe.fontBoundingBoxDescent;
+  const halfLeading = (lineHeight - fontBoxHeight) / 2;
+
+  return {
+    x: position.x,
+    y: position.y + halfLeading,
+    width,
+    // Visible glyphs span from the first line's top (position.y + halfLeading)
+    // through the last line's bottom: (N-1) line gaps + one font box.
+    height: (lines.length - 1) * lineHeight + fontBoxHeight,
+  };
+}
+
 /**
  * Draw a text shape on the canvas
  * Feature #129: Multi-line text support with line break handling
@@ -413,17 +463,28 @@ export function drawText(
   const { position, text, color, fontSize } = shape;
 
   ctx.fillStyle = color;
-  const fontFamily = style === ShapeStyle.SKETCHY ? SKETCHY_FONT_STACK : "sans-serif";
-  ctx.font = `${fontSize}px ${fontFamily}`;
-  ctx.textBaseline = "top";
+  ctx.font = `${fontSize}px ${textFontFamily(style)}`;
+  ctx.textBaseline = "alphabetic";
+
+  // Match the textarea's line-box layout exactly. With line-height: fontSize*1.2
+  // the browser centers the font box (fontBoundingBoxAscent + Descent) inside
+  // the line box, so each line's baseline sits at:
+  //   lineTop + halfLeading + fontBoundingBoxAscent
+  // where halfLeading = (lineHeight - fontBoxHeight) / 2. Drawing each line at
+  // that same baseline makes the canvas glyphs land on the same pixels the
+  // textarea showed while typing — the committed text no longer shifts.
+  const probe = ctx.measureText("Mg");
+  const fontBoxHeight = probe.fontBoundingBoxAscent + probe.fontBoundingBoxDescent;
+  const lineHeight = fontSize * 1.2;
+  const halfLeading = (lineHeight - fontBoxHeight) / 2;
 
   // Feature #129: Handle multi-line text
   const lines = text.split('\n');
-  const lineHeight = fontSize * 1.2; // 20% line spacing
 
   lines.forEach((line, index) => {
-    const y = position.y + (index * lineHeight);
-    ctx.fillText(line, position.x, y);
+    const lineTop = position.y + index * lineHeight;
+    const baseline = lineTop + halfLeading + probe.fontBoundingBoxAscent;
+    ctx.fillText(line, position.x, baseline);
   });
 }
 

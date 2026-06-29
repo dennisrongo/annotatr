@@ -22,10 +22,13 @@ tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# Cross-platform native window backdrops: apply_vibrancy on macOS,
+# apply_mica/apply_acrylic on Windows. Listed unconditionally so the Windows
+# setup branch can use it; the crate errors out as unsupported elsewhere.
+window-vibrancy = "0.6"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
-window-vibrancy = "0.6"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }

@@ -3,7 +3,8 @@
  * This module provides functionality for selecting and editing existing shapes
  */
 
-import { Shape, ArrowShape, LineShape, CircleShape, BoxShape, DiamondShape, FreehandShape, HighlighterShape, TextShape, Point, ToolType } from "../types/shapes";
+import { Shape, ArrowShape, LineShape, CircleShape, BoxShape, DiamondShape, FreehandShape, HighlighterShape, TextShape, Point, ToolType, ShapeStyle } from "../types/shapes";
+import { measureTextBox } from "./drawing";
 
 /**
  * Hit detection tolerance in pixels
@@ -28,11 +29,15 @@ export interface HitResult {
  * @param point - The point to test
  * @returns The hit result containing the shape if found
  */
-export function findShapeAtPoint(shapes: Shape[], point: Point): HitResult {
+export function findShapeAtPoint(
+  shapes: Shape[],
+  point: Point,
+  style: ShapeStyle = ShapeStyle.CLASSIC
+): HitResult {
   // Search in reverse order (topmost shapes first)
   for (let i = shapes.length - 1; i >= 0; i--) {
     const shape = shapes[i];
-    const result = testShapeHit(shape, point);
+    const result = testShapeHit(shape, point, style);
 
     if (result.hit) {
       return { hit: true, shape };
@@ -49,7 +54,7 @@ export function findShapeAtPoint(shapes: Shape[], point: Point): HitResult {
  * @param point - The point to test
  * @returns Hit result with distance if applicable
  */
-function testShapeHit(shape: Shape, point: Point): HitResult {
+function testShapeHit(shape: Shape, point: Point, style: ShapeStyle): HitResult {
   switch (shape.tool) {
     case ToolType.ARROW:
       return testArrowHit(shape as ArrowShape, point);
@@ -66,7 +71,7 @@ function testShapeHit(shape: Shape, point: Point): HitResult {
     case ToolType.HIGHLIGHTER:
       return testHighlighterHit(shape as HighlighterShape, point);
     case ToolType.TEXT:
-      return testTextHit(shape as TextShape, point);
+      return testTextHit(shape as TextShape, point, style);
     default:
       return { hit: false, shape: null };
   }
@@ -270,8 +275,7 @@ function testHighlighterHit(shape: HighlighterShape, point: Point): HitResult {
  * Test if a point hits a text shape
  * Uses canvas text measurement to determine hit area
  */
-function testTextHit(shape: TextShape, point: Point): HitResult {
-  const { position, text, fontSize } = shape;
+function testTextHit(shape: TextShape, point: Point, style: ShapeStyle): HitResult {
   const tolerance = HIT_TOLERANCE;
 
   // Create a temporary canvas to measure text
@@ -279,17 +283,11 @@ function testTextHit(shape: TextShape, point: Point): HitResult {
   const ctx = canvas.getContext("2d");
   if (!ctx) return { hit: false, shape: null };
 
-  ctx.font = `${fontSize}px sans-serif`;
-  const metrics = ctx.measureText(text);
-
-  // Estimate text bounds (rough approximation)
-  const textWidth = metrics.width;
-  const textHeight = fontSize; // Approximate height
-
-  const minX = position.x;
-  const maxX = position.x + textWidth;
-  const minY = position.y - textHeight;
-  const maxY = position.y;
+  const box = measureTextBox(ctx, shape, style);
+  const minX = box.x;
+  const maxX = box.x + box.width;
+  const minY = box.y;
+  const maxY = box.y + box.height;
 
   // Check if point is within or near the text bounds
   const nearText =
@@ -434,7 +432,11 @@ export function updateShapeProperty(shape: Shape, property: string, value: any):
  * @param ctx - The canvas rendering context
  * @param shape - The shape to highlight
  */
-export function drawSelectionIndicator(ctx: CanvasRenderingContext2D, shape: Shape): void {
+export function drawSelectionIndicator(
+  ctx: CanvasRenderingContext2D,
+  shape: Shape,
+  style: ShapeStyle = ShapeStyle.CLASSIC
+): void {
   ctx.save();
   ctx.strokeStyle = "#00BFFF"; // Bright cyan
   ctx.lineWidth = 2;
@@ -495,12 +497,11 @@ export function drawSelectionIndicator(ctx: CanvasRenderingContext2D, shape: Sha
     }
     case ToolType.TEXT: {
       const text = shape as TextShape;
-      // Estimate text bounds and draw selection rectangle
-      ctx.font = `${text.fontSize}px sans-serif`;
-      const metrics = ctx.measureText(text.text);
-      const width = metrics.width + 10;
-      const height = text.fontSize + 10;
-      ctx.strokeRect(text.position.x - 5, text.position.y - height, width, height);
+      // Wrap the text's VISIBLE glyph bounds (measureTextBox returns the ink
+      // box, excluding the line-height's half-leading) so the dashed border has
+      // even spacing on every side instead of extra gap top/bottom.
+      const box = measureTextBox(ctx, text, style);
+      ctx.strokeRect(box.x - 5, box.y - 5, box.width + 10, box.height + 10);
       break;
     }
   }

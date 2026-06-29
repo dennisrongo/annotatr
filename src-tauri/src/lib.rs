@@ -13,6 +13,11 @@ struct OverlayState {
     is_visible: bool,
     current_monitor: Option<String>,
     drawing_mode: bool,
+    // Windows only: the HWND (stored as isize) of the app that was in the
+    // foreground when a drawing session began, so Escape / toggle-off can hand
+    // focus back to it — mirroring macOS app.hide(), which NSApp routes to the
+    // previously frontmost app automatically. None on macOS/Linux.
+    prev_foreground: Option<isize>,
 }
 
 impl Default for OverlayState {
@@ -21,6 +26,7 @@ impl Default for OverlayState {
             is_visible: false,
             current_monitor: None,
             drawing_mode: false,
+            prev_foreground: None,
         }
     }
 }
@@ -1036,6 +1042,59 @@ fn show_toolbar(app: &AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// Windows only: remember the currently foreground window so a later dismiss
+/// can hand focus back to it (the app being demoed). macOS gets this for free
+/// from NSApp.hide(); Win32 has no such implicit hand-off, so we capture it
+/// here while the demoed app still has the foreground. The stored HWND is
+/// validated on restore — the app may have closed or minimized in the meantime.
+#[cfg(target_os = "windows")]
+fn remember_foreground_window(app: &AppHandle) {
+    use windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
+    let fg = unsafe { GetForegroundWindow() };
+    // Don't capture our own windows (the toolbar/overlay) — only an external
+    // app being demoed. A null handle (no foreground yet) is left as-is.
+    let raw = if !fg.is_invalid() {
+        let ours = ["mini-panel"]
+            .into_iter()
+            .filter_map(|label| app.get_webview_window(label).and_then(|w| w.hwnd().ok()))
+            .any(|h| std::ptr::eq(h.0, fg.0));
+        if ours { None } else { Some(fg.0 as isize) }
+    } else {
+        None
+    };
+    if let Ok(mut state) = app.state::<SharedState>().try_lock() {
+        state.prev_foreground = raw;
+    }
+}
+
+/// Windows only: hand the foreground back to the window remembered at session
+/// start (see remember_foreground_window). Guards against dead HWNDs and the
+/// Win32 foreground-lock (a no-op if SetForegroundWindow is refused — at worst
+/// the taskbar flashes rather than the wrong app staying focused).
+#[cfg(target_os = "windows")]
+fn restore_foreground_window(app: &AppHandle) {
+    let raw = app
+        .state::<SharedState>()
+        .try_lock()
+        .ok()
+        .and_then(|mut s| s.prev_foreground.take());
+    let Some(raw) = raw else { return };
+    use windows::Win32::Foundation::HWND;
+    use windows::Win32::UI::WindowsAndMessaging::SetForegroundWindow;
+    let hwnd = HWND(raw as *mut _);
+    if hwnd.is_invalid() {
+        return;
+    }
+    unsafe {
+        let _ = SetForegroundWindow(hwnd);
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn remember_foreground_window(_app: &AppHandle) {}
+#[cfg(not(target_os = "windows"))]
+fn restore_foreground_window(_app: &AppHandle) {}
+
 /// Activate a drawing tool: ensure toolbar + overlay are up, capture the
 /// mouse, and tell the overlay which tool to use. Called from the global
 /// hotkey handler and from the toolbar's tool buttons (via the
@@ -1116,6 +1175,11 @@ fn toggle_session(app: &AppHandle) -> Result<bool, String> {
         // Hand activation back to the previously frontmost app
         #[cfg(target_os = "macos")]
         let _ = app.hide();
+        // Windows: NSApp.hide() doesn't exist; explicitly restore the window
+        // captured when drawing began (no-op if there wasn't one, e.g. the
+        // session was toolbar-only).
+        #[cfg(target_os = "windows")]
+        restore_foreground_window(app);
         println!("Session toggled OFF (idle)");
         Ok(false)
     } else {
@@ -1177,6 +1241,14 @@ fn dismiss_overlay_internal(app: &AppHandle, return_focus: bool) -> Result<(), S
                 let _ = panel.show();
             }
         }
+    }
+
+    // Windows hand-back: there's no NSApp.hide() equivalent that returns to the
+    // previously frontmost app, so we explicitly SetForegroundWindow back to
+    // the HWND captured when the session began (remember_foreground_window).
+    #[cfg(target_os = "windows")]
+    if return_focus {
+        restore_foreground_window(app);
     }
 
     println!("Overlay dismissed - shapes cleared, drawing state reset");
@@ -1343,6 +1415,11 @@ pub fn run() {
                             }
                         }
                         Some(HotkeyAction::Tool(tool)) => {
+                            // While the global hotkey fires, the app being
+                            // demoed still has the foreground — capture it now,
+                            // before activate_tool shows + focuses our overlay.
+                            // Escape / toggle-off will hand focus back to it.
+                            remember_foreground_window(app);
                             if let Err(e) = activate_tool(app, tool) {
                                 eprintln!("Tool hotkey failed: {}", e);
                             }
@@ -1369,6 +1446,25 @@ pub fn run() {
                 use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial};
                 if let Err(e) = apply_vibrancy(&main, NSVisualEffectMaterial::Sidebar, None, None) {
                     eprintln!("Failed to apply window vibrancy: {}", e);
+                }
+            }
+
+            // Windows equivalent: the settings window is built transparent
+            // (tauri.conf.json) but, unlike macOS, no backdrop was applied, so
+            // it rendered as a black/empty void. Mica (Win11) or Acrylic
+            // (Win10) gives it the same native glass the sidebar paints over.
+            // Mica is preferred on Win11 (it samples the desktop wallpaper);
+            // Acrylic is the Win10 fallback. Both are graceful no-ops on the
+            // other OS, so the cfg gates only which we try.
+            #[cfg(target_os = "windows")]
+            if let Some(main) = app.get_webview_window("main") {
+                use window_vibrancy::apply_mica;
+                // None = follow the system light/dark preference, matching the
+                // macOS vibrancy which also adapts to the appearance setting.
+                if let Err(e) = apply_mica(&main, None) {
+                    eprintln!("Mica backdrop unavailable (likely Win10); falling back to acrylic: {}", e);
+                    use window_vibrancy::apply_acrylic;
+                    let _ = apply_acrylic(&main, None);
                 }
             }
 
