@@ -8,8 +8,20 @@ import { loadSettings, saveSettings, DEFAULT_SETTINGS, exportSettings, importSet
 import { ArrowHeadStyle, ShapeStyle } from "./types/shapes";
 import { UpdateBanner, UpdateCheckRow } from "./components/UpdateBanner";
 
-/** macOS gets vibrancy + an overlay title bar; other platforms keep opaque chrome */
-const IS_MAC = typeof navigator !== "undefined" && navigator.platform.toUpperCase().includes("MAC");
+/**
+ * Platform flags for the Settings window chrome.
+ * - IS_MAC drives genuinely macOS-only UI (the ⌘ keycap label).
+ * - HAS_NATIVE_GLASS is true wherever a native window backdrop (macOS
+ *   NSVisualEffectView, Windows Mica/Acrylic) is applied in Rust. The window
+ *   is transparent and the sidebar paints translucent over that backdrop, so
+ *   both platforms share the same "glass" styling; Linux (no backdrop) keeps
+ *   the opaque fallback.
+ */
+const PLATFORM = (typeof navigator !== "undefined" ? navigator.platform : "").toUpperCase();
+const IS_MAC = PLATFORM.includes("MAC");
+// navigator.platform reports "Win32" on Windows (legacy/deprecated but still
+// the only per-window signal available before any Tauri API loads).
+const HAS_NATIVE_GLASS = IS_MAC || PLATFORM.startsWith("WIN");
 
 /**
  * Preset color palette for drawing tools
@@ -707,12 +719,14 @@ function App() {
   const conflictEntries = Object.entries(hotkeyConflicts).filter(([, info]: [string, any]) => info.conflict);
 
   return (
-    <div className={`st-app${IS_MAC ? " mac" : ""}`} data-theme={effectiveTheme}>
+    <div className={`st-app${HAS_NATIVE_GLASS ? " glass mac" : ""}`} data-theme={effectiveTheme}>
       <style>{CSS}</style>
 
       {/* With the overlay title bar the window has no chrome to grab, so the
-          top strip (and the sidebar background below) doubles as one */}
-      {IS_MAC && <div className="st-drag-strip" data-tauri-drag-region />}
+          top strip (and the sidebar background below) doubles as one. Rendered
+          on every platform with a native backdrop (macOS + Windows); the
+          drag-region attribute makes it move the frameless window. */}
+      {HAS_NATIVE_GLASS && <div className="st-drag-strip" data-tauri-drag-region />}
 
       {/* Sidebar navigation (background drags the window, like System Settings) */}
       <aside className="st-sidebar" data-tauri-drag-region>
