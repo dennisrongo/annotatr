@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ToolType, Shape, ArrowShape, LineShape, CircleShape, BoxShape, DiamondShape, FreehandShape, HighlighterShape, TextShape, Point, ShapeStyle } from "../types/shapes";
-import { drawShape, redrawShapes, SKETCHY_FONT_STACK } from "../lib/drawing";
+import { drawShape, redrawShapes, textFontFamily } from "../lib/drawing";
 import { loadSettings, Settings, DEFAULT_SETTINGS } from "../lib/storage";
 import { findShapeAtPoint, updateShapeProperty, drawSelectionIndicator } from "../lib/shapeEditing";
 
@@ -240,7 +240,7 @@ export default function Overlay() {
     // state catches up). The shape may be gone via fade-out, clear, or undo.
     if (selectedShape && isEditMode) {
       const live = shapesRef.current.find(s => s.id === selectedShape.id);
-      if (live) drawSelectionIndicator(ctx, live);
+      if (live) drawSelectionIndicator(ctx, live, getShapeStyle());
     }
   }, [getCanvasContext, selectedShape, isEditMode, getShapeStyle]);
   redrawRef.current = redrawAllShapes;
@@ -698,7 +698,7 @@ export default function Overlay() {
     // Feature #125: In selection mode (Select tool or Ctrl+E edit mode), try
     // to select a shape — and begin a drag so it can be moved.
     if (isEditMode || currentTool === ToolType.SELECT) {
-      const hitResult = findShapeAtPoint(shapesRef.current, { x: clickX, y: clickY });
+      const hitResult = findShapeAtPoint(shapesRef.current, { x: clickX, y: clickY }, getShapeStyle());
 
       if (hitResult.hit && hitResult.shape) {
         console.log(`[Feature #125] Selected shape: ${hitResult.shape.tool} (${hitResult.shape.id})`);
@@ -1401,19 +1401,16 @@ export default function Overlay() {
       {/* Feature #30 & #31: Uses font size and color from settings */}
       {/* Feature #129: Multi-line text support with textarea */}
       {textInputVisible && (() => {
-        // Compute the exact font metrics the committed canvas shape will use
-        // (see createTextShape / drawText) so the live textarea lines up with
-        // the on-canvas text pixel-for-pixel. The previous version relied on
-        // the textarea's default line-height ("normal"), whose half-leading
-        // pushed the glyphs ~0.1*fontSize below position.y while canvas's
-        // textBaseline="top" anchors the em-box AT position.y — so on commit
-        // the text jumped up by that half-leading.
+        // Match the canvas text layout exactly (see drawText / measureTextBox)
+        // so the live preview and the committed shape occupy the same pixels.
+        // The shared anchor: position is the top-left of the first LINE BOX.
+        // Both the textarea (line-box top == its content-box top) and drawText
+        // (baseline = lineTop + halfLeading + ascent) derive the glyph origin
+        // from that same line-box top using the SAME lineHeight and font, so no
+        // manual offset is needed — the previous half-leading nudge double-
+        // applied it and is what left the text shifted.
         const fontSizePx = settings ? Math.round(settings.fontSize * 1.7) : defaultFontSize;
         const lineHeightPx = Math.round(fontSizePx * 1.2); // matches drawText
-        // Half-leading = (lineHeight - fontSize) / 2. The textarea places the
-        // em-box top this far inside its line box, so nudge the field up by it
-        // to align the textarea's glyphs with canvas's top-baseline origin.
-        const halfLeading = (lineHeightPx - fontSizePx) / 2;
         return (
           <textarea
             ref={textInputRef}
@@ -1430,14 +1427,17 @@ export default function Overlay() {
             onBlur={handleTextInputSubmit}
             style={{
               position: "absolute",
+              // Line-box top == position.y. The textarea centers the font box
+              // inside this line height (adding half-leading), exactly like the
+              // canvas, so the glyphs line up with no extra offset.
               left: textInputPosition.x,
-              top: textInputPosition.y - halfLeading,
+              top: textInputPosition.y,
               // Feature #30: Use font size from settings
               fontSize: `${fontSizePx}px`,
               // Match the canvas line spacing exactly (drawText: fontSize*1.2)
               lineHeight: `${lineHeightPx}px`,
               // Match the canvas font so the input previews the final text
-              fontFamily: settings?.shapeStyle === ShapeStyle.SKETCHY ? SKETCHY_FONT_STACK : "sans-serif",
+              fontFamily: textFontFamily(settings?.shapeStyle),
               padding: 0,
               margin: 0,
               // Transparent, borderless field so the input previews the final
