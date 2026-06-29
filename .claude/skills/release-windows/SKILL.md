@@ -26,6 +26,7 @@ Do **not** trigger for a local dev build (`npm run tauri dev`, `cargo build`).
 
 - **Toolchain:** Node + npm, Rust (MSVC toolchain), and the Tauri prerequisites (WebView2 is present on Win10/11). `gh` authenticated (`gh auth status`), `git` configured.
 - **Updater key:** copy `~/.tauri/annotatr-updater.key` from the Mac, then set `TAURI_SIGNING_PRIVATE_KEY` (path or base64 contents) and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` in `.env.release`. **It must be the same key as macOS** or the signature won't validate against the embedded pubkey. (On Windows you do *not* need the `APPLE_*` vars — those are macOS-only.) `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` **must match the key's password** — set it to `""` if the key has none. The script signs via `tauri signer sign -p <password>`, so an empty password works; a wrong/omitted one fails the preflight's *"Updater key can sign"* check in ~2s (before any build).
+- **Verified commits (for the "Verified" badge):** set up SSH commit signing once — see `docs/RELEASE.md` → *Verified commits*. Then the manifest commit below shows as Verified on GitHub.
 
 > Verify all of the above at once with `./scripts/release-win.ps1 -Preflight` (checklist only — builds nothing).
 
@@ -45,10 +46,10 @@ Do **not** trigger for a local dev build (`npm run tauri dev`, `cargo build`).
 3. **Confirm the macOS release exists.** `gh release view v<VERSION>` must succeed. If it doesn't, stop — the macOS release must be cut first (Windows only follows). `scripts/release-win.ps1` also enforces this and that `updater/latest.json` is already at this version.
 4. **Typecheck:** `npm install` (if deps changed) then `npm run build`. Fix any error before continuing.
 5. **Build + publish:** `./scripts/release-win.ps1 -Publish`. This builds the NSIS installer (with build-time signing disabled), packs the **version-matched** installer into a **STORED (uncompressed) `.nsis.zip` via Windows bsdtar**, signs that zip with the `tauri signer` CLI, **merges** `windows-x86_64` into `updater/latest.json` (preserving the darwin entries), and uploads the `.exe` + `.nsis.zip` + `.sig` + `latest.json` into the existing `v<VERSION>` release with `--clobber`. The release notes are left untouched. (Both the STORED zip and the version-matched installer selection are load-bearing for a working auto-update — see *Notes*.)
-6. **Commit the merged manifest:** verify no secret is staged (`git diff --cached --name-only` must not include `.env.release` or `*.key`), then commit `updater/latest.json` and push:
+6. **Commit the merged manifest:** verify no secret is staged (`git diff --cached --name-only` must not include `.env.release` or `*.key`), then commit `updater/latest.json` with a **signed** commit and push:
    ```bash
    git add updater/latest.json
-   git commit -m "v<VERSION>: add windows-x86_64 updater signature"
+   git commit -S -m "v<VERSION>: add windows-x86_64 updater signature"
    git push origin main
    ```
 7. **Verify externally** that the public endpoint serves all three platforms **and that the Windows payload is a STORED zip at the right version** (this is the check that catches a broken auto-update before users hit it):
@@ -75,7 +76,7 @@ See `docs/RELEASE.md` → *Releasing the Windows app* for the full runbook and `
 **Claude:**
 - On the Windows box: `git pull`, confirms `tauri.conf.json` is `0.3.0` and `gh release view v0.3.0` succeeds.
 - Runs `./scripts/release-win.ps1 -Publish`; it merges `windows-x86_64` into `updater/latest.json` (darwin entries preserved) and uploads the `.exe`/`.nsis.zip`/`.sig`/`latest.json` into `v0.3.0`.
-- Commits the manifest, curls the endpoint, confirms all three platform keys at HTTP 200, and reports that the Mac's signatures + release notes are intact.
+- Commits the manifest with a signed commit, curls the endpoint, confirms all three platform keys at HTTP 200, and reports that the Mac's signatures + release notes are intact.
 
 ### Example 2: macOS hasn't released yet
 
@@ -93,7 +94,7 @@ See `docs/RELEASE.md` → *Releasing the Windows app* for the full runbook and `
 - ❌ Committing `.env.release` or the updater `.key`, or echoing their contents.
 - ❌ Packing the `.nsis.zip` with PowerShell `Compress-Archive` — it produces a DEFLATE zip the client updater can't extract (*"Compression method not supported"*). The zip **must** be STORED; the script uses bsdtar for this.
 - ❌ Trusting a bare `*_x64-setup.exe` glob — if a prior version's installer lingers in the bundle dir it sorts first (`0.2.1` before `0.3.0`) and you'd sign/ship the stale one. Always select the version-matched installer.
-- ✅ Pull → confirm same version + existing release → `release-win.ps1 -Publish` (merges) → commit of `updater/latest.json` → verify the live endpoint shows all three platforms **and the windows zip is STORED at the right version**.
+- ✅ Pull → confirm same version + existing release → `release-win.ps1 -Publish` (merges) → signed commit of `updater/latest.json` → verify the live endpoint shows all three platforms **and the windows zip is STORED at the right version**.
 
 ## Notes
 

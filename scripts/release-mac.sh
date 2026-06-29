@@ -143,15 +143,49 @@ echo "  $MANIFEST"
 # --- Publish to GitHub Releases (opt-in) -------------------------------------
 if [[ "$PUBLISH" == true ]]; then
   TAG="v$VERSION"
+
+  # Build release notes from the commit log since the previous release tag, so
+  # the GitHub release records what actually changed in this version instead of
+  # a static blurb. The Windows build only uploads assets (never edits the body),
+  # so these notes survive intact across both machines.
+  NOTES_FILE="$(mktemp -t annotatr-notes)"
+  trap 'rm -f "$NOTES_FILE"' EXIT
+  # Releases are tagged server-side by `gh release create`, so the local repo may
+  # not have prior tags — fetch them before picking the previous one.
+  git fetch --tags --quiet || true
+  PREV_TAG=$(git tag -l 'v*' --sort=-v:refname | grep -v "^${TAG}$" | head -1 || true)
+  {
+    echo "## What's changed in ${TAG}"
+    echo
+    if [[ -n "$PREV_TAG" ]]; then
+      CHANGES=$(git log "${PREV_TAG}..HEAD" --no-merges --pretty=format:'- %s (%h)' \
+        | grep -viE 'bump version' || true)
+      [[ -z "$CHANGES" ]] && CHANGES="- Maintenance and internal improvements."
+      printf '%s\n\n\n' "$CHANGES"
+      echo "**Full changelog:** https://github.com/${REPO}/compare/${PREV_TAG}...${TAG}"
+    else
+      echo "- Initial release."
+    fi
+    echo
+    echo "---"
+    echo
+    echo "Download the installer for your platform below (\`.dmg\` for macOS, \`.exe\` for Windows)."
+    echo "Installed apps auto-update via the in-app updater."
+  } > "$NOTES_FILE"
+
+  echo ""
+  echo "▸ Release notes for ${TAG} (from ${PREV_TAG:-<none>}..HEAD):"
+  sed 's/^/    /' "$NOTES_FILE"
   echo ""
   if gh release view "$TAG" >/dev/null 2>&1; then
-    echo "▸ Release $TAG exists — uploading/overwriting assets"
+    echo "▸ Release $TAG exists — refreshing notes + uploading/overwriting assets"
+    gh release edit "$TAG" --notes-file "$NOTES_FILE"
     gh release upload "$TAG" --clobber "$DMG_FILE" "$TARBALL" "$SIG_FILE" "$MANIFEST"
   else
     echo "▸ Creating release $TAG on $REPO"
     gh release create "$TAG" \
       --title "$TAG — $APP_NAME" \
-      --notes "Signed & notarized universal build. Download the .dmg to install; the .app.tar.gz / .sig / latest.json drive the in-app auto-updater." \
+      --notes-file "$NOTES_FILE" \
       "$DMG_FILE" "$TARBALL" "$SIG_FILE" "$MANIFEST"
   fi
   echo "▸ Verifying the updater endpoint resolves unauthenticated…"

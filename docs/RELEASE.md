@@ -62,8 +62,10 @@ Under the hood the script:
   `bundle.createUpdaterArtifacts` is enabled;
 - writes `latest.json` with **both** `darwin-aarch64` and `darwin-x86_64` keys
   (the universal payload satisfies both);
-- with `--publish`, creates/uploads the GitHub release `vX.Y.Z` and checks the
-  public endpoint returns HTTP 200.
+- with `--publish`, **generates release notes from the commit log** since the
+  previous tag, then creates/updates the GitHub release `vX.Y.Z` and checks the
+  public endpoint returns HTTP 200. (The Windows build only uploads assets and
+  never edits the body, so these notes survive intact across both machines.)
 
 > **First run:** macOS may prompt *"codesign wants to sign using key …"* — click
 > **Always Allow**.
@@ -106,16 +108,19 @@ https://github.com/dennisrongo/annotatr/releases/latest/download/latest.json
 
 To ship a new version:
 
-1. Bump `version` in **`package.json`**, **`src-tauri/Cargo.toml`**, and
-   **`src-tauri/tauri.conf.json`** (keep all three identical — `tauri.conf.json`
-   is the value shown in-app and written into `latest.json`). It MUST be strictly
-   greater than the published version. Commit.
-2. Run **`./scripts/release-mac.sh --publish`**.
+1. Bump `version` in all **five** files, kept identical — **`package.json`**,
+   **`package-lock.json`** (both the top-level `"version"` and `packages.""`),
+   **`src-tauri/Cargo.toml`**, **`src-tauri/Cargo.lock`** (the `name = "annotatr"`
+   package entry), and **`src-tauri/tauri.conf.json`** (the value shown in-app and
+   written into `latest.json`). It MUST be strictly greater than the published
+   version. Commit (**signed** — see [Verified commits](#verified-commits)).
+2. Run **`./scripts/release-mac.sh --publish`**. It also generates the release
+   notes from the commit log since the previous tag.
 3. Commit the manifest the script merged the mac signatures into — this is the
-   cross-machine source of truth the Windows build reads:
+   cross-machine source of truth the Windows build reads (signed commit):
    ```bash
    git add updater/latest.json
-   git commit -m "vX.Y.Z: add darwin updater signatures"
+   git commit -S -m "vX.Y.Z: add darwin updater signatures"
    git push origin main
    ```
 4. Confirm the endpoint serves the new version:
@@ -166,7 +171,7 @@ merges `windows-x86_64` into the one `latest.json` the Mac published. Driven by
 git pull origin main                    # get the mac version bump + darwin signatures
 .\scripts\release-win.ps1 -Publish      # build NSIS, merge windows-x86_64, upload into vX.Y.Z
 git add updater/latest.json
-git commit -m "vX.Y.Z: add windows-x86_64 updater signature"
+git commit -S -m "vX.Y.Z: add windows-x86_64 updater signature"   # signed (see Verified commits)
 git push origin main
 ```
 
@@ -193,6 +198,33 @@ Expect `['darwin-aarch64','darwin-x86_64','windows-x86_64']`.
 > in via `merge-manifest.mjs` (same version → keep the others). Overwriting it
 > from scratch would drop the other platform's signature and break its
 > auto-updates — which is exactly what the merge helper prevents.
+
+---
+
+## Verified commits
+
+The "Verified" badge on GitHub commits comes from **signed commits** — separate
+from the Apple cert, the Windows installer, and the Tauri updater signature. Set
+up SSH commit signing once **per machine** (Mac and Windows):
+
+```bash
+# Use an SSH key you already have (or generate one) and tell git to sign with it:
+git config --global gpg.format ssh
+git config --global user.signingkey ~/.ssh/id_ed25519.pub
+git config --global commit.gpgsign true
+git config --global tag.gpgSign true
+```
+
+Then add that **public** key to GitHub as a **Signing key** (Settings → SSH and
+GPG keys → New SSH key → key type **Signing Key**). This is separate from an
+authentication key — add it with type *Signing Key* even if the same key is
+already there for auth.
+
+With `commit.gpgsign true`, every `git commit` is signed automatically and shows
+**Verified** on GitHub. The release scripts don't commit — the `/release-macos`
+and `/release-windows` skills do, using `git commit -S`. The release **tag** is
+created server-side by `gh release create`, so GitHub marks it Verified with its
+own web-flow key automatically.
 
 ---
 
